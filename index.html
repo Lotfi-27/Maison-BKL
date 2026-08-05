@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maison BKL - متجر التسوق الذكي</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Cairo) -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-white/85 backdrop-blur-md border-b border-neutral-200">
+        <div class="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+                <button onclick="goToPage('page-1')" class="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-800 hover:bg-neutral-200 transition" title="الرئيسية">
+                    <i class="fa-solid fa-house text-xs"></i>
+                </button>
+                <!-- تم تغيير الدالة إلى openOwnerDashboard() للزر الأصفر -->
+                <button onclick="openOwnerDashboard()" class="w-8 h-8 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center hover:bg-amber-100 transition" title="لوحة تحكم صاحب المتجر">
+                    <i class="fa-solid fa-user-tie text-xs"></i>
+                </button>
+                <!-- زر تغيير اللغات الشامل -->
+                <select id="language-selector" onchange="changeLanguage(this.value)" class="bg-neutral-100 border border-neutral-200 text-neutral-800 text-[10px] font-bold rounded-lg px-1.5 py-1 outline-none focus:border-amber-600 transition cursor-pointer" title="تغيير لغة المتجر">
+                    <option value="ar" selected>🌐 العربية</option>
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                    <option value="es">Español</option>
+                    <option value="de">Deutsch</option>
+                    <option value="zh">中文</option>
+                </select>
+                <!-- حقل / زر البحث عن المنتجات بجانب قائمة اللغات -->
+                <div class="relative flex items-center">
+                    <input type="text" id="search-input" placeholder="بحث..." oninput="searchProducts(this.value)" class="bg-neutral-100 border border-neutral-200 text-neutral-800 text-[10px] font-bold rounded-lg px-2 py-1 pl-6 w-24 sm:w-32 outline-none focus:border-amber-600 transition">
+                    <i class="fa-solid fa-search absolute left-2 text-neutral-400 text-[10px]"></i>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <!-- اختيار العملات -->
+                <select id="currency-selector" onchange="changeCurrency(this.value)" class="bg-neutral-100 border border-neutral-200 text-neutral-800 text-[10px] font-bold rounded-lg px-1.5 py-1 outline-none focus:border-amber-600 transition cursor-pointer">
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="DZD" selected>DZD (د.ج)</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Pages Container -->
+    <main class="max-w-md mx-auto w-full p-4 flex-grow mb-16">
+
+        <!-- ================= PAGE 1: Store Home ================= -->
+        <div id="page-1" class="page flex flex-col gap-4">
+            <!-- Hero Banner -->
+            <div class="bg-gradient-to-br from-neutral-900 to-neutral-800 text-white rounded-3xl p-5 relative overflow-hidden shadow-lg">
+                <div class="relative z-10 flex flex-col items-start gap-2">
+                    <span id="txt-subtitle" class="bg-amber-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">تشكيلة جديدة</span>
+                    <h1 id="txt-main-title" class="text-xl font-extrabold tracking-tight">أحدث المنتجات العصرية</h1>
+                    <p id="txt-store-subtitle" class="text-neutral-300 text-xs leading-relaxed max-w-[240px]">تسوق أفضل المنتجات مع خدمة التوصيل السريع والدفع الآمن</p>
+                    <button onclick="goToPage('page-1')" id="btn-shop-now" class="mt-2 bg-white text-neutral-900 text-xs font-bold px-4 py-2 rounded-xl shadow hover:bg-neutral-100 transition cursor-pointer">تسوق الآن</button>
+                </div>
+            </div>
+
+            <!-- Add Product & Add Category Buttons -->
+            <div class="flex justify-between items-center">
+                <span id="txt-best-sellers" class="text-sm font-bold text-neutral-900">الأكثر مبيعاً</span>
+                <div class="flex gap-2">
+                    <button onclick="openAddCategoryModal()" id="btn-add-category" class="text-xs font-bold bg-neutral-900 text-white px-3 py-1.5 rounded-xl hover:bg-neutral-800 transition shadow-sm cursor-pointer">+ تصنيف جديد</button>
+                    <button onclick="openAddModal()" id="btn-add-product" class="text-xs font-bold bg-amber-600 text-white px-3 py-1.5 rounded-xl hover:bg-amber-700 transition shadow-sm cursor-pointer">+ إضافة منتج جديد</button>
+                </div>
+            </div>
+
+            <!-- Categories Tabs Container (يدعم التعبئة الديناميكية عبر الجافاسكريبت) -->
+            <div id="categories-container" class="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                <button id="tab-all" onclick="filterCategory('all', this)" class="category-tab bg-neutral-900 text-white text-xs font-medium px-4 py-2 rounded-xl whitespace-nowrap shadow-sm cursor-pointer">الكل</button>
+            </div>
+
+            <!-- Products Grid Section -->
+            <div class="flex flex-col gap-2 mt-2">
+                <h3 id="txt-product-list-title" class="text-xs font-bold text-neutral-500">قائمة المنتجات (اضغط على أي صورة لعرض المعرض)</h3>
+                <div id="products-grid" class="grid grid-cols-2 gap-3">
+                    <!-- Products will be injected dynamically via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= PAGE 2: Product Details ================= -->
+        <div id="page-2" class="page hidden flex flex-col gap-4">
+            <div class="flex justify-between items-center">
+                <button onclick="goToPage('page-1')" id="btn-back-1" class="text-xs font-bold text-neutral-600 hover:text-neutral-900 transition w-fit cursor-pointer">← رجوع</button>
+                <div class="flex gap-2">
+                    <button onclick="openEditModal()" class="text-xs bg-amber-100 text-amber-700 px-3 py-1 rounded-lg font-bold cursor-pointer">تعديل</button>
+                    <button onclick="deleteCurrentProduct()" class="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-lg font-bold cursor-pointer">حذف</button>
+                </div>
+            </div>
+            
+            <div class="bg-white border border-neutral-200 rounded-3xl p-4 flex flex-col gap-4 shadow-sm">
+                <!-- Main Product Image Display -->
+                <div class="w-full h-64 bg-neutral-100 rounded-2xl overflow-hidden flex items-center justify-center relative">
+                    <img id="product-detail-img" src="" class="w-full h-full object-cover hidden" alt="">
+                    <span id="product-detail-placeholder" class="text-neutral-400 text-xs">لا توجد صور</span>
+                </div>
+
+                <!-- Thumbnails Gallery Strip -->
+                <div id="product-thumbnails" class="flex gap-2 overflow-x-auto hide-scrollbar">
+                    <!-- Thumbnails injected via JS -->
+                </div>
+
+                <!-- Product Info -->
+                <div class="flex flex-col gap-1">
+                    <div class="flex justify-between items-start">
+                        <h2 id="product-name" class="text-base font-bold text-neutral-900">اسم المنتج</h2>
+                        <span id="product-price" class="text-base font-extrabold text-amber-600">$0</span>
+                    </div>
+                    <p id="product-desc" class="text-xs text-neutral-500 leading-relaxed mt-1">وصف المنتج يظهر هنا...</p>
+                </div>
+
+                <!-- Color Selection -->
+                <div class="flex flex-col gap-1.5 pt-2 border-t border-neutral-100">
+                    <label class="text-xs font-bold text-neutral-700">اللون:</label>
+                    <div id="product-colors-container" class="flex gap-2 items-center">
+                        <!-- Colors injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Size Selection -->
+                <div class="flex flex-col gap-1.5 pt-1">
+                    <label class="text-xs font-bold text-neutral-700">المقاس:</label>
+                    <div id="product-sizes-container" class="flex gap-2 flex-wrap">
+                        <!-- Sizes injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Quantity Selection -->
+                <div class="flex items-center justify-between pt-1">
+                    <label id="lbl-quantity" class="text-xs font-bold text-neutral-700">الكمية المطلوبة:</label>
+                    <div class="flex items-center border border-neutral-200 rounded-xl overflow-hidden bg-neutral-50">
+                        <button type="button" onclick="decrementQuantity()" class="px-3 py-1 text-xs font-bold text-neutral-600 hover:bg-neutral-200 transition cursor-pointer">-</button>
+                        <input id="product-quantity" type="number" min="1" value="1" class="w-12 text-center bg-transparent text-xs font-bold text-neutral-900 outline-none">
+                        <button type="button" onclick="incrementQuantity()" class="px-3 py-1 text-xs font-bold text-neutral-600 hover:bg-neutral-200 transition cursor-pointer">+</button>
+                    </div>
+                </div>
+
+                <!-- Buy CTA -->
+                <button onclick="buyProduct()" id="btn-buy" class="w-full bg-neutral-900 text-white text-xs font-bold py-3 rounded-2xl hover:bg-neutral-800 transition shadow cursor-pointer mt-2">شراء</button>
+            </div>
+        </div>
+
+        <!-- ================= PAGE 3: Shopping Cart ================= -->
+        <div id="page-3" class="page hidden flex flex-col gap-4">
+            <button onclick="goToPage('page-2')" id="btn-back-2" class="text-xs font-bold text-neutral-600 hover:text-neutral-900 transition w-fit cursor-pointer">← رجوع</button>
+            
+            <h2 id="txt-cart-title" class="text-base font-bold text-neutral-900">سلة المشتريات</h2>
+
+            <div class="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3 shadow-sm">
+                <div class="flex items-center justify-between pb-3 border-b border-neutral-100">
+                    <div>
+                        <div id="cart-item-name" class="text-xs font-bold text-neutral-800 mb-1">اسم المنتج</div>
+                        <div class="text-[10px] text-neutral-500">توصيل سريع</div>
+                    </div>
+                    <span id="cart-item-price" class="text-xs font-bold text-amber-600">$0</span>
+                </div>
+                
+                <div class="flex items-center justify-between pt-1">
+                    <span id="txt-total-label" class="text-xs font-bold text-neutral-900">المجموع:</span>
+                    <span id="cart-total" class="text-sm font-extrabold text-amber-600">$0</span>
+                </div>
+            </div>
+
+            <button onclick="goToPage('page-4')" id="btn-proceed" class="w-full bg-amber-600 text-white text-xs font-bold py-3 rounded-2xl hover:bg-amber-700 transition shadow cursor-pointer">الانتقال إلى الدفع</button>
+        </div>
+
+        <!-- ================= PAGE 4: Checkout & Payment ================= -->
+        <div id="page-4" class="page hidden flex flex-col gap-4">
+            <button onclick="goToPage('page-3')" id="btn-back-3" class="text-xs font-bold text-neutral-600 hover:text-neutral-900 transition w-fit cursor-pointer">← رجوع</button>
+            
+            <h2 id="txt-payment-title" class="text-base font-bold text-neutral-900">بيانات التوصيل والدفع</h2>
+
+            <div class="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-4 shadow-sm">
+                <h3 id="sec-delivery-info" class="text-xs font-bold text-amber-600 border-b border-neutral-100 pb-2">معلومات التوصيل</h3>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label id="lbl-firstname" class="block text-[11px] text-neutral-600 mb-1">الاسم</label>
+                        <input id="pay-firstname" type="text" placeholder="الاسم" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                    </div>
+                    <div>
+                        <label id="lbl-lastname" class="block text-[11px] text-neutral-600 mb-1">اللقب</label>
+                        <input id="pay-lastname" type="text" placeholder="اللقب" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                    </div>
+                </div>
+
+                <div>
+                    <label id="lbl-detailed-address" class="block text-[11px] text-neutral-600 mb-1">العنوان بالتفصيل</label>
+                    <input id="pay-detailed-address" type="text" placeholder="رقم الشارع، الحي، المعلم القريب..." class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label id="lbl-country" class="block text-[11px] text-neutral-600 mb-1">البلد</label>
+                        <select id="pay-country" onchange="onCountryChange()" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition cursor-pointer">
+                            <option value="الجزائر" selected>الجزائر</option>
+                            <option value="فرنسا">فرنسا</option>
+                            <option value="المغرب">المغرب</option>
+                            <option value="تونس">تونس</option>
+                        </select>
+                    </div>
+                    <div id="state-container">
+                        <label id="lbl-state" class="block text-[11px] text-neutral-600 mb-1">الولاية / المقاطعة</label>
+                        <select id="pay-state-select" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition cursor-pointer">
+                            <!-- يتم تعبئتها ديناميكياً عبر الجافاسكريبت -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label id="lbl-municipality" class="block text-[11px] text-neutral-600 mb-1">البلدية</label>
+                        <input id="pay-municipality" type="text" placeholder="البلدية" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                    </div>
+                    <div>
+                        <label id="lbl-phone" class="block text-[11px] text-neutral-600 mb-1">رقم الهاتف</label>
+                        <input id="pay-phone" type="text" placeholder="06xxxxxxxx" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                    </div>
+                </div>
+
+                <h3 id="sec-payment-info" class="text-xs font-bold text-amber-600 border-b border-neutral-100 pb-2 pt-2">معلومات الدفع</h3>
+                
+                <div>
+                    <label id="lbl-card-type" class="block text-[11px] text-neutral-600 mb-1">نوع البطاقة</label>
+                    <select class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition cursor-pointer">
+                        <option>Credit Card / Visa / Master</option>
+                        <option>CIB / Edahabia</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label id="lbl-card-num" class="block text-[11px] text-neutral-600 mb-1">رقم البطاقة</label>
+                    <input type="text" placeholder="xxxx xxxx xxxx xxxx" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                </div>
+
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <label id="lbl-month" class="block text-[11px] text-neutral-600 mb-1">الشهر (MM)</label>
+                        <input type="text" placeholder="MM" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition text-center">
+                    </div>
+                    <div>
+                        <label id="lbl-year" class="block text-[11px] text-neutral-600 mb-1">السنة (YY)</label>
+                        <input type="text" placeholder="YY" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition text-center">
+                    </div>
+                    <div>
+                        <label id="lbl-cvv" class="block text-[11px] text-neutral-600 mb-1">رمز الأمان (CVV)</label>
+                        <input type="text" placeholder="CVV" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition text-center">
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="goToPage('page-5')" id="btn-pay-now" class="w-full bg-neutral-900 text-white text-xs font-bold py-3 rounded-2xl hover:bg-neutral-800 transition shadow cursor-pointer">ادفع الآن</button>
+        </div>
+
+        <!-- ================= PAGE 5: Success Order Confirmation ================= -->
+        <div id="page-5" class="page hidden flex flex-col items-center justify-center text-center gap-4 py-12">
+            <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-2xl shadow-inner">
+                <i class="fa-solid fa-check"></i>
+            </div>
+            <h2 id="txt-success-title" class="text-lg font-extrabold text-neutral-900">تم تأكيد الطلب!</h2>
+            <p id="txt-success-desc" class="text-xs text-neutral-500 max-w-[260px] leading-relaxed">شكراً لك، تم استلام طلبك بنجاح وجاري تجهيزه للشحن.</p>
+            <button onclick="goToPage('page-1')" id="btn-back-home" class="mt-4 bg-neutral-900 text-white text-xs font-bold px-6 py-3 rounded-xl hover:bg-neutral-800 transition shadow cursor-pointer">العودة للرئيسية</button>
+        </div>
+
+    </main>
+
+    <!-- Footer Navigation Bar -->
+    <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 z-40">
+        <div class="max-w-md mx-auto px-6 h-14 flex items-center justify-between">
+            <button onclick="goToPage('page-1')" class="flex flex-col items-center gap-0.5 text-amber-600 transition cursor-pointer">
+                <i class="fa-solid fa-store text-sm"></i>
+                <span id="nav-store" class="text-[10px] font-medium">المتجر</span>
+            </button>
+            <button onclick="goToPage('page-3')" class="flex flex-col items-center gap-0.5 text-neutral-400 hover:text-neutral-700 transition cursor-pointer">
+                <i class="fa-solid fa-bag-shopping text-sm"></i>
+                <span id="nav-cart" class="text-[10px] font-medium">السلة</span>
+            </button>
+            <button onclick="goToPage('page-1')" class="flex flex-col items-center gap-0.5 text-neutral-400 hover:text-neutral-700 transition cursor-pointer">
+                <i class="fa-solid fa-user text-sm"></i>
+                <span id="nav-account" class="text-[10px] font-medium">حسابي</span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- ================= ADD / EDIT PRODUCT MODAL ================= -->
+    <div id="add-modal" class="hidden fixed inset-0 z-50 bg-neutral-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-5 flex flex-col gap-4 shadow-xl max-h-[90vh] overflow-y-auto">
+            <h3 id="modal-title" class="text-sm font-bold text-neutral-900">إضافة منتج جديد</h3>
+            <input type="hidden" id="edit-product-id" value="">
+
+            <div class="flex flex-col gap-1">
+                <label id="lbl-prod-name" class="text-[11px] text-neutral-600 font-medium">اسم المنتج</label>
+                <input id="new-name" type="text" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label id="lbl-prod-price" class="text-[11px] text-neutral-600 font-medium">السعر (بالدولار الأساسي USD)</label>
+                <input id="new-price" type="number" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+            </div>
+
+            <!-- Current Images Preview Strip -->
+            <div class="flex flex-col gap-1">
+                <label id="lbl-current-imgs" class="text-[11px] text-neutral-600 font-medium">صور المنتج الحالية</label>
+                <div id="edit-images-preview" class="flex gap-2 overflow-x-auto hide-scrollbar py-1">
+                    <!-- Previews injected via JS -->
+                </div>
+            </div>
+
+            <!-- Add New Images -->
+            <div class="flex flex-col gap-1">
+                <label id="lbl-add-new-imgs" class="text-[11px] text-neutral-600 font-medium">إضافة صورة جديدة / صور إضافية</label>
+                <input id="new-images-file" type="file" multiple accept="image/*" class="bg-neutral-50 border border-neutral-200 rounded-xl p-1.5 text-xs text-neutral-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 transition cursor-pointer">
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label id="lbl-prod-desc" class="text-[11px] text-neutral-600 font-medium">الوصف</label>
+                <textarea id="new-desc" rows="2" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition"></textarea>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button type="button" onclick="closeAddModal()" id="btn-cancel" class="flex-1 bg-neutral-100 text-neutral-800 text-xs font-bold py-2.5 rounded-xl hover:bg-neutral-200 transition cursor-pointer">إلغاء</button>
+                <button type="button" onclick="saveProductData()" id="btn-save" class="flex-1 bg-amber-600 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-amber-700 transition cursor-pointer">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= ADD CATEGORY MODAL ================= -->
+    <div id="category-modal" class="hidden fixed inset-0 z-50 bg-neutral-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-5 flex flex-col gap-4 shadow-xl">
+            <h3 id="category-modal-title" class="text-sm font-bold text-neutral-900">إضافة تصنيف جديد</h3>
+
+            <div class="flex flex-col gap-1">
+                <label class="text-[11px] text-neutral-600 font-medium">معرف التصنيف (بالإنجليزية مثل: sports)</label>
+                <input id="new-cat-id" type="text" placeholder="مثال: sports" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label class="text-[11px] text-neutral-600 font-medium">اسم التصنيف (بالعربية أو لغات أخرى)</label>
+                <input id="new-cat-name" type="text" placeholder="مثال: مستلزمات رياضية" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button type="button" onclick="closeAddCategoryModal()" class="flex-1 bg-neutral-100 text-neutral-800 text-xs font-bold py-2.5 rounded-xl hover:bg-neutral-200 transition cursor-pointer">إلغاء</button>
+                <button type="button" onclick="saveNewCategory()" class="flex-1 bg-neutral-900 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-neutral-800 transition cursor-pointer">حفظ التصنيف</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- External JavaScript file reference -->
+    <script src="script.js"></script>
+</body>
+</html>
