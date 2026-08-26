@@ -2494,6 +2494,7 @@ function ensureComplaintCameraModal() {
     videoInput.id = 'bkl-native-complaint-video';
     videoInput.accept = 'video/*';
     videoInput.setAttribute('capture', 'environment');
+    videoInput.setAttribute('data-bkl-camera-mode', 'video');
     videoInput.className = 'hidden';
     videoInput.onchange = () => handleNativeComplaintCameraFile(videoInput);
     document.body.appendChild(videoInput);
@@ -2513,23 +2514,18 @@ function openComplaintCamera(prefix) {
 function openNativeComplaintCamera(mode) {
     ensureComplaintCameraModal();
     bklComplaintCameraMode = mode === 'video' ? 'video' : 'photo';
-    const input = document.getElementById('bkl-native-complaint-photo');
+    const inputId = bklComplaintCameraMode === 'video'
+        ? 'bkl-native-complaint-video'
+        : 'bkl-native-complaint-photo';
+    const input = document.getElementById(inputId);
     if (!input) { alert('تعذر تجهيز كاميرا الهاتف.'); return; }
     input.value = '';
     input.click();
 }
 
-async function startComplaintVideoCapture() {
-    ensureComplaintCameraModal();
-    bklComplaintCameraMode = 'video';
-    const input = document.getElementById('bkl-native-complaint-video');
-    if (input) {
-        input.value = '';
-        // هذا هو المسار الأساسي على الهاتف: يطلب من نظام الهاتف فتح الكاميرا في وضع الفيديو.
-        input.click();
-        return;
-    }
-    alert('تعذر تجهيز كاميرا الفيديو على هذا الجهاز.');
+function startComplaintVideoCapture() {
+    // مهم: لا نستخدم حقل الصورة هنا. يجب فتح input مخصص للفيديو.
+    openNativeComplaintCamera('video');
 }
 
 function stopComplaintVideoCapture(attach) {
