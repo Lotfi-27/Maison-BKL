@@ -2365,12 +2365,13 @@ async function collectChatAttachments(inputId) {
     const input = document.getElementById(inputId);
     if (!input || !input.files || !input.files.length) return [];
     const files = Array.from(input.files);
-    const maxSize = 12 * 1024 * 1024;
+    // لا يوجد حد اصطناعي لحجم الصور أو الفيديوهات هنا.
+    // نتحقق فقط من نوع الملف، ثم نرسله للطرف الآخر.
     const allowed = files.filter(file =>
-        (file.type.startsWith('image/') || file.type.startsWith('video/')) && file.size <= maxSize
+        file.type.startsWith('image/') || file.type.startsWith('video/')
     );
     if (allowed.length !== files.length) {
-        alert('يسمح فقط بالصور والفيديوهات، وبحجم أقصى 12 ميغابايت لكل ملف.');
+        alert('يسمح فقط بإرسال الصور والفيديوهات.');
     }
     const media = [];
     for (const file of allowed) {
@@ -2391,26 +2392,29 @@ function renderChatAttachmentPreview(inputId, previewId) {
 
 function buildChatComposer(prefix, sendFunction) {
     return `
-        <div class="pt-3 border-t border-neutral-100 mt-2">
-            <div id="${prefix}-attachment-preview" class="flex flex-wrap gap-1 mb-2"></div>
-            <div class="flex gap-2 items-center">
-                <button type="button" onclick="openComplaintCamera('${prefix}')" class="shrink-0 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold w-10 h-10 rounded-xl text-base cursor-pointer flex items-center justify-center" title="فتح الكاميرا لإرسال صورة أو فيديو" aria-label="فتح الكاميرا">📷</button>
-                <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold w-10 h-10 rounded-xl text-base cursor-pointer flex items-center justify-center" title="اختيار صورة أو فيديو من الملفات" aria-label="اختيار من الملفات">📎</label>
-                <input id="${prefix}-file-input" type="file" accept="image/*,video/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
-                <input id="${prefix}-text-input" type="text" placeholder="اكتب رسالتك..." class="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-indigo-500" onkeypress="if(event.key === 'Enter') ${sendFunction}()">
-                <button type="button" onclick="${sendFunction}()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer">إرسال</button>
+        <div class="pt-3 border-t border-neutral-100 mt-2 chat-composer">
+            <div id="${prefix}-attachment-preview" class="flex flex-wrap gap-1 mb-2 max-h-16 overflow-y-auto"></div>
+            <div class="w-full">
+                <input id="${prefix}-text-input" type="text" placeholder="اكتب رسالتك..." class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs outline-none focus:border-indigo-500" onkeypress="if(event.key === 'Enter') ${sendFunction}()">
             </div>
-            <div class="text-[9px] text-neutral-400 mt-1">📷 التقط صورة أو سجّل فيديو مباشرة، أو استخدم 📎 لاختيار ملف من الهاتف.</div>
+            <div class="mt-2 flex gap-2 items-center overflow-x-auto pb-1 whitespace-nowrap" style="-webkit-overflow-scrolling:touch;scrollbar-width:thin;">
+                <button type="button" onclick="openComplaintCamera('${prefix}')" class="shrink-0 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold min-w-11 h-10 px-3 rounded-xl text-sm cursor-pointer flex items-center justify-center gap-1" title="التقاط صورة أو تسجيل فيديو" aria-label="الكاميرا">📷 <span class="text-[10px]">كاميرا</span></button>
+                <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold min-w-11 h-10 px-3 rounded-xl text-sm cursor-pointer flex items-center justify-center gap-1" title="اختيار صورة أو فيديو من الملفات" aria-label="اختيار من الملفات">📎 <span class="text-[10px]">ملفات</span></label>
+                <input id="${prefix}-file-input" type="file" accept="image/*,video/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
+                <button type="button" onclick="${sendFunction}()" class="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold min-w-20 h-10 px-4 rounded-xl text-xs cursor-pointer flex items-center justify-center gap-1">إرسال <span>➤</span></button>
+            </div>
+            <div class="text-[9px] text-neutral-400 mt-1">يمكن تمرير الأزرار يميناً ويساراً على الهاتف. 📷 للتصوير أو تسجيل الفيديو، و📎 للملفات.</div>
         </div>`;
 }
 
 /* =========================================================
-   كاميرا محادثة الشكاوى - استخدام كاميرا الهاتف الأصلية
-   لا نعتمد على getUserMedia حتى تعمل الكاميرا أيضاً عند فتح المتجر
-   من هاتف عبر رابط/استضافة لا توفر Secure Context.
+   كاميرا محادثة الشكاوى - كاميرا الهاتف + مسجل فيديو داخل الصفحة عند الإمكان
    ========================================================= */
 let bklComplaintCameraPrefix = null;
 let bklComplaintCameraMode = 'photo';
+let bklComplaintVideoStream = null;
+let bklComplaintVideoRecorder = null;
+let bklComplaintVideoChunks = [];
 
 function ensureComplaintCameraModal() {
     let modal = document.getElementById('bkl-complaint-camera-modal');
@@ -2421,75 +2425,120 @@ function ensureComplaintCameraModal() {
     modal.innerHTML = `
         <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between gap-2 p-3 border-b border-neutral-100">
-                <div>
-                    <h3 class="text-sm font-extrabold text-neutral-900">استخدام كاميرا الهاتف</h3>
-                    <p class="text-[9px] text-neutral-400">اختر ما تريد إرساله مباشرة إلى المحادثة.</p>
-                </div>
+                <div><h3 class="text-sm font-extrabold text-neutral-900">استخدام كاميرا الهاتف</h3><p class="text-[9px] text-neutral-400">اختر ما تريد إرساله مباشرة إلى المحادثة.</p></div>
                 <button type="button" onclick="closeComplaintCamera()" class="w-9 h-9 rounded-full bg-neutral-100 text-neutral-600 font-bold">✕</button>
             </div>
-            <div class="p-4 grid grid-cols-2 gap-3">
-                <button type="button" onclick="openNativeComplaintCamera('photo')" class="bg-indigo-600 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2">
-                    <span class="text-2xl">📸</span><span>التقاط صورة</span>
-                </button>
-                <button type="button" onclick="openNativeComplaintCamera('video')" class="bg-neutral-900 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2">
-                    <span class="text-2xl">🎥</span><span>تسجيل فيديو</span>
-                </button>
+            <div class="p-4 grid grid-cols-2 gap-3" id="bkl-camera-choice-buttons">
+                <button type="button" onclick="openNativeComplaintCamera('photo')" class="bg-indigo-600 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2"><span class="text-2xl">📸</span><span>التقاط صورة</span></button>
+                <button type="button" onclick="startComplaintVideoCapture()" class="bg-neutral-900 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2"><span class="text-2xl">🎥</span><span>تسجيل فيديو</span></button>
             </div>
-            <div class="px-4 pb-4 text-[9px] text-neutral-400 text-center">سيتم فتح كاميرا الهاتف مباشرة. اسمح بالوصول إلى الكاميرا عند ظهور طلب الإذن.</div>
+            <div id="bkl-video-capture-panel" class="hidden p-3">
+                <video id="bkl-complaint-video-preview" autoplay muted playsinline class="w-full aspect-video bg-black rounded-xl object-cover"></video>
+                <div class="flex gap-2 mt-3">
+                    <button type="button" onclick="stopComplaintVideoCapture(true)" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl text-xs">⏹ إيقاف وإرفاق</button>
+                    <button type="button" onclick="stopComplaintVideoCapture(false)" class="flex-1 bg-neutral-100 text-neutral-700 font-bold py-3 rounded-xl text-xs">إلغاء</button>
+                </div>
+            </div>
+            <div class="px-4 pb-4 text-[9px] text-neutral-400 text-center">الصورة تفتح كاميرا الهاتف. الفيديو يسجل مباشرة عند توفر صلاحية الكاميرا.</div>
         </div>`;
     document.body.appendChild(modal);
 
-    // حقول منفصلة: الصورة تفتح الكاميرا، والفيديو يفتح تسجيل الفيديو.
     const photoInput = document.createElement('input');
-    photoInput.type = 'file';
-    photoInput.id = 'bkl-native-complaint-photo';
-    photoInput.accept = 'image/*';
-    photoInput.capture = 'environment';
-    photoInput.className = 'hidden';
+    photoInput.type = 'file'; photoInput.id = 'bkl-native-complaint-photo'; photoInput.accept = 'image/*'; photoInput.capture = 'environment'; photoInput.className = 'hidden';
     photoInput.onchange = () => handleNativeComplaintCameraFile(photoInput);
-
-    const videoInput = document.createElement('input');
-    videoInput.type = 'file';
-    videoInput.id = 'bkl-native-complaint-video';
-    videoInput.accept = 'video/*';
-    videoInput.capture = 'environment';
-    videoInput.className = 'hidden';
-    videoInput.onchange = () => handleNativeComplaintCameraFile(videoInput);
-
     document.body.appendChild(photoInput);
-    document.body.appendChild(videoInput);
     return modal;
 }
 
 function openComplaintCamera(prefix) {
     const modal = ensureComplaintCameraModal();
     bklComplaintCameraPrefix = prefix;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+    const choice = document.getElementById('bkl-camera-choice-buttons');
+    const panel = document.getElementById('bkl-video-capture-panel');
+    if (choice) choice.classList.remove('hidden');
+    if (panel) panel.classList.add('hidden');
 }
 
 function openNativeComplaintCamera(mode) {
     ensureComplaintCameraModal();
     bklComplaintCameraMode = mode === 'video' ? 'video' : 'photo';
-    const input = document.getElementById(bklComplaintCameraMode === 'video' ? 'bkl-native-complaint-video' : 'bkl-native-complaint-photo');
-    if (!input) {
-        alert('تعذر تجهيز كاميرا الهاتف.');
-        return;
-    }
-    // إعادة ضبط value حتى يمكن التقاط صورة/فيديو جديد حتى لو كان نفس الملف السابق.
+    const input = document.getElementById('bkl-native-complaint-photo');
+    if (!input) { alert('تعذر تجهيز كاميرا الهاتف.'); return; }
     input.value = '';
     input.click();
+}
+
+async function startComplaintVideoCapture() {
+    ensureComplaintCameraModal();
+    bklComplaintCameraMode = 'video';
+    const choice = document.getElementById('bkl-camera-choice-buttons');
+    const panel = document.getElementById('bkl-video-capture-panel');
+    const video = document.getElementById('bkl-complaint-video-preview');
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('getUserMedia unavailable');
+        bklComplaintVideoStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}, audio:true});
+        if (video) { video.srcObject = bklComplaintVideoStream; await video.play().catch(()=>{}); }
+        bklComplaintVideoChunks = [];
+        const mime = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(x => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(x)) || '';
+        if (!window.MediaRecorder) throw new Error('MediaRecorder unavailable');
+        bklComplaintVideoRecorder = new MediaRecorder(bklComplaintVideoStream, mime ? {mimeType:mime} : undefined);
+        bklComplaintVideoRecorder.ondataavailable = e => { if (e.data && e.data.size) bklComplaintVideoChunks.push(e.data); };
+        bklComplaintVideoRecorder.start(250);
+        if (choice) choice.classList.add('hidden');
+        if (panel) panel.classList.remove('hidden');
+    } catch (e) {
+        // fallback: افتح مسجل الفيديو الأصلي للهاتف. لا نستخدم حقل الصورة هنا.
+        const input = document.getElementById('bkl-native-complaint-video') || document.createElement('input');
+        input.type='file'; input.id='bkl-native-complaint-video'; input.accept='video/*'; input.setAttribute('capture','environment'); input.className='hidden';
+        input.onchange = () => handleNativeComplaintCameraFile(input);
+        if (!input.parentNode) document.body.appendChild(input);
+        input.value=''; input.click();
+    }
+}
+
+function stopComplaintVideoCapture(attach) {
+    const recorder = bklComplaintVideoRecorder;
+    if (recorder && recorder.state !== 'inactive') {
+        recorder.onstop = () => {
+            const mime = recorder.mimeType || 'video/webm';
+            const blob = new Blob(bklComplaintVideoChunks, {type:mime});
+            if (attach && blob.size) {
+                const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+                const file = new File([blob], `complaint-video-${Date.now()}.${ext}`, {type:mime, lastModified:Date.now()});
+                attachComplaintCameraFile(file);
+            }
+            cleanupComplaintVideoCapture();
+        };
+        recorder.stop();
+    } else cleanupComplaintVideoCapture();
+}
+
+function cleanupComplaintVideoCapture() {
+    if (bklComplaintVideoStream) bklComplaintVideoStream.getTracks().forEach(t=>t.stop());
+    bklComplaintVideoStream = null; bklComplaintVideoRecorder = null; bklComplaintVideoChunks = [];
+    const video = document.getElementById('bkl-complaint-video-preview');
+    if (video) video.srcObject = null;
+    const choice = document.getElementById('bkl-camera-choice-buttons');
+    const panel = document.getElementById('bkl-video-capture-panel');
+    if (choice) choice.classList.remove('hidden');
+    if (panel) panel.classList.add('hidden');
 }
 
 function handleNativeComplaintCameraFile(input) {
     const file = input && input.files && input.files[0];
     if (!file || !bklComplaintCameraPrefix) return;
-    const expected = bklComplaintCameraMode === 'video' ? 'video/' : 'image/';
-    if (!String(file.type || '').startsWith(expected)) {
-        alert(bklComplaintCameraMode === 'video' ? 'يرجى تسجيل فيديو من الكاميرا.' : 'يرجى التقاط صورة من الكاميرا.');
-        input.value = '';
+    const type = String(file.type || '');
+    if (!(type.startsWith('image/') || type.startsWith('video/'))) {
+        alert('يرجى اختيار صورة أو فيديو من الكاميرا.');
+        input.value='';
         return;
     }
+    attachComplaintCameraFile(file);
+    input.value='';
+}
+
+function attachComplaintCameraFile(file) {
     const targetInput = document.getElementById(`${bklComplaintCameraPrefix}-file-input`);
     const preview = document.getElementById(`${bklComplaintCameraPrefix}-attachment-preview`);
     if (!targetInput || !preview) return;
@@ -2500,18 +2549,13 @@ function handleNativeComplaintCameraFile(input) {
         targetInput.files = dt.files;
         renderChatAttachmentPreview(targetInput.id, preview.id);
         closeComplaintCamera();
-    } catch (e) {
-        alert('تعذر إرفاق الصورة أو الفيديو. استخدم زر الملفات إذا لزم الأمر.');
-    }
-    input.value = '';
+    } catch(e) { alert('تعذر إرفاق الصورة أو الفيديو. استخدم زر الملفات إذا لزم الأمر.'); }
 }
 
 function closeComplaintCamera() {
+    stopComplaintVideoCapture(false);
     const modal = document.getElementById('bkl-complaint-camera-modal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
     bklComplaintCameraPrefix = null;
 }
 
@@ -4838,7 +4882,7 @@ let currentLang = 'ar';
         'تعذر قراءة الصورة المختارة.':'Unable to read the selected image.','تم حفظ صورة ومحتوى الواجهة بنجاح.':'The interface image and content were saved successfully.','تعذر العثور على بيانات الطلب.':'Order data could not be found.',
         'تعذر تنفيذ العملية. لم يتم إعادة تحميل المتجر.':'The operation could not be completed. The store was not reloaded.','تعذر فتح نافذة الفاتورة. يرجى السماح بالنوافذ المنبثقة من المتجر.':'Could not open the invoice window. Please allow pop-ups for the store.',
         'يرجى كتابة تفاصيل الشكوى أولاً!':'Please enter the complaint details first!','تم إرسال شكواك بنجاح إلى لوحة التحكم الخاصة بالمتجر وسيتم مراجعتها قريباً.':'Your complaint was sent successfully to the store dashboard and will be reviewed soon.',
-        'يسمح فقط بالصور والفيديوهات، وبحجم أقصى 12 ميغابايت لكل ملف.':'Only images and videos are allowed, with a maximum size of 12 MB per file.',
+        'يسمح فقط بإرسال الصور والفيديوهات.':'Only images and videos are allowed.',
         'السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.':'The cart is empty. Add at least one product before checkout.','يجب أن يحتوي الطلب على منتج واحد على الأقل.':'The order must contain at least one product.',
         'تم حفظ جميع تعديلات الطلب والفاتورة بنجاح.':'All order and invoice changes were saved successfully.','يرجى تعبئة الحقول الأساسية (الاسم، اللقب ورقم الهاتف على الأقل).':'Please fill in the required fields (at least first name, last name and phone number).',
         'يرجى إدخال رقم بطاقة صحيح.':'Please enter a valid card number.','الشهر يجب أن يكون رقماً من 1 إلى 12 فقط.':'The month must be a number from 1 to 12.','يرجى إدخال السنة.':'Please enter the year.','يرجى إدخال رمز أمان CVV صحيح.':'Please enter a valid CVV security code.',
