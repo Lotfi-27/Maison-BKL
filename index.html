@@ -2329,7 +2329,7 @@ function escapeChatHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
-function getChatMessageMediaHtml(msg, ownerView) {
+function getChatMessageMediaHtml(msg, ownerView, complaintId, messageIndex) {
     const media = Array.isArray(msg.media) ? msg.media : [];
     if (!media.length) return '';
     return `<div class="mt-2 space-y-2">${media.map((file, index) => {
@@ -2337,14 +2337,33 @@ function getChatMessageMediaHtml(msg, ownerView) {
         const src = String(file.data || file.url || file.src || '');
         const name = escapeChatHtml(file.name || `ملف ${index + 1}`);
         if (!src) return '';
+        const removeBtn = (complaintId != null && messageIndex != null)
+            ? `<button type="button" onclick="deleteComplaintChatMedia('${String(complaintId).replace(/'/g, "\\'")}',${messageIndex},${index})" class="absolute top-1 end-1 z-10 w-7 h-7 rounded-full bg-red-600 text-white text-xs font-bold shadow" title="حذف الوسائط وتحرير مساحة التخزين">✕</button>`
+            : '';
         if (type.startsWith('image/')) {
-            return `<a href="${src}" target="_blank" rel="noopener" class="block"><img src="${src}" alt="${name}" class="max-w-full max-h-64 rounded-xl object-contain bg-black/5 border border-white/20"></a>`;
+            return `<div class="relative inline-block max-w-full">${removeBtn}<a href="${src}" target="_blank" rel="noopener" class="block"><img src="${src}" alt="${name}" class="max-w-full max-h-64 rounded-xl object-contain bg-black/5 border border-white/20"></a></div>`;
         }
         if (type.startsWith('video/')) {
-            return `<video controls preload="metadata" class="max-w-full max-h-64 rounded-xl bg-black" src="${src}"></video>`;
+            return `<div class="relative inline-block max-w-full">${removeBtn}<video controls preload="metadata" class="max-w-full max-h-64 rounded-xl bg-black" src="${src}"></video></div>`;
         }
-        return `<a href="${src}" target="_blank" rel="noopener" class="underline font-bold text-xs">📎 ${name}</a>`;
+        return `<div class="relative inline-flex items-center gap-2"><a href="${src}" target="_blank" rel="noopener" class="underline font-bold text-xs">📎 ${name}</a>${removeBtn}</div>`;
     }).join('')}</div>`;
+}
+
+function deleteComplaintChatMedia(complaintId, messageIndex, mediaIndex) {
+    if (!confirm('حذف هذه الصورة/الفيديو؟ سيتم تحرير مساحة التخزين المستخدمة داخل المتجر.')) return;
+    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+    const complaint = storeComplaints.find(c => String(c.id) === String(complaintId));
+    if (!complaint || !Array.isArray(complaint.messages) || !complaint.messages[messageIndex]) return;
+    const msg = complaint.messages[messageIndex];
+    if (!Array.isArray(msg.media) || !msg.media[mediaIndex]) return;
+    msg.media.splice(mediaIndex, 1);
+    if (!msg.media.length) delete msg.media;
+    saveComplaintChatData();
+    if (typeof activeComplaintChatId !== 'undefined' && String(activeComplaintChatId) === String(complaintId) && typeof renderComplaintChatMessages === 'function') renderComplaintChatMessages(complaint);
+    if (typeof window.activeCustomerComplaintChatId !== 'undefined' && String(window.activeCustomerComplaintChatId) === String(complaintId) && typeof renderCustomerComplaintChatMessages === 'function') renderCustomerComplaintChatMessages(complaint);
+    if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+    if (typeof renderCustomerComplaintChats === 'function') renderCustomerComplaintChats();
 }
 
 function chatReadFileAsDataURL(file) {
@@ -2380,14 +2399,36 @@ async function collectChatAttachments(inputId) {
     return media;
 }
 
+function removeChatSelectedFile(inputId, index, previewId) {
+    const input = document.getElementById(inputId);
+    if (!input || !input.files) return;
+    const dt = new DataTransfer();
+    Array.from(input.files).forEach((file, i) => { if (i !== index) dt.items.add(file); });
+    input.files = dt.files;
+    renderChatAttachmentPreview(inputId, previewId);
+}
+
+function clearChatSelectedFiles(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    if (input) input.value = '';
+    const preview = document.getElementById(previewId);
+    if (preview) preview.innerHTML = '';
+}
+
 function renderChatAttachmentPreview(inputId, previewId) {
     const input = document.getElementById(inputId);
     const preview = document.getElementById(previewId);
     if (!input || !preview) return;
     const files = Array.from(input.files || []);
-    preview.innerHTML = files.length
-        ? files.map(file => `<span class="inline-flex items-center gap-1 bg-neutral-100 border border-neutral-200 rounded-lg px-2 py-1 text-[9px]">${file.type.startsWith('video/') ? '🎬' : '🖼️'} ${escapeChatHtml(file.name)}</span>`).join('')
-        : '';
+    preview.innerHTML = files.length ? `
+        <div class="flex items-center justify-between gap-2 mb-1 px-1">
+            <span class="text-[9px] font-bold text-neutral-500">المرفقات المحددة (${files.length})</span>
+            <button type="button" onclick="clearChatSelectedFiles('${inputId}','${previewId}')" class="text-[9px] font-bold text-red-600 hover:text-red-700">مسح الكل ✕</button>
+        </div>
+        <div class="flex flex-wrap gap-1">${files.map((file,index) => `<span class="inline-flex items-center gap-1 bg-neutral-100 border border-neutral-200 rounded-lg px-2 py-1 text-[9px] max-w-full">
+            <span>${file.type.startsWith('video/') ? '🎬' : '🖼️'}</span><span class="truncate max-w-[150px]">${escapeChatHtml(file.name)}</span>
+            <button type="button" onclick="removeChatSelectedFile('${inputId}',${index},'${previewId}')" class="text-red-600 font-black" title="إزالة">✕</button>
+        </span>`).join('')}</div>` : '';
 }
 
 function buildChatComposer(prefix, sendFunction) {
@@ -2447,6 +2488,15 @@ function ensureComplaintCameraModal() {
     photoInput.type = 'file'; photoInput.id = 'bkl-native-complaint-photo'; photoInput.accept = 'image/*'; photoInput.capture = 'environment'; photoInput.className = 'hidden';
     photoInput.onchange = () => handleNativeComplaintCameraFile(photoInput);
     document.body.appendChild(photoInput);
+
+    const videoInput = document.createElement('input');
+    videoInput.type = 'file';
+    videoInput.id = 'bkl-native-complaint-video';
+    videoInput.accept = 'video/*';
+    videoInput.setAttribute('capture', 'environment');
+    videoInput.className = 'hidden';
+    videoInput.onchange = () => handleNativeComplaintCameraFile(videoInput);
+    document.body.appendChild(videoInput);
     return modal;
 }
 
@@ -2472,29 +2522,14 @@ function openNativeComplaintCamera(mode) {
 async function startComplaintVideoCapture() {
     ensureComplaintCameraModal();
     bklComplaintCameraMode = 'video';
-    const choice = document.getElementById('bkl-camera-choice-buttons');
-    const panel = document.getElementById('bkl-video-capture-panel');
-    const video = document.getElementById('bkl-complaint-video-preview');
-    try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('getUserMedia unavailable');
-        bklComplaintVideoStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}, audio:true});
-        if (video) { video.srcObject = bklComplaintVideoStream; await video.play().catch(()=>{}); }
-        bklComplaintVideoChunks = [];
-        const mime = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(x => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(x)) || '';
-        if (!window.MediaRecorder) throw new Error('MediaRecorder unavailable');
-        bklComplaintVideoRecorder = new MediaRecorder(bklComplaintVideoStream, mime ? {mimeType:mime} : undefined);
-        bklComplaintVideoRecorder.ondataavailable = e => { if (e.data && e.data.size) bklComplaintVideoChunks.push(e.data); };
-        bklComplaintVideoRecorder.start(250);
-        if (choice) choice.classList.add('hidden');
-        if (panel) panel.classList.remove('hidden');
-    } catch (e) {
-        // fallback: افتح مسجل الفيديو الأصلي للهاتف. لا نستخدم حقل الصورة هنا.
-        const input = document.getElementById('bkl-native-complaint-video') || document.createElement('input');
-        input.type='file'; input.id='bkl-native-complaint-video'; input.accept='video/*'; input.setAttribute('capture','environment'); input.className='hidden';
-        input.onchange = () => handleNativeComplaintCameraFile(input);
-        if (!input.parentNode) document.body.appendChild(input);
-        input.value=''; input.click();
+    const input = document.getElementById('bkl-native-complaint-video');
+    if (input) {
+        input.value = '';
+        // هذا هو المسار الأساسي على الهاتف: يطلب من نظام الهاتف فتح الكاميرا في وضع الفيديو.
+        input.click();
+        return;
     }
+    alert('تعذر تجهيز كاميرا الفيديو على هذا الجهاز.');
 }
 
 function stopComplaintVideoCapture(attach) {
@@ -2669,7 +2704,7 @@ function renderComplaintChatMessages(complaint) {
             <div class="flex flex-col ${isOwner ? 'items-end' : 'items-start'}">
                 <div class="max-w-[82%] rounded-2xl p-2.5 ${isOwner ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-none'} shadow-sm">
                     ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
-                    ${getChatMessageMediaHtml(msg, true)}
+                    ${getChatMessageMediaHtml(msg, true, complaint.id, idx)}
                 </div>
                 <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span>
             </div>`;
@@ -2802,12 +2837,12 @@ function renderCustomerComplaintChatMessages(complaint) {
     if (!container) return;
     ensureComplaintMessages(complaint);
     const messages = complaint.messages;
-    container.innerHTML = messages.length ? messages.map(msg => {
+    container.innerHTML = messages.length ? messages.map((msg, idx) => {
         const fromOwner = msg.sender === 'owner';
         return `<div class="flex flex-col ${fromOwner ? 'items-start' : 'items-end'}">
             <div class="max-w-[82%] rounded-2xl p-2.5 ${fromOwner ? 'bg-indigo-600 text-white rounded-bl-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-br-none'} shadow-sm">
                 ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
-                ${getChatMessageMediaHtml(msg, false)}
+                ${getChatMessageMediaHtml(msg, false, complaint.id, idx)}
             </div>
             <span class="text-[9px] text-neutral-400 mt-1 px-1">${fromOwner ? 'صاحب المتجر' : 'أنت'} • ${escapeChatHtml(msg.time || '')}</span>
         </div>`;
