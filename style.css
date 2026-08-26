@@ -117,3 +117,12 @@
 .submit-btn:hover {
   background-color: #218838;
 }
+/* مثال للتطبيق على الهواتف التي تقل عرض شاشتها عن 768 بكسل */
+@media (max-width: 768px) {
+  /* تصغير حجم الأيقونات لتتناسب مع المساحة المتاحة */
+  .icon, nav img, .nav-item {
+    font-size: 14px;
+    padding: 4px;
+    margin: 0 2px;
+  }
+}
