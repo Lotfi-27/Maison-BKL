@@ -693,6 +693,97 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
   if(lang!=='ar') document.documentElement.classList.add('bkl-i18n-pending');
 })();
 </script>
+
+<style id="bkl-mobile-responsive-final">
+/* ===== Mobile header: keep all primary actions visible ===== */
+@media (max-width:760px){
+  header.bkl-header{position:sticky!important;top:0!important;z-index:80!important;}
+  .bkl-header-inner{
+    height:auto!important;
+    min-height:116px!important;
+    padding:7px 8px 8px!important;
+    display:flex!important;
+    flex-wrap:wrap!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:7px 6px!important;
+  }
+  .bkl-brand{
+    order:1!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+    max-width:calc(100% - 132px)!important;
+    gap:7px!important;
+  }
+  .bkl-logo{width:40px!important;height:40px!important;font-size:23px!important;}
+  .bkl-brand-name{font-size:17px!important;white-space:nowrap!important;}
+  .bkl-brand-sub{font-size:9px!important;white-space:nowrap!important;}
+
+  /* Currency + cart stay on the first row */
+  .bkl-header-actions{
+    order:2!important;
+    flex:0 0 auto!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    gap:5px!important;
+    min-width:0!important;
+  }
+  .bkl-currency{min-width:72px!important;max-width:78px!important;width:78px!important;height:40px!important;font-size:11px!important;padding:0 5px!important;}
+  .bkl-header-actions .bkl-cart-top{width:40px!important;min-width:40px!important;height:40px!important;flex:0 0 40px!important;}
+
+  /* Home / dashboard / account + language become a dedicated second row */
+  .bkl-header-center{
+    order:3!important;
+    flex:0 0 100%!important;
+    width:100%!important;
+    min-width:0!important;
+    display:flex!important;
+    justify-content:center!important;
+    align-items:center!important;
+    gap:6px!important;
+    padding:1px 0 0!important;
+  }
+  .bkl-header-center > .bkl-icon-btn{
+    display:flex!important;
+    width:40px!important;min-width:40px!important;height:40px!important;
+    flex:0 0 40px!important;
+  }
+  .bkl-header-center > .bkl-icon-btn i{font-size:16px!important;width:16px!important;height:16px!important;}
+  .bkl-dashboard-btn span{display:none!important;}
+  .bkl-language{
+    display:block!important;
+    height:40px!important;
+    min-width:92px!important;max-width:105px!important;
+    width:auto!important;
+    font-size:11px!important;padding:0 6px!important;
+  }
+  /* Search is intentionally removed on very small screens; all action icons remain visible. */
+  .bkl-search-wrap{display:none!important;}
+
+  /* The modal starts below the two-row mobile header. */
+  #add-modal{inset:116px 0 0 0!important;}
+  #add-modal > .bg-white{width:100%!important;height:100%!important;}
+
+  /* Bottom navigation: four equal slots where available, without clipping icons. */
+  footer > div{height:64px!important;padding:0 4px!important;gap:2px!important;}
+  footer button{min-width:0!important;flex:1 1 0!important;padding:4px 2px!important;}
+  footer i{font-size:20px!important;width:auto!important;height:auto!important;}
+  footer span{font-size:9px!important;white-space:nowrap!important;}
+}
+
+@media (max-width:360px){
+  .bkl-brand{max-width:calc(100% - 120px)!important;}
+  .bkl-brand-name{font-size:15px!important;}
+  .bkl-brand-sub{font-size:8px!important;}
+  .bkl-currency{width:68px!important;min-width:68px!important;font-size:10px!important;}
+  .bkl-header-actions .bkl-cart-top{width:38px!important;min-width:38px!important;height:38px!important;}
+  .bkl-header-center{gap:4px!important;}
+  .bkl-header-center > .bkl-icon-btn{width:38px!important;min-width:38px!important;height:38px!important;flex-basis:38px!important;}
+  .bkl-language{min-width:84px!important;font-size:10px!important;}
+}
+</style>
+
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -917,8 +1008,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                         </select>
                     </div>
                     <div id="state-container">
-                        <label id="lbl-state" class="block text-[11px] text-neutral-600 mb-1">الولاية / المقاطعة</label>
-                        <select id="pay-state-select" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition cursor-pointer">
+                        <label id="lbl-state-initial" class="block text-[11px] text-neutral-600 mb-1">الولاية / المقاطعة</label>
+                        <select id="pay-state-select-initial" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition cursor-pointer">
                         </select>
                     </div>
                 </div>
@@ -5529,7 +5620,7 @@ function injectAdminColorSizeInputsIfNeeded() {
                     <button type="button" onclick="addImageWithColor()" class="bg-amber-600 hover:bg-amber-700 text-white w-8 h-8 rounded-xl text-xs font-bold flex items-center justify-center transition cursor-pointer shadow-sm">+</button>
                 </div>
             </div>
-            <div id="edit-images-preview" class="flex items-center gap-2 overflow-x-auto py-1"></div>
+            <div id="new-images-preview" class="flex items-center gap-2 overflow-x-auto py-1"></div>
         </div>
 
         <div class="flex items-center justify-between bg-neutral-50 p-2.5 rounded-xl border border-neutral-200">
@@ -5973,20 +6064,22 @@ function renderCart() {
 
     const items = getCartItems();
     const totalQuantity = items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1), 0);
-    const subtotal = items.reduce((sum, item) => {
+    const subtotalDZD = items.reduce((sum, item) => {
         const qty = Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1);
         const unitDZD = Number(item.priceDZD ?? item.unitPriceDZD);
         const unitBase = Number(item.basePrice ?? item.unitPriceUSD ?? item.priceBase ?? 0) || 0;
-        const unitAmount = Number.isFinite(unitDZD) ? unitDZD : unitBase * ((currencyConfig[currentCurrency] || currencyConfig.DZD).rate);
-        return sum + (unitAmount * qty);
+        const unitAmountDZD = Number.isFinite(unitDZD)
+            ? unitDZD
+            : unitBase * (Number(currencyConfig.DZD?.rate) || 1);
+        return sum + (unitAmountDZD * qty);
     }, 0);
 
     container.innerHTML = items.map((item, index) => {
         const qty = Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1);
         const unitDZD = Number(item.priceDZD ?? item.unitPriceDZD);
         const unitBase = Number(item.basePrice ?? item.unitPriceUSD ?? item.priceBase ?? 0) || 0;
-        const unitDisplay = Number.isFinite(unitDZD) ? `${unitDZD.toLocaleString('ar-DZ')} د.ج` : formatPrice(unitBase);
-        const lineDisplay = Number.isFinite(unitDZD) ? `${(unitDZD * qty).toLocaleString('ar-DZ')} د.ج` : formatPrice(unitBase * qty);
+        const unitDisplay = formatPrice(unitBase, Number.isFinite(unitDZD) ? unitDZD : null);
+        const lineDisplay = formatPrice(unitBase * qty, Number.isFinite(unitDZD) ? unitDZD * qty : null);
         const options = [item.size ? `المقاس: ${item.size}` : '', item.color ? `اللون: ${item.color}` : ''].filter(Boolean).join(' - ');
         return `
             <div class="bg-white border border-neutral-200 rounded-2xl p-3 shadow-sm">
@@ -6021,7 +6114,7 @@ function renderCart() {
     emptyState?.classList.toggle('hidden', hasItems);
     summary?.classList.toggle('hidden', !hasItems);
     if (proceed) proceed.disabled = !hasItems;
-    if (totalEl) totalEl.innerText = hasItems ? `${subtotal.toLocaleString('ar-DZ')} ${currencyConfig[currentCurrency]?.symbol || 'د.ج'}` : '0 د.ج';
+    if (totalEl) totalEl.innerText = hasItems ? formatPrice(0, subtotalDZD) : '0 د.ج';
     if (countEl) countEl.innerText = `${totalQuantity} منتج`;
     if (itemsCountEl) itemsCountEl.innerText = String(totalQuantity);
 }
@@ -7030,6 +7123,35 @@ function completeCheckoutOrder() {
             preview.textContent = `الإجمالي: ${total.toLocaleString('ar-DZ', { maximumFractionDigits: 2 })} د.ج`;
         }
 
+        function decrementInventoryForOrder(order) {
+            if (!order || !Array.isArray(order.items) || !order.items.length) return;
+            try {
+                const all = getInventoryData();
+                const branchId = typeof currentBranchId !== 'undefined' ? currentBranchId : 'main';
+                const branchItems = Array.isArray(all[branchId]) ? all[branchId] : [];
+                let changed = false;
+
+                order.items.forEach(orderItem => {
+                    const productName = String(orderItem.name || orderItem.productName || '').trim();
+                    const qty = Math.max(1, Number(orderItem.quantity ?? orderItem.qty ?? 1) || 1);
+                    if (!productName) return;
+                    const inv = branchItems.find(item => String(item.name || '').trim().toLowerCase() === productName.toLowerCase());
+                    if (inv) {
+                        inv.qty = Math.max(0, Number(inv.qty || 0) - qty);
+                        changed = true;
+                    }
+                });
+
+                if (changed) {
+                    all[branchId] = branchItems;
+                    saveInventoryData(all);
+                    if (typeof renderInventoryTable === 'function') renderInventoryTable();
+                }
+            } catch (e) {
+                console.warn('تعذر تحديث كمية المخزون بعد تسجيل الطلب:', e);
+            }
+        }
+
         function submitOrderAndPay() {
             const getValue = (id, fallback = '') => {
                 const el = document.getElementById(id);
@@ -7089,6 +7211,10 @@ function completeCheckoutOrder() {
                 alert('السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.');
                 return;
             }
+
+            // منع الضغط المزدوج على زر الدفع وإنشاء طلبين متطابقين.
+            if (window.__bklSubmittingOrder) return;
+            window.__bklSubmittingOrder = true;
 
             // نحسب مجموع جميع المنتجات من بيانات السلة نفسها، ثم نضيف إليه التوصيل.
             // مهم: لا نقرب سعر كل منتج منفرداً حتى لا تضيع الكسور مثل 558.26 د.ج.
@@ -7154,6 +7280,9 @@ function completeCheckoutOrder() {
             localStorage.setItem('store_orders', JSON.stringify(orders));
             localStorage.setItem('storeOrdersList', JSON.stringify(orders));
 
+            // خصم الكميات من مخزون الفرع النشط عند تسجيل الطلب.
+            decrementInventoryForOrder(orderData);
+
             // الكريدي: نحفظ نسخة ثابتة من الفاتورة في دفتر الكريدي الخاص بالمتجر والزبون.
             // النسختان snapshots مستقلتان ولا توجد لهما دوال تعديل أو حذف.
             if (methodValue === 'credit') {
@@ -7167,6 +7296,7 @@ function completeCheckoutOrder() {
             localStorage.removeItem('store_cart');
 
             goToPage('page-5');
+            setTimeout(() => { window.__bklSubmittingOrder = false; }, 300);
         }
 
         // =====================================================
