@@ -27,6 +27,9 @@
             font-family:Arial,"Corps CS",sans-serif;
             min-height:100vh;
         }
+        html:not([lang="ar"]) body{
+            font-family:"Times New Roman","Titres CS",serif;
+        }
 
         /* Never override icon fonts: otherwise Font Awesome becomes squares. */
         .fa,.fas,.far,.fal,.fad,.fab,
@@ -669,6 +672,27 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 @keyframes bklCreditCardIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 [data-credit-payment-input]{font-variant-numeric:tabular-nums;}
 </style>
+
+<!-- BKL International Store Language Bootstrap -->
+<style id="bkl-i18n-bootstrap-style">
+  html.bkl-i18n-pending body { visibility:hidden !important; }
+  html.bkl-i18n-ready body { visibility:visible !important; }
+</style>
+<script id="bkl-i18n-bootstrap">
+(function(){
+  const supported=['ar','en','fr','es','de','zh'];
+  let lang='';
+  try { lang=localStorage.getItem('store_language')||''; } catch(e){}
+  if(!supported.includes(lang)){
+    const raw=(navigator.language||navigator.userLanguage||'en').toLowerCase();
+    const base=raw.split('-')[0];
+    lang=supported.includes(base)?base:'en';
+  }
+  document.documentElement.lang=lang;
+  document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+  if(lang!=='ar') document.documentElement.classList.add('bkl-i18n-pending');
+})();
+</script>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -4406,78 +4430,86 @@ const translations = {
 let currentLang = 'ar';
 
 /* =========================================================
-   BKL SAFE COMPREHENSIVE TRANSLATION LAYER
-   - Uses the built-in translations dictionary first.
-   - Uses MyMemory only as a guarded fallback for unknown text.
-   - NEVER writes API quota/error/warning messages into the store.
-   - Does not continuously observe every DOM mutation (prevents loops).
-   - Keeps original text per node so language switching is reversible.
+   BKL TRANSLATION ENGINE v5
+   - Translates static AND dynamically generated visible UI.
+   - Translates placeholders/title/aria-label/alt.
+   - Translates user-entered visible text fields without changing
+     the original Arabic value kept by the application.
+   - International sizes are NEVER translated.
+   - Algerian wilayas/communes use their French/Latin place names,
+     not machine translation. The 2026 dataset is loaded and cached;
+     a phonetic fallback is used when a place is not found.
    ========================================================= */
 (function(){
     const BKL_LANGS=['ar','en','fr','es','de','zh'];
-    const BKL_SIZE_RE=/^(?:XXXS|XXS|XS|S|M|L|XL|XXL|XXXL|XXXXL|[0-9]{1,3}(?:[.,][0-9])?|[0-9]{1,3}\s*(?:EU|US|UK|FR|IT))$/i;
-    const BKL_SKIP_TAGS=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','SVG','PATH']);
     const BKL_ATTRS=['placeholder','title','aria-label','alt'];
-    const BKL_CACHE_KEY='bkl_translation_cache_v5_safe';
-    const BKL_SESSION_BLOCK_KEY='bkl_translation_api_blocked_until';
-    const originals=new WeakMap();
-    const attrOriginals=new WeakMap();
-    let translating=false;
-
+    const BKL_SKIP_TAGS=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','SVG','PATH']);
+    const BKL_CACHE_KEY='bkl_translation_cache_v5';
+    const BKL_PLACE_CACHE_KEY='bkl_algeria_places_v1';
+    const BKL_PLACE_DATA_URL='https://raw.githubusercontent.com/el-amin-dev/algeria-wilayas-communes/main/data/algeria.json';
+    const BKL_SIZE_RE=/^(?:XXXS|XXS|XS|S|M|L|XL|XXL|XXXL|XXXXL|[0-9]{1,3}(?:[.,][0-9])?|[0-9]{1,3}\s*(?:EU|US|UK|FR|IT))$/i;
+    const BKL_VALUE_SKIP_RE=/(phone|email|username|password|pass|card|cvv|month|year|quantity|price|delivery|search|otp|code|id)/i;
     let cache={};
     try{cache=JSON.parse(localStorage.getItem(BKL_CACHE_KEY)||'{}')||{};}catch(e){cache={};}
+    let placeMap={};
+    try{placeMap=JSON.parse(localStorage.getItem(BKL_PLACE_CACHE_KEY)||'{}')||{};}catch(e){placeMap={};}
 
-    function saveCache(){
-        try{localStorage.setItem(BKL_CACHE_KEY,JSON.stringify(cache));}catch(e){}
-    }
+    const originals=new WeakMap();
+    const attrOriginals=new WeakMap();
+    const valueOriginals=new WeakMap();
+    let translating=false;
+    let applyingValue=false;
+    let scanTimer=null;
 
-    function normalize(t){
-        return String(t??'').replace(/\s+/g,' ').trim();
-    }
-
+    function saveCache(){try{localStorage.setItem(BKL_CACHE_KEY,JSON.stringify(cache));}catch(e){}}
+    function savePlaceMap(){try{localStorage.setItem(BKL_PLACE_CACHE_KEY,JSON.stringify(placeMap));}catch(e){}}
+    function normalize(t){return String(t??'').replace(/\s+/g,' ').trim();}
     function isSizeText(t){
-        const x=normalize(t);
-        if(!x)return false;
-        return BKL_SIZE_RE.test(x) ||
-          /^مقاس\s*[:：-]?\s*(XXXS|XXS|XS|S|M|L|XL|XXL|XXXL|XXXXL|[0-9]{1,3})$/i.test(x);
+        const x=normalize(t); if(!x) return false;
+        return BKL_SIZE_RE.test(x) || /^مقاس\s*[:：-]?\s*(XXXS|XXS|XS|S|M|L|XL|XXL|XXXL|[0-9]{1,3})$/i.test(x);
     }
-
-    function isNumericOnly(t){
-        return /^[0-9\s.,+\-/:()#%$€£₩¥دج]+$/i.test(normalize(t));
-    }
-
+    function isNumericOnly(t){return /^[0-9\s.,+\-/:()#%$€£₩¥دج]+$/i.test(normalize(t));}
+    function hasArabic(t){return /[\u0600-\u06FF]/.test(String(t||''));}
     function shouldSkip(el){
         if(!el || BKL_SKIP_TAGS.has(el.tagName)) return true;
-        if(el.closest('[data-no-translate],.bkl-no-translate,[data-size],.size-option,.size-selector')) return true;
-        return false;
+        return !!el.closest('[data-no-translate],.bkl-no-translate,[data-size],.size-option,.size-selector');
     }
-
     function originalNode(n){
         if(!originals.has(n)) originals.set(n,n.nodeValue||'');
         return originals.get(n);
     }
-
     function originalAttr(el,attr){
-        let m=attrOriginals.get(el);
-        if(!m){m={};attrOriginals.set(el,m);}
+        let m=attrOriginals.get(el); if(!m){m={};attrOriginals.set(el,m);}
         if(!(attr in m)) m[attr]=el.getAttribute(attr)||'';
         return m[attr];
     }
+    function shouldTranslateValue(el){
+        if(!el || shouldSkip(el)) return false;
+        if(el.tagName==='TEXTAREA') return true;
+        if(el.tagName!=='INPUT') return false;
+        const type=(el.type||'text').toLowerCase();
+        if(!['text','search','tel','email','url'].includes(type)) return false;
+        if(type!=='text' && type!=='search') return false;
+        const id=String(el.id||'');
+        if(BKL_VALUE_SKIP_RE.test(id)) return false;
+        return true;
+    }
+    function originalValue(el){
+        if(!valueOriginals.has(el)) valueOriginals.set(el,el.value||'');
+        return valueOriginals.get(el);
+    }
 
     function collectTextNodes(root=document.body){
-        const out=[];
-        const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+        const out=[]; const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
         let n;
         while(n=walker.nextNode()){
-            const p=n.parentElement;
-            if(!p||shouldSkip(p)) continue;
+            const p=n.parentElement; if(!p||shouldSkip(p)) continue;
             const raw=originalNode(n), t=normalize(raw);
             if(!t||isSizeText(t)||isNumericOnly(t)) continue;
             out.push({node:n,text:t});
         }
         return out;
     }
-
     function collectAttributes(root=document.body){
         const out=[];
         root.querySelectorAll('*').forEach(el=>{
@@ -4491,283 +4523,258 @@ let currentLang = 'ar';
         });
         return out;
     }
-
-    /*
-      Convert the existing translations object into a reverse lookup:
-      Arabic source phrase -> translated phrase.
-      This means the main store UI never needs an external request.
-    */
-    const localMaps={};
-    function buildLocalMaps(){
-        try{
-            const ar=translations?.ar||{};
-            Object.keys(translations||{}).forEach(lang=>{
-                if(lang==='ar') return;
-                const map={};
-                const target=translations[lang]||{};
-                Object.keys(ar).forEach(key=>{
-                    const source=normalize(ar[key]);
-                    const value=normalize(target[key]);
-                    if(source && value) map[source]=value;
-                });
-                localMaps[lang]=map;
-            });
-        }catch(e){}
+    function collectValues(root=document.body){
+        const out=[];
+        root.querySelectorAll('input,textarea').forEach(el=>{
+            if(!shouldTranslateValue(el)) return;
+            const raw=originalValue(el), t=normalize(raw);
+            if(!t||isSizeText(t)||isNumericOnly(t)) return;
+            out.push({el,text:t});
+        });
+        return out;
     }
-    buildLocalMaps();
 
-    /* Additional common UI phrases generated dynamically in the store. */
-    const COMMON={
-      en:{
-        'الرئيسية':'Home','لوحة التحكم':'Dashboard','حسابي':'My Account','السلة':'Cart',
-        'تغيير لغة المتجر':'Change Store Language','تغيير العملة':'Change Currency',
-        'ابحث عن منتج...':'Search for a product...','الفرع الحالي:':'Current branch:',
-        'المتجر الرئيسي':'Main Store','تبديل / إدارة':'Switch / Manage','الكل':'All',
-        'اللون:':'Color:','المقاس:':'Size:','الكمية المطلوبة:':'Quantity:',
-        'عدد المنتجات:':'Number of products:','مجموع المنتجات:':'Products total:',
-        'سلة المشتريات':'Shopping Cart','السلة فارغة':'Cart is empty',
-        'أضف أكثر من منتج ثم انتقل إلى الدفع في طلب واحد.':'Add more than one product, then proceed to checkout in a single order.',
-        'الانتقال إلى الدفع':'Proceed to Checkout','بيانات التوصيل والدفع':'Delivery and Payment Details',
-        'معلومات التوصيل':'Delivery Information','معلومات الدفع':'Payment Information',
-        'طريقة الدفع':'Payment Method','سعر التوصيل':'Delivery Fee','الإجمالي:':'Total:',
-        'ادفع الآن':'Pay Now','تم تأكيد الطلب!':'Order Confirmed!',
-        'العودة للرئيسية':'Back to Home','إنشاء حساب جديد كزبون':'Create a New Customer Account',
-        'تسجيل الدخول':'Log In','إلغاء':'Cancel','حفظ':'Save','إغلاق':'Close','حذف':'Delete',
-        'تعديل':'Edit','اسم المنتج':'Product Name','السعر':'Price','الوصف':'Description',
-        'الاسم':'First Name','اللقب':'Last Name','رقم الهاتف':'Phone Number',
-        'البريد الإلكتروني':'Email','البلد':'Country','الولاية':'State / Province',
-        'البلدية':'Municipality','العنوان بالتفصيل':'Detailed Address',
-        'اختر الولاية':'Select State','اختر الفرع':'Select Branch',
-        'كلمة المرور *':'Password *','رقم البطاقة':'Card Number',
-        'الدفع عند الاستلام':'Cash on Delivery','الدفع نقداً':'Cash Payment',
-        'البطاقة الذهبية (Edahabia)':'Edahabia Card','تأكيد الطلب':'Confirm Order',
-        'لا توجد صور حالية':'No images available','لا توجد تنبيهات حالياً':'No notifications',
-        'جميع الفروع':'All Branches','تغيير كلمة المرور':'Change Password',
-        'إرسال شكوى أو ملاحظة':'Send a complaint or note','المحادثة وفتح الشكوى':'Open complaint chat',
-        'طباعة الفاتورة':'Print Invoice','حفظ الفاتورة':'Save Invoice'
+    // Local UI dictionary for critical dashboard/auth phrases. This is used first
+    // so important controls never remain Arabic when the remote translator is slow.
+    const BKL_UI_TRANSLATIONS = {
+      en: {
+        'أدخل كلمة المرور':'Enter password',
+        'أدخل كلمة مرور لوحة التحكم':'Enter the dashboard password',
+        'أدخل كلمة مرور إدارة الفروع والمخازن':'Enter the branches and inventory management password',
+        'كلمة المرور...':'Password...', 'كلمة المرور غير صحيحة!':'Incorrect password!',
+        'إلغاء':'Cancel','دخول':'Login','تأكيد الحذف':'Confirm deletion','هل أنت متأكد من حذف هذه المادة؟':'Are you sure you want to delete this item?',
+        'لا':'No','نعم':'Yes','تغيير كلمة المرور':'Change password','كلمة المرور القديمة':'Old password','الكلمة القديمة...':'Old password...',
+        'لوحة تحكم صاحب المتجر الإدارية':'Store Owner Admin Dashboard','لوحة تحكم صاحب المتجر':'Store Owner Dashboard',
+        'سجل نشاط وحضور المشرفين':'Admin Activity and Attendance Log','متابعة الحضور والغياب مع الوقت والتاريخ الكامل':'Track attendance and absence with full date and time',
+        'فتح السجل':'Open Log','إدارة الطلبات وفواتير الشراء':'Order and Purchase Invoice Management','تحديث':'Refresh',
+        'دفتر الكريدي':'Credit Ledger','إدارة الفروع والمخازن':'Branches and Inventory Management','الإعدادات':'Settings',
+        'النشاط':'Activity','الفروع':'Branches','المخزون':'Inventory','حفظ':'Save','إغلاق لوحة التحكم':'Close dashboard',
+        'المتجر الرئيسي':'Main Store','فرع مستغانم':'Mostaganem Branch','حذف الفرع':'Delete Branch',
+        'يرجى ملء جميع الحقول المطلوبة':'Please fill in all required fields','الاسم':'Name','اللقب':'Last Name','العنوان بالتفصيل':'Detailed Address',
+        'البلدية':'Municipality','الولاية':'Wilaya','رقم الهاتف':'Phone Number','البريد الإلكتروني':'Email'
       },
-      fr:{
-        'الرئيسية':'Accueil','لوحة التحكم':'Tableau de bord','حسابي':'Mon compte','السلة':'Panier',
-        'تغيير لغة المتجر':'Changer la langue de la boutique','ابحث عن منتج...':'Rechercher un produit...',
-        'الفرع الحالي:':'Branche actuelle :','المتجر الرئيسي':'Boutique principale',
-        'تبديل / إدارة':'Changer / Gérer','الكل':'Tous','اللون:':'Couleur :','المقاس:':'Taille :',
-        'الكمية المطلوبة:':'Quantité :','عدد المنتجات:':'Nombre de produits :',
-        'مجموع المنتجات:':'Total des produits :','سلة المشتريات':'Panier',
-        'السلة فارغة':'Le panier est vide','الانتقال إلى الدفع':'Procéder au paiement',
-        'بيانات التوصيل والدفع':'Informations de livraison et de paiement',
-        'معلومات التوصيل':'Informations de livraison','معلومات الدفع':'Informations de paiement',
-        'طريقة الدفع':'Mode de paiement','سعر التوصيل':'Frais de livraison','الإجمالي:':'Total :',
-        'ادفع الآن':'Payer maintenant','تم تأكيد الطلب!':'Commande confirmée !',
-        'العودة للرئيسية':"Retour à l'accueil",'تسجيل الدخول':'Se connecter','إلغاء':'Annuler',
-        'حفظ':'Enregistrer','إغلاق':'Fermer','حذف':'Supprimer','تعديل':'Modifier',
-        'اسم المنتج':'Nom du produit','السعر':'Prix','الوصف':'Description','الاسم':'Prénom',
-        'اللقب':'Nom','رقم الهاتف':'Numéro de téléphone','البريد الإلكتروني':'E-mail',
-        'البلد':'Pays','الولاية':'État / Province','البلدية':'Municipalité',
-        'العنوان بالتفصيل':'Adresse détaillée','اختر الولاية':'Choisir la wilaya',
-        'اختر الفرع':'Choisir la branche','كلمة المرور *':'Mot de passe *',
-        'رقم البطاقة':'Numéro de carte','الدفع عند الاستلام':'Paiement à la livraison',
-        'الدفع نقداً':'Paiement en espèces','البطاقة الذهبية (Edahabia)':'Carte Edahabia',
-        'لا توجد صور حالية':"Aucune image disponible",'جميع الفروع':'Toutes les branches',
-        'تغيير كلمة المرور':'Changer le mot de passe','إرسال شكوى أو ملاحظة':'Envoyer une réclamation ou une remarque',
-        'طباعة الفاتورة':'Imprimer la facture','حفظ الفاتورة':'Enregistrer la facture'
+      fr: {
+        'أدخل كلمة المرور':'Entrez le mot de passe','أدخل كلمة مرور لوحة التحكم':'Entrez le mot de passe du tableau de bord','أدخل كلمة مرور إدارة الفروع والمخازن':'Entrez le mot de passe de gestion des agences et stocks',
+        'كلمة المرور...':'Mot de passe...','كلمة المرور غير صحيحة!':'Mot de passe incorrect !','إلغاء':'Annuler','دخول':'Connexion',
+        'تأكيد الحذف':'Confirmer la suppression','هل أنت متأكد من حذف هذه المادة؟':'Voulez-vous vraiment supprimer cet article ?','لا':'Non','نعم':'Oui',
+        'تغيير كلمة المرور':'Modifier le mot de passe','كلمة المرور القديمة':'Ancien mot de passe','الكلمة القديمة...':'Ancien mot de passe...',
+        'لوحة تحكم صاحب المتجر الإدارية':'Tableau de bord administrateur du propriétaire','لوحة تحكم صاحب المتجر':'Tableau de bord du propriétaire',
+        'سجل نشاط وحضور المشرفين':'Journal d’activité et de présence des administrateurs','متابعة الحضور والغياب مع الوقت والتاريخ الكامل':'Suivi des présences et absences avec date et heure complètes',
+        'فتح السجل':'Ouvrir le journal','إدارة الطلبات وفواتير الشراء':'Gestion des commandes et factures d’achat','تحديث':'Actualiser',
+        'دفتر الكريدي':'Registre de crédit','إدارة الفروع والمخازن':'Gestion des agences et des stocks','الإعدادات':'Paramètres','النشاط':'Activité','الفروع':'Agences','المخزون':'Stock','حفظ':'Enregistrer','إغلاق لوحة التحكم':'Fermer le tableau de bord',
+        'المتجر الرئيسي':'Boutique principale','فرع مستغانم':'Agence de Mostaganem','حذف الفرع':'Supprimer l’agence','الاسم':'Nom','اللقب':'Prénom','العنوان بالتفصيل':'Adresse détaillée','البلدية':'Commune','الولاية':'Wilaya','رقم الهاتف':'Téléphone','البريد الإلكتروني':'E-mail'
       },
-      es:{
-        'الرئيسية':'Inicio','لوحة التحكم':'Panel de control','حسابي':'Mi cuenta','السلة':'Carrito',
-        'ابحث عن منتج...':'Buscar un producto...','الفرع الحالي:':'Sucursal actual:',
-        'المتجر الرئيسي':'Tienda principal','تبديل / إدارة':'Cambiar / Gestionar','الكل':'Todos',
-        'اللون:':'Color:','المقاس:':'Talla:','الكمية المطلوبة:':'Cantidad:',
-        'عدد المنتجات:':'Número de productos:','مجموع المنتجات:':'Total de productos:',
-        'سلة المشتريات':'Carrito de compras','السلة فارغة':'El carrito está vacío',
-        'الانتقال إلى الدفع':'Proceder al pago','بيانات التوصيل والدفع':'Datos de entrega y pago',
-        'معلومات التوصيل':'Información de entrega','معلومات الدفع':'Información de pago',
-        'طريقة الدفع':'Método de pago','سعر التوصيل':'Precio de entrega','الإجمالي:':'Total:',
-        'ادفع الآن':'Pagar ahora','تم تأكيد الطلب!':'¡Pedido confirmado!',
-        'العودة للرئيسية':'Volver al inicio','تسجيل الدخول':'Iniciar sesión','إلغاء':'Cancelar',
-        'حفظ':'Guardar','إغلاق':'Cerrar','حذف':'Eliminar','تعديل':'Editar','اسم المنتج':'Nombre del producto',
-        'السعر':'Precio','الوصف':'Descripción','الاسم':'Nombre','اللقب':'Apellidos',
-        'رقم الهاتف':'Número de teléfono','البريد الإلكتروني':'Correo electrónico','البلد':'País',
-        'الولاية':'Estado / Provincia','البلدية':'Municipio','العنوان بالتفصيل':'Dirección detallada',
-        'اختر الولاية':'Seleccionar estado','اختر الفرع':'Seleccionar sucursal',
-        'كلمة المرور *':'Contraseña *','رقم البطاقة':'Número de tarjeta',
-        'الدفع عند الاستلام':'Pago contra entrega','الدفع نقداً':'Pago en efectivo',
-        'البطاقة الذهبية (Edahabia)':'Tarjeta Edahabia','لا توجد صور حالية':'No hay imágenes disponibles',
-        'جميع الفروع':'Todas las sucursales','تغيير كلمة المرور':'Cambiar contraseña',
-        'إرسال شكوى أو ملاحظة':'Enviar una reclamación o nota','طباعة الفاتورة':'Imprimir factura',
-        'حفظ الفاتورة':'Guardar factura'
+      es: {
+        'أدخل كلمة المرور':'Introduzca la contraseña','أدخل كلمة مرور لوحة التحكم':'Introduzca la contraseña del panel de control','كلمة المرور...':'Contraseña...','كلمة المرور غير صحيحة!':'¡Contraseña incorrecta!','إلغاء':'Cancelar','دخول':'Iniciar sesión','تأكيد الحذف':'Confirmar eliminación','لا':'No','نعم':'Sí','تغيير كلمة المرور':'Cambiar contraseña','كلمة المرور القديمة':'Contraseña anterior','حفظ':'Guardar','تحديث':'Actualizar','الإعدادات':'Configuración','النشاط':'Actividad','الفروع':'Sucursales','المخزون':'Inventario','البلدية':'Municipio','الولاية':'Wilaya','رقم الهاتف':'Número de teléfono','البريد الإلكتروني':'Correo electrónico'
       },
-      de:{
-        'الرئيسية':'Startseite','لوحة التحكم':'Dashboard','حسابي':'Mein Konto','السلة':'Warenkorb',
-        'ابحث عن منتج...':'Produkt suchen...','الفرع الحالي:':'Aktuelle Filiale:',
-        'المتجر الرئيسي':'Hauptgeschäft','تبديل / إدارة':'Wechseln / Verwalten','الكل':'Alle',
-        'اللون:':'Farbe:','المقاس:':'Größe:','الكمية المطلوبة:':'Menge:',
-        'عدد المنتجات:':'Anzahl der Produkte:','مجموع المنتجات:':'Produktsumme:',
-        'سلة المشتريات':'Warenkorb','السلة فارغة':'Der Warenkorb ist leer',
-        'الانتقال إلى الدفع':'Zur Kasse','بيانات التوصيل والدفع':'Liefer- und Zahlungsdaten',
-        'معلومات التوصيل':'Lieferinformationen','معلومات الدفع':'Zahlungsinformationen',
-        'طريقة الدفع':'Zahlungsmethode','سعر التوصيل':'Lieferpreis','الإجمالي:':'Gesamt:',
-        'ادفع الآن':'Jetzt bezahlen','تم تأكيد الطلب!':'Bestellung bestätigt!',
-        'العودة للرئيسية':'Zur Startseite','تسجيل الدخول':'Anmelden','إلغاء':'Abbrechen',
-        'حفظ':'Speichern','إغلاق':'Schließen','حذف':'Löschen','تعديل':'Bearbeiten',
-        'اسم المنتج':'Produktname','السعر':'Preis','الوصف':'Beschreibung','الاسم':'Vorname',
-        'اللقب':'Nachname','رقم الهاتف':'Telefonnummer','البريد الإلكتروني':'E-Mail',
-        'البلد':'Land','الولاية':'Bundesland / Provinz','البلدية':'Gemeinde',
-        'العنوان بالتفصيل':'Detaillierte Adresse','اختر الولاية':'Bundesland auswählen',
-        'اختر الفرع':'Filiale auswählen','كلمة المرور *':'Passwort *','رقم البطاقة':'Kartennummer',
-        'الدفع عند الاستلام':'Zahlung bei Lieferung','الدفع نقداً':'Barzahlung',
-        'البطاقة الذهبية (Edahabia)':'Edahabia-Karte','لا توجد صور حالية':'Keine Bilder verfügbar',
-        'جميع الفروع':'Alle Filialen','تغيير كلمة المرور':'Passwort ändern',
-        'إرسال شكوى أو ملاحظة':'Beschwerde oder Hinweis senden','طباعة الفاتورة':'Rechnung drucken',
-        'حفظ الفاتورة':'Rechnung speichern'
+      de: {
+        'أدخل كلمة المرور':'Passwort eingeben','أدخل كلمة مرور لوحة التحكم':'Passwort für das Dashboard eingeben','كلمة المرور...':'Passwort...','كلمة المرور غير صحيحة!':'Falsches Passwort!','إلغاء':'Abbrechen','دخول':'Anmelden','تأكيد الحذف':'Löschen bestätigen','لا':'Nein','نعم':'Ja','تغيير كلمة المرور':'Passwort ändern','كلمة المرور القديمة':'Altes Passwort','حفظ':'Speichern','تحديث':'Aktualisieren','الإعدادات':'Einstellungen','النشاط':'Aktivität','الفروع':'Filialen','المخزون':'Inventar','البلدية':'Gemeinde','الولاية':'Wilaya','رقم الهاتف':'Telefonnummer','البريد الإلكتروني':'E-Mail'
       },
-      zh:{
-        'الرئيسية':'首页','لوحة التحكم':'控制面板','حسابي':'我的账户','السلة':'购物车',
-        'ابحث عن منتج...':'搜索商品...','الفرع الحالي:':'当前分店：','المتجر الرئيسي':'主店',
-        'تبديل / إدارة':'切换 / 管理','الكل':'全部','اللون:':'颜色：','المقاس:':'尺寸：',
-        'الكمية المطلوبة:':'所需数量：','عدد المنتجات:':'商品数量：','مجموع المنتجات:':'商品总额：',
-        'سلة المشتريات':'购物车','السلة فارغة':'购物车为空','الانتقال إلى الدفع':'前往结账',
-        'بيانات التوصيل والدفع':'配送与支付信息','معلومات التوصيل':'配送信息','معلومات الدفع':'支付信息',
-        'طريقة الدفع':'支付方式','سعر التوصيل':'配送费用','الإجمالي:':'总计：','ادفع الآن':'立即支付',
-        'تم تأكيد الطلب!':'订单已确认！','العودة للرئيسية':'返回首页','تسجيل الدخول':'登录',
-        'إلغاء':'取消','حفظ':'保存','إغلاق':'关闭','حذف':'删除','تعديل':'编辑',
-        'اسم المنتج':'商品名称','السعر':'价格','الوصف':'描述','الاسم':'名','اللقب':'姓',
-        'رقم الهاتف':'电话号码','البريد الإلكتروني':'电子邮件','البلد':'国家','الولاية':'省/地区',
-        'البلدية':'市镇','العنوان بالتفصيل':'详细地址','اختر الولاية':'选择省份',
-        'اختر الفرع':'选择分店','كلمة المرور *':'密码 *','رقم البطاقة':'卡号',
-        'الدفع عند الاستلام':'货到付款','الدفع نقداً':'现金支付','البطاقة الذهبية (Edahabia)':'Edahabia 卡',
-        'لا توجد صور حالية':'暂无图片','جميع الفروع':'所有分店','تغيير كلمة المرور':'更改密码',
-        'إرسال شكوى أو ملاحظة':'发送投诉或备注','طباعة الفاتورة':'打印发票','حفظ الفاتورة':'保存发票'
+      zh: {
+        'أدخل كلمة المرور':'请输入密码','أدخل كلمة مرور لوحة التحكم':'请输入控制面板密码','كلمة المرور...':'密码...','كلمة المرور غير صحيحة!':'密码错误！','إلغاء':'取消','دخول':'登录','تأكيد الحذف':'确认删除','لا':'否','نعم':'是','تغيير كلمة المرور':'修改密码','كلمة المرور القديمة':'旧密码','حفظ':'保存','تحديث':'刷新','الإعدادات':'设置','النشاط':'活动','الفروع':'分店','المخزون':'库存','البلدية':'市镇','الولاية':'省','رقم الهاتف':'电话号码','البريد الإلكتروني':'电子邮箱'
       }
     };
 
-    Object.keys(COMMON).forEach(lang=>{
-        localMaps[lang]=Object.assign({},COMMON[lang],localMaps[lang]||{});
-    });
+    /* Complete critical admin/auth/order UI dictionary. */
+    const BKL_UI_EXTRA = {
+      en:{
+        'كلمة مرور إدارة الفروع والمخازن':'Branches and inventory management password','أدخل كلمة مرور إدارة الفروع والمخازن':'Enter the branches and inventory management password',
+        'لوحة التحكم':'Dashboard','لوحة التحكم الإدارية':'Admin Dashboard','صاحب المتجر':'Store Owner','إدارة المنتجات':'Product Management','إضافة منتج':'Add Product','تعديل المنتج':'Edit Product','حذف المنتج':'Delete Product',
+        'الطلبات':'Orders','الفواتير':'Invoices','المخزون':'Inventory','الفروع':'Branches','المشرفون':'Administrators','الشكاوى':'Complaints','الإحصائيات':'Statistics','السجل':'Log','إدارة الحساب':'Account Management',
+        'إضافة فرع':'Add Branch','تعديل الفرع':'Edit Branch','اسم الفرع':'Branch Name','عنوان الفرع':'Branch Address','حفظ التغييرات':'Save Changes','إغلاق':'Close','رجوع':'Back',
+        'تم الحفظ بنجاح':'Saved successfully','تم الحذف بنجاح':'Deleted successfully','حدث خطأ':'An error occurred','غير مصرح':'Unauthorized','هذه الخاصية مخصصة لصاحب المتجر فقط.':'This feature is reserved for the store owner only.',
+        'أدخل اسم المشرف':'Enter the administrator name','يرجى إدخال اسم المشرف':'Please enter the administrator name','يرجى إدخال اسم المادة':'Please enter the item name','يرجى اختيار صورة أولاً!':'Please select an image first!',
+        'تعذر قراءة الصورة المختارة.':'Unable to read the selected image.','تم حفظ صورة ومحتوى الواجهة بنجاح.':'The interface image and content were saved successfully.','تعذر العثور على بيانات الطلب.':'Order data could not be found.',
+        'تعذر تنفيذ العملية. لم يتم إعادة تحميل المتجر.':'The operation could not be completed. The store was not reloaded.','تعذر فتح نافذة الفاتورة. يرجى السماح بالنوافذ المنبثقة من المتجر.':'Could not open the invoice window. Please allow pop-ups for the store.',
+        'يرجى كتابة تفاصيل الشكوى أولاً!':'Please enter the complaint details first!','تم إرسال شكواك بنجاح إلى لوحة التحكم الخاصة بالمتجر وسيتم مراجعتها قريباً.':'Your complaint was sent successfully to the store dashboard and will be reviewed soon.',
+        'يسمح فقط بالصور والفيديوهات، وبحجم أقصى 12 ميغابايت لكل ملف.':'Only images and videos are allowed, with a maximum size of 12 MB per file.',
+        'السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.':'The cart is empty. Add at least one product before checkout.','يجب أن يحتوي الطلب على منتج واحد على الأقل.':'The order must contain at least one product.',
+        'تم حفظ جميع تعديلات الطلب والفاتورة بنجاح.':'All order and invoice changes were saved successfully.','يرجى تعبئة الحقول الأساسية (الاسم، اللقب ورقم الهاتف على الأقل).':'Please fill in the required fields (at least first name, last name and phone number).',
+        'يرجى إدخال رقم بطاقة صحيح.':'Please enter a valid card number.','الشهر يجب أن يكون رقماً من 1 إلى 12 فقط.':'The month must be a number from 1 to 12.','يرجى إدخال السنة.':'Please enter the year.','يرجى إدخال رمز أمان CVV صحيح.':'Please enter a valid CVV security code.',
+        'أدخل مبلغ التسديد أولاً.':'Enter the payment amount first.','المبلغ المسدد أكبر من إجمالي المبلغ المتبقي في دفتر الكريدي.':'The payment amount is greater than the remaining balance in the credit ledger.','لا يوجد':'None','قيد المعالجة':'Processing','مكتمل':'Completed','ملغى':'Cancelled'
+      },
+      fr:{
+        'كلمة مرور إدارة الفروع والمخازن':'Mot de passe de gestion des agences et des stocks','أدخل كلمة مرور إدارة الفروع والمخازن':'Entrez le mot de passe de gestion des agences et des stocks',
+        'لوحة التحكم':'Tableau de bord','لوحة التحكم الإدارية':'Tableau de bord administrateur','صاحب المتجر':'Propriétaire de la boutique','إدارة المنتجات':'Gestion des produits','إضافة منتج':'Ajouter un produit','تعديل المنتج':'Modifier le produit','حذف المنتج':'Supprimer le produit',
+        'الطلبات':'Commandes','الفواتير':'Factures','المخزون':'Stock','الفروع':'Agences','المشرفون':'Administrateurs','الشكاوى':'Réclamations','الإحصائيات':'Statistiques','السجل':'Journal','إدارة الحساب':'Gestion du compte',
+        'إضافة فرع':'Ajouter une agence','تعديل الفرع':'Modifier l’agence','اسم الفرع':'Nom de l’agence','عنوان الفرع':'Adresse de l’agence','حفظ التغييرات':'Enregistrer les modifications','إغلاق':'Fermer','رجوع':'Retour',
+        'تم الحفظ بنجاح':'Enregistré avec succès','تم الحذف بنجاح':'Supprimé avec succès','حدث خطأ':'Une erreur est survenue','غير مصرح':'Non autorisé','هذه الخاصية مخصصة لصاحب المتجر فقط.':'Cette fonctionnalité est réservée au propriétaire de la boutique.',
+        'أدخل اسم المشرف':'Entrez le nom de l’administrateur','يرجى إدخال اسم المشرف':'Veuillez saisir le nom de l’administrateur','يرجى إدخال اسم المادة':'Veuillez saisir le nom de l’article','يرجى اختيار صورة أولاً!':'Veuillez d’abord sélectionner une image !',
+        'تعذر قراءة الصورة المختارة.':'Impossible de lire l’image sélectionnée.','تم حفظ صورة ومحتوى الواجهة بنجاح.':'L’image et le contenu de l’interface ont été enregistrés avec succès.','تعذر العثور على بيانات الطلب.':'Les données de la commande sont introuvables.',
+        'تعذر تنفيذ العملية. لم يتم إعادة تحميل المتجر.':'Impossible d’effectuer l’opération. La boutique n’a pas été rechargée.','تعذر فتح نافذة الفاتورة. يرجى السماح بالنوافذ المنبثقة من المتجر.':'Impossible d’ouvrir la fenêtre de facture. Veuillez autoriser les fenêtres contextuelles de la boutique.',
+        'يرجى كتابة تفاصيل الشكوى أولاً!':'Veuillez d’abord saisir les détails de la réclamation !','تم إرسال شكواك بنجاح إلى لوحة التحكم الخاصة بالمتجر وسيتم مراجعتها قريباً.':'Votre réclamation a été envoyée au tableau de bord de la boutique et sera examinée prochainement.',
+        'السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.':'Le panier est vide. Ajoutez au moins un produit avant le paiement.','يجب أن يحتوي الطلب على منتج واحد على الأقل.':'La commande doit contenir au moins un produit.','تم حفظ جميع تعديلات الطلب والفاتورة بنجاح.':'Toutes les modifications de la commande et de la facture ont été enregistrées avec succès.',
+        'يرجى إدخال رقم بطاقة صحيح.':'Veuillez saisir un numéro de carte valide.','يرجى إدخال السنة.':'Veuillez saisir l’année.','يرجى إدخال رمز أمان CVV صحيح.':'Veuillez saisir un code de sécurité CVV valide.','أدخل مبلغ التسديد أولاً.':'Saisissez d’abord le montant du paiement.','لا يوجد':'Aucun','قيد المعالجة':'En traitement','مكتمل':'Terminé','ملغى':'Annulé'
+      },
+      es:{
+        'لوحة التحكم':'Panel de control','لوحة التحكم الإدارية':'Panel de administración','صاحب المتجر':'Propietario de la tienda','إدارة المنتجات':'Gestión de productos','إضافة منتج':'Añadir producto','تعديل المنتج':'Editar producto','حذف المنتج':'Eliminar producto','الطلبات':'Pedidos','الفواتير':'Facturas','المخزون':'Inventario','الفروع':'Sucursales','المشرفون':'Administradores','الشكاوى':'Reclamaciones','الإحصائيات':'Estadísticas','السجل':'Registro','إغلاق':'Cerrar','رجوع':'Volver','حفظ التغييرات':'Guardar cambios','إضافة فرع':'Añadir sucursal','تعديل الفرع':'Editar sucursal','اسم الفرع':'Nombre de la sucursal','عنوان الفرع':'Dirección de la sucursal','تم الحفظ بنجاح':'Guardado correctamente','تم الحذف بنجاح':'Eliminado correctamente','حدث خطأ':'Ha ocurrido un error','غير مصرح':'No autorizado','أدخل اسم المشرف':'Introduzca el nombre del administrador','يرجى إدخال اسم المشرف':'Introduzca el nombre del administrador','يرجى اختيار صورة أولاً!':'Seleccione primero una imagen','تعذر العثور على بيانات الطلب.':'No se encontraron los datos del pedido.','يرجى كتابة تفاصيل الشكوى أولاً!':'Escriba primero los detalles de la reclamación.','السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.':'El carrito está vacío. Añada al menos un producto antes de pagar.','لا يوجد':'Ninguno','قيد المعالجة':'En proceso','مكتمل':'Completado','ملغى':'Cancelado'
+      },
+      de:{
+        'لوحة التحكم':'Dashboard','لوحة التحكم الإدارية':'Admin-Dashboard','صاحب المتجر':'Shopbesitzer','إدارة المنتجات':'Produktverwaltung','إضافة منتج':'Produkt hinzufügen','تعديل المنتج':'Produkt bearbeiten','حذف المنتج':'Produkt löschen','الطلبات':'Bestellungen','الفواتير':'Rechnungen','المخزون':'Inventar','الفروع':'Filialen','المشرفون':'Administratoren','الشكاوى':'Beschwerden','الإحصائيات':'Statistiken','السجل':'Protokoll','إغلاق':'Schließen','رجوع':'Zurück','حفظ التغييرات':'Änderungen speichern','إضافة فرع':'Filiale hinzufügen','تعديل الفرع':'Filiale bearbeiten','اسم الفرع':'Filialname','عنوان الفرع':'Filialadresse','تم الحفظ بنجاح':'Erfolgreich gespeichert','تم الحذف بنجاح':'Erfolgreich gelöscht','حدث خطأ':'Ein Fehler ist aufgetreten','غير مصرح':'Nicht autorisiert','أدخل اسم المشرف':'Administratornamen eingeben','يرجى إدخال اسم المشرف':'Bitte Administratornamen eingeben','يرجى اختيار صورة أولاً!':'Bitte zuerst ein Bild auswählen','تعذر العثور على بيانات الطلب.':'Bestelldaten konnten nicht gefunden werden.','يرجى كتابة تفاصيل الشكوى أولاً!':'Bitte geben Sie zuerst die Beschwerdedetails ein.','السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.':'Der Warenkorb ist leer. Fügen Sie vor dem Bezahlen mindestens ein Produkt hinzu.','لا يوجد':'Keine','قيد المعالجة':'In Bearbeitung','مكتمل':'Abgeschlossen','ملغى':'Storniert'
+      },
+      zh:{
+        'لوحة التحكم':'控制面板','لوحة التحكم الإدارية':'管理控制面板','صاحب المتجر':'店主','إدارة المنتجات':'商品管理','إضافة منتج':'添加商品','تعديل المنتج':'编辑商品','حذف المنتج':'删除商品','الطلبات':'订单','الفواتير':'发票','المخزون':'库存','الفروع':'分店','المشرفون':'管理员','الشكاوى':'投诉','الإحصائيات':'统计','السجل':'日志','إغلاق':'关闭','رجوع':'返回','حفظ التغييرات':'保存更改','إضافة فرع':'添加分店','تعديل الفرع':'编辑分店','اسم الفرع':'分店名称','عنوان الفرع':'分店地址','تم الحفظ بنجاح':'保存成功','تم الحذف بنجاح':'删除成功','حدث خطأ':'发生错误','غير مصرح':'未授权','أدخل اسم المشرف':'请输入管理员姓名','يرجى إدخال اسم المشرف':'请输入管理员姓名','يرجى اختيار صورة أولاً!':'请先选择图片','تعذر العثور على بيانات الطلب.':'找不到订单数据。','يرجى كتابة تفاصيل الشكوى أولاً!':'请先填写投诉详情。','السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.':'购物车为空。结账前请至少添加一件商品。','لا يوجد':'无','قيد المعالجة':'处理中','مكتمل':'已完成','ملغى':'已取消'
+      }
+    };
+    Object.keys(BKL_UI_EXTRA).forEach(k=>Object.assign(BKL_UI_TRANSLATIONS[k]||{},BKL_UI_EXTRA[k]));
 
-    function isApiWarning(value){
-        const s=normalize(value).toLowerCase();
-        if(!s)return true;
-        return /mymemory|translated\.net|usage\s*limits|available\s+free|next\s+available|to\s+translate\s+more|used\s+all|visit\s+https?:/i.test(s) ||
-               /avertissement|limite\s+d['’]utilisation|disponible\s+dans/i.test(s);
-    }
-
-    function apiIsBlocked(){
-        try{
-            const until=Number(sessionStorage.getItem(BKL_SESSION_BLOCK_KEY)||0);
-            return until>Date.now();
-        }catch(e){return false;}
-    }
-
-    function blockApi(){
-        try{sessionStorage.setItem(BKL_SESSION_BLOCK_KEY,String(Date.now()+30*60*1000));}catch(e){}
-    }
-
-    function localTranslate(text,target){
-        if(target==='ar') return text;
-        const key=normalize(text);
-        const map=localMaps[target]||{};
-        if(Object.prototype.hasOwnProperty.call(map,key)) return map[key];
+    function localUiTranslate(text,target){
+        const dict=BKL_UI_TRANSLATIONS[target]||{};
+        const n=normalize(text);
+        if(dict[n]) return dict[n];
         return null;
     }
 
+    async function remoteTranslateWithGoogle(text,target){
+        const q=encodeURIComponent(String(text).slice(0,500));
+        const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ar&tl=${encodeURIComponent(target)}&dt=t&q=${q}`;
+        const r=await fetch(url,{method:'GET',mode:'cors',cache:'no-store'});
+        if(!r.ok) throw new Error('google translation http '+r.status);
+        const d=await r.json();
+        const tr=Array.isArray(d?.[0]) ? d[0].map(x=>x?.[0]||'').join('') : '';
+        return tr.trim();
+    }
+
     async function apiTranslate(text,target){
-        if(target==='ar') return text;
-
-        const local=localTranslate(text,target);
-        if(local!==null) return local;
-
+        if(target==='ar'||!hasArabic(text)) return text;
+        const local=localUiTranslate(text,target);
+        if(local) return local;
         const key=target+'|'+text;
-        const cached=cache[key];
-        if(cached && !isApiWarning(cached)) return cached;
-        if(cached && isApiWarning(cached)){
-            try{delete cache[key];saveCache();}catch(e){}
-        }
-
-        if(apiIsBlocked()) return text;
-
+        if(cache[key]) return cache[key];
+        // Google endpoint first: it is more reliable for a browser-only HTML store.
         try{
-            const q=encodeURIComponent(text.slice(0,450));
+            const tr=await remoteTranslateWithGoogle(text,target);
+            if(tr&&tr!==text){cache[key]=tr;saveCache();return tr;}
+        }catch(e){}
+        // MyMemory remains as a secondary provider.
+        try{
+            const q=encodeURIComponent(String(text).slice(0,450));
             const url=`https://api.mymemory.translated.net/get?q=${q}&langpair=ar|${encodeURIComponent(target)}`;
-            const r=await fetch(url,{method:'GET',cache:'no-store'});
-            if(!r.ok) throw new Error('HTTP '+r.status);
-
+            const r=await fetch(url,{headers:{'Accept':'application/json'},cache:'no-store'});
+            if(!r.ok) throw new Error('translation http '+r.status);
             const d=await r.json();
-            const tr=normalize(d?.responseData?.translatedText||'');
-            const status=Number(d?.responseStatus||0);
-
-            if(status && status!==200) throw new Error('Translation API status '+status);
-            if(!tr || isApiWarning(tr)){
-                blockApi();
-                return text;
-            }
-
-            cache[key]=tr;
-            saveCache();
-            return tr;
-        }catch(e){
-            return text;
-        }
+            const tr=d?.responseData?.translatedText;
+            if(tr&&tr.trim()&&tr.trim()!==text){cache[key]=tr.trim();saveCache();return tr.trim();}
+        }catch(e){}
+        return text;
     }
 
-    function setText(item,tr){
-        if(!item?.node?.parentNode) return;
-        const current=item.node.nodeValue||'';
-        const leading=current.match(/^\s*/)?.[0]||'';
-        const trailing=current.match(/\s*$/)?.[0]||'';
-        item.node.nodeValue=leading+tr+trailing;
+    // Place-name fallback: conservative Algerian/French-style transliteration.
+    function transliterateArabicPlace(input){
+        let s=normalize(input);
+        if(!s) return s;
+        const special={
+            'السور':'Sour','عين تادلس':'Ain Tedles','قومبيطة':'Goumbita','باب الواد':'Bab El Oued',
+            'باب الوادي':'Bab El Oued','الجزائر':'Alger','وهران':'Oran','قسنطينة':'Constantine',
+            'عنابة':'Annaba','مستغانم':'Mostaganem','تيارت':'Tiaret','سيدي بلعباس':'Sidi Bel Abbes',
+            'عين تموشنت':'Ain Temouchent','غليزان':'Relizane','معسكر':'Mascara','الشلف':'Chlef',
+            'تلمسان':'Tlemcen','بجاية':'Bejaia','البليدة':'Blida','سطيف':'Setif','باتنة':'Batna',
+            'بسكرة':'Biskra','المدية':'Medea','تيبازة':'Tipaza','سعيدة':'Saida','جيجل':'Jijel',
+            'سكيكدة':'Skikda','قالمة':'Guelma','ميلة':'Mila','تبسة':'Tebessa','أدرار':'Adrar',
+            'الأغواط':'Laghouat','الجلفة':'Djelfa','البيض':'El Bayadh','بشار':'Bechar','ورقلة':'Ouargla',
+            'تندوف':'Tindouf','إليزي':'Illizi','الوادي':'El Oued','خنشلة':'Khenchela','غرداية':'Ghardaia',
+            'النعامة':'Naama','الطارف':'El Tarf','برج بوعريريج':'Bordj Bou Arreridj','بومرداس':'Boumerdes',
+            'تيزي وزو':'Tizi Ouzou','عين الدفلى':'Ain Defla','الجزائر العاصمة':'Alger'
+        };
+        if(special[s]) return special[s];
+        const wordMap={
+            'ال':'El ','و':'Ou','أ':'A','إ':'I','آ':'A','ا':'a','ب':'b','ت':'t','ث':'th','ج':'dj','ح':'h','خ':'kh',
+            'د':'d','ذ':'dh','ر':'r','ز':'z','س':'s','ش':'ch','ص':'s','ض':'d','ط':'t','ظ':'z','ع':'a','غ':'gh',
+            'ف':'f','ق':'k','ك':'k','ل':'l','م':'m','ن':'n','ه':'h','ة':'a','و':'ou','ي':'i','ى':'a','ء':'a',
+            'ؤ':'ou','ئ':'i','ﻻ':'la','لا':'la','ة':'a','ّ':'','ْ':'','َ':'a','ُ':'ou','ِ':'i','ً':'an','ٌ':'oun','ٍ':'in','ـ':''
+        };
+        let out='';
+        for(const ch of s) out += Object.prototype.hasOwnProperty.call(wordMap,ch)?wordMap[ch]:ch;
+        out=out.replace(/\bEl\s+/gi,'El ').replace(/\s+/g,' ').trim();
+        out=out.replace(/\bAin\s+/gi,'Ain ').replace(/\bOuled\s+/gi,'Ouled ');
+        return out.split(' ').map(w=>w? w.charAt(0).toUpperCase()+w.slice(1):w).join(' ');
     }
+    function placeNameFor(text){
+        const key=normalize(text);
+        return placeMap[key] || transliterateArabicPlace(key);
+    }
+    window.bklPlaceNameFor=placeNameFor;
+
+    async function loadAlgeriaPlaces(){
+        try{
+            const r=await fetch(BKL_PLACE_DATA_URL,{cache:'no-store'});
+            if(!r.ok) throw new Error('place data http '+r.status);
+            const data=await r.json();
+            const next={};
+            (data?.wilayas||[]).forEach(w=>{
+                if(w?.nom_ar&&w?.nom_fr) next[normalize(w.nom_ar)]=normalize(w.nom_fr);
+                (w?.dairas||[]).forEach(d=>(d?.communes||[]).forEach(c=>{
+                    if(c?.nom_ar&&c?.nom_fr) next[normalize(c.nom_ar)]=normalize(c.nom_fr);
+                }));
+            });
+            if(Object.keys(next).length>1000){ placeMap=next; savePlaceMap(); }
+        }catch(e){ /* cached map + fallback remain available */ }
+        try{ if(typeof onCountryChange==='function') onCountryChange(); }catch(e){}
+        try{ if(typeof populateRegistrationWilayasAndBranches==='function') populateRegistrationWilayasAndBranches(); }catch(e){}
+    }
+
+    function wilayaOptionsHtml(){
+        const lang=BKL_LANGS.includes(currentLang)?currentLang:'ar';
+        const arList=(typeof algeriaWilayas!=='undefined'&&Array.isArray(algeriaWilayas))?algeriaWilayas:[];
+        return arList.map(w=>{
+            const raw=String(w);
+            const m=raw.match(/^(\d+\s*-\s*)(.*)$/);
+            const code=m?m[1]:''; const arName=m?m[2]:raw;
+            const display=lang==='ar'?raw:(code+placeNameFor(arName));
+            return `<option value="${raw.replace(/"/g,'&quot;')}">${display.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</option>`;
+        }).join('');
+    }
+    window.bklWilayaOptionsHtml=wilayaOptionsHtml;
 
     async function translateAll(){
         if(translating) return;
-
         const lang=BKL_LANGS.includes(currentLang)?currentLang:'ar';
-        const nodes=collectTextNodes();
-        const attrs=collectAttributes();
-
+        const nodes=collectTextNodes(), attrs=collectAttributes(), values=collectValues();
         translating=true;
-
         try{
             if(lang==='ar'){
-                nodes.forEach(x=>{
-                    if(x.node.parentNode)x.node.nodeValue=originals.get(x.node);
-                });
-                attrs.forEach(x=>{
-                    const original=attrOriginals.get(x.el)?.[x.attr];
-                    if(original!==undefined)x.el.setAttribute(x.attr,original);
-                });
+                nodes.forEach(x=>{if(x.node.parentNode)x.node.nodeValue=originals.get(x.node)||'';});
+                attrs.forEach(x=>x.el.setAttribute(x.attr,attrOriginals.get(x.el)?.[x.attr]||''));
+                applyingValue=true;
+                values.forEach(x=>{if(x.el)valueOriginals.has(x.el)&&(x.el.value=valueOriginals.get(x.el)||'');});
+                applyingValue=false;
                 return;
             }
-
-            /*
-              Local translations are applied immediately.
-              Only unknown phrases go through the guarded fallback.
-              Concurrency is intentionally low to avoid API quota exhaustion.
-            */
+            let index=0;
             const jobs=[];
             nodes.forEach(x=>jobs.push({kind:'text',item:x}));
             attrs.forEach(x=>jobs.push({kind:'attr',item:x}));
-
-            let index=0;
+            values.forEach(x=>jobs.push({kind:'value',item:x}));
             async function worker(){
                 while(index<jobs.length){
                     const job=jobs[index++];
-                    const tr=await apiTranslate(job.item.text,lang);
-
-                    if(job.kind==='text'){
-                        setText(job.item,tr);
-                    }else if(job.item.el){
+                    let tr=job.item.text;
+                    if(job.kind==='value' && /municipality|state|wilaya|commune|branch/i.test(String(job.item.el.id||'')) && hasArabic(tr)) tr=placeNameFor(tr);
+                    else tr=await apiTranslate(tr,lang);
+                    if(job.kind==='text'&&job.item.node.parentNode){
+                        const current=job.item.node.nodeValue||'';
+                        const leading=current.match(/^\s*/)?.[0]||'', trailing=current.match(/\s*$/)?.[0]||'';
+                        job.item.node.nodeValue=leading+tr+trailing;
+                    }else if(job.kind==='attr'&&job.item.el){
                         job.item.el.setAttribute(job.item.attr,tr);
+                    }else if(job.kind==='value'&&job.item.el){
+                        applyingValue=true; job.item.el.value=tr; applyingValue=false;
                     }
                 }
             }
+            await Promise.all([worker(),worker(),worker(),worker(),worker(),worker()]);
+        }finally{ translating=false; }
+    }
 
-            await Promise.all([worker(),worker()]);
-        }finally{
-            translating=false;
-        }
+    function scheduleTranslate(){
+        clearTimeout(scanTimer);
+        scanTimer=setTimeout(()=>{
+            try{ if(typeof bklMarkSizes==='function') bklMarkSizes(); }catch(e){}
+            translateAll();
+        },180);
     }
 
     window.bklTranslateAll=translateAll;
-
     window.bklMarkSizes=function(root=document){
         root.querySelectorAll('option,button,span,div,label,small,strong').forEach(el=>{
             const t=normalize(el.textContent||'');
@@ -4775,11 +4782,99 @@ let currentLang = 'ar';
         });
     };
 
-    document.addEventListener('DOMContentLoaded',()=>{
-        window.bklMarkSizes();
-        setTimeout(()=>window.bklTranslateAll(),350);
+    // User edits while a non-Arabic language is active: keep the latest source value.
+    document.addEventListener('input',function(e){
+        if(applyingValue) return;
+        const el=e.target;
+        if(shouldTranslateValue(el)) valueOriginals.set(el,el.value||'');
+        scheduleTranslate();
+    },true);
+    document.addEventListener('change',function(e){
+        if(applyingValue) return;
+        const el=e.target;
+        if(shouldTranslateValue(el)) valueOriginals.set(el,el.value||'');
+        scheduleTranslate();
+    },true);
+
+    // The HTML uses changeLanguage(...) directly.
+    window.changeLanguage=async function(lang){
+        if(!BKL_LANGS.includes(lang)) lang='ar';
+        currentLang=lang;
+        try{localStorage.setItem('store_language',lang);}catch(e){}
+        document.documentElement.lang=lang;
+        document.documentElement.dir=lang==='ar'?'rtl':'ltr';
+        const selector=document.getElementById('language-selector');
+        if(selector) selector.value=lang;
+        try{ if(typeof onCountryChange==='function') onCountryChange(); }catch(e){}
+        try{ if(typeof populateRegistrationWilayasAndBranches==='function') populateRegistrationWilayasAndBranches(); }catch(e){}
+        try{ if(typeof renderCategoriesTabs==='function') renderCategoriesTabs(); }catch(e){}
+        try{ if(typeof renderProducts==='function') renderProducts(); }catch(e){}
+        try{ if(typeof updateBranchBanner==='function') updateBranchBanner(); }catch(e){}
+        try{ if(typeof renderOwnerDashboardData==='function') renderOwnerDashboardData(); }catch(e){}
+        try{ if(typeof applyBKLHomeHeroSettings==='function') await applyBKLHomeHeroSettings(); }catch(e){}
+        if(lang!=='ar') document.documentElement.classList.add('bkl-i18n-pending');
+        await translateAll();
+        scheduleTranslate();
+        document.documentElement.classList.remove('bkl-i18n-pending');
+        document.documentElement.classList.add('bkl-i18n-ready');
+    };
+
+    // Translate newly opened print/report windows too, so generated invoices and ledgers
+    // never expose Arabic-only UI to an international store owner.
+    window.bklTranslateDetachedDocument = async function(doc, lang){
+        try{
+            if(!doc || !doc.body) return;
+            const target=BKL_LANGS.includes(lang)?lang:(currentLang||'en');
+            const walker=doc.createTreeWalker(doc.body,NodeFilter.SHOW_TEXT);
+            const nodes=[]; let n;
+            while(n=walker.nextNode()){
+                const p=n.parentElement;
+                if(!p || ['SCRIPT','STYLE','NOSCRIPT'].includes(p.tagName)) continue;
+                const text=normalize(n.nodeValue);
+                if(!text || isSizeText(text) || isNumericOnly(text) || !hasArabic(text)) continue;
+                nodes.push({n,text});
+            }
+            for(const x of nodes){
+                const tr=await apiTranslate(x.text,target);
+                if(x.n.parentNode){
+                    const raw=x.n.nodeValue||'';
+                    const lead=raw.match(/^\s*/)?.[0]||'', tail=raw.match(/\s*$/)?.[0]||'';
+                    x.n.nodeValue=lead+tr+tail;
+                }
+            }
+            doc.documentElement.lang=target;
+            doc.documentElement.dir=target==='ar'?'rtl':'ltr';
+        }catch(e){}
+    };
+
+    document.addEventListener('DOMContentLoaded',async()=>{
+        try{bklMarkSizes();}catch(e){}
+        try{
+            const saved=localStorage.getItem('store_language');
+            if(saved&&BKL_LANGS.includes(saved)) currentLang=saved;
+        }catch(e){}
+        const selector=document.getElementById('language-selector');
+        if(selector) selector.value=currentLang;
+        document.documentElement.lang=currentLang;
+        document.documentElement.dir=currentLang==='ar'?'rtl':'ltr';
+        loadAlgeriaPlaces();
+        try{
+            await translateAll();
+            document.documentElement.classList.remove('bkl-i18n-pending');
+            document.documentElement.classList.add('bkl-i18n-ready');
+        }catch(e){
+            document.documentElement.classList.remove('bkl-i18n-pending');
+            document.documentElement.classList.add('bkl-i18n-ready');
+        }
+        setTimeout(translateAll,100);
+        const obs=new MutationObserver(muts=>{
+            if(translating) return;
+            if(muts.some(m=>m.type==='childList'||m.type==='characterData'||m.type==='attributes')) scheduleTranslate();
+        });
+        obs.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:BKL_ATTRS});
     });
 })();
+
 // ==========================================
 // إدارة صورة ومحتوى واجهة الصفحة الرئيسية - لصاحب المتجر فقط
 // ==========================================
@@ -5039,8 +5134,8 @@ function onCountryChange() {
         stateContainer.innerHTML = `
             <label id="lbl-state" class="block text-[11px] text-neutral-600 mb-1">${t.lblState}</label>
             <select id="pay-state-select" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition cursor-pointer">
-                <option value="">اختر الولاية</option>
-                ${algeriaWilayas.map(w => `<option value="${w.replace(/"/g, '&quot;')}">${w}</option>`).join('')}
+                <option value="">${currentLang === 'ar' ? 'اختر الولاية' : 'Select Wilaya'}</option>
+                ${typeof bklWilayaOptionsHtml === 'function' ? bklWilayaOptionsHtml() : algeriaWilayas.map(w => `<option value="${w.replace(/"/g, '&quot;')}">${w}</option>`).join('')}
             </select>
         `;
     } else {
@@ -6103,8 +6198,8 @@ function completeCheckoutOrder() {
             const branchSelect = document.getElementById('reg-branch');
             if (stateSelect) {
                 const current = stateSelect.value;
-                stateSelect.innerHTML = '<option value="">اختر الولاية</option>' +
-                    algeriaWilayas.map(w => `<option value="${w.replace(/"/g, '&quot;')}">${w}</option>`).join('');
+                stateSelect.innerHTML = '<option value="">' + (currentLang === 'ar' ? 'اختر الولاية' : 'Select Wilaya') + '</option>' +
+                    (typeof bklWilayaOptionsHtml === 'function' ? bklWilayaOptionsHtml() : algeriaWilayas.map(w => `<option value="${w.replace(/"/g, '&quot;')}">${w}</option>`).join(''));
                 if (current && algeriaWilayas.includes(current)) stateSelect.value = current;
                 stateSelect.onchange = function() {
                     const display = document.getElementById('reg-state-display');
@@ -8340,7 +8435,7 @@ let activeComplaintChatId = null;
         function promptAdminsActivityPassword(event) {
             if (event) event.preventDefault();
             currentTargetAction = 'activity';
-            document.getElementById('password-modal-title').innerText = 'أدخل كلمة مرور إدارة الفروع والمخازن';
+            document.getElementById('password-modal-title').innerText = (typeof localUiTranslate==='function' ? (localUiTranslate('أدخل كلمة مرور إدارة الفروع والمخازن', currentLang) || 'أدخل كلمة مرور إدارة الفروع والمخازن') : 'أدخل كلمة مرور إدارة الفروع والمخازن');
             document.getElementById('access-password-input').value = '';
             document.getElementById('password-error-msg').classList.add('hidden');
             document.getElementById('password-modal').classList.remove('hidden');
@@ -8349,7 +8444,7 @@ let activeComplaintChatId = null;
         function promptOwnerDashboardPassword(event) {
             if (event) event.preventDefault();
             currentTargetAction = 'dashboard';
-            document.getElementById('password-modal-title').innerText = 'أدخل كلمة مرور لوحة التحكم';
+            document.getElementById('password-modal-title').innerText = (typeof localUiTranslate==='function' ? (localUiTranslate('أدخل كلمة مرور لوحة التحكم', currentLang) || 'أدخل كلمة مرور لوحة التحكم') : 'أدخل كلمة مرور لوحة التحكم');
             document.getElementById('access-password-input').value = '';
             document.getElementById('password-error-msg').classList.add('hidden');
             document.getElementById('password-modal').classList.remove('hidden');
@@ -9141,79 +9236,5 @@ document.addEventListener('DOMContentLoaded', function(){
     const active=document.querySelector('#order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal');
     if(active&&!active.contains(btn))hide(active.id);
   },true);
-})();
-</script>
-
-
-<!-- =========================================================
-     BKL FINAL LANGUAGE CONTROLLER
-     Fixes the missing changeLanguage() handler and guarantees that
-     every language switch updates direction, dynamic components,
-     checkout fields, hero content and the comprehensive translator.
-     ========================================================= -->
-<script id="bkl-final-language-controller">
-(function(){
-    const BKL_LANG_META={
-        ar:{dir:'rtl',locale:'ar-DZ'},
-        en:{dir:'ltr',locale:'en-US'},
-        fr:{dir:'ltr',locale:'fr-FR'},
-        es:{dir:'ltr',locale:'es-ES'},
-        de:{dir:'ltr',locale:'de-DE'},
-        zh:{dir:'ltr',locale:'zh-CN'}
-    };
-    const BKL_SUPPORTED=Object.keys(BKL_LANG_META);
-
-    function setLanguageState(lang){
-        if(!BKL_SUPPORTED.includes(lang)) lang='ar';
-        currentLang=lang;
-        const meta=BKL_LANG_META[lang];
-        document.documentElement.lang=lang;
-        document.documentElement.dir=meta.dir;
-        document.body.dir=meta.dir;
-        document.body.style.direction=meta.dir;
-        const selector=document.getElementById('language-selector');
-        if(selector && selector.value!==lang) selector.value=lang;
-        try{localStorage.setItem('bkl_current_language',lang);}catch(e){}
-    }
-
-    // This is the function called by the language selector in the header.
-    window.changeLanguage=async function(lang){
-        setLanguageState(lang);
-
-        // Rebuild components whose HTML is generated dynamically.
-        try{if(typeof renderCategoriesTabs==='function') renderCategoriesTabs();}catch(e){}
-        try{if(typeof renderProducts==='function') renderProducts();}catch(e){}
-        try{if(typeof onCountryChange==='function') onCountryChange();}catch(e){}
-        try{if(typeof onRegCountryChange==='function') onRegCountryChange();}catch(e){}
-        try{
-            if(typeof renderCustomerProductOptions==='function' &&
-               typeof selectedProduct!=='undefined' && selectedProduct){
-                renderCustomerProductOptions();
-            }
-        }catch(e){}
-
-        // The home hero has its own per-language content store.
-        try{if(typeof applyBKLHomeHeroSettings==='function') await applyBKLHomeHeroSettings();}catch(e){}
-
-        // Give newly generated DOM nodes time to exist, then translate the
-        // complete visible store (text + placeholders + titles + aria labels).
-        await new Promise(resolve=>setTimeout(resolve,80));
-        try{if(typeof window.bklTranslateAll==='function') await window.bklTranslateAll();}catch(e){}
-        setTimeout(function(){
-            try{if(typeof window.bklTranslateAll==='function') window.bklTranslateAll();}catch(e){}
-        },250);
-    };
-
-    document.addEventListener('DOMContentLoaded',function(){
-        let saved='ar';
-        try{saved=localStorage.getItem('bkl_current_language')||'ar';}catch(e){}
-        if(!BKL_SUPPORTED.includes(saved)) saved='ar';
-        setLanguageState(saved);
-
-        // Run after the store has rendered its dynamic sections.
-        setTimeout(function(){
-            try{window.changeLanguage(saved);}catch(e){}
-        },500);
-    });
 })();
 </script>
