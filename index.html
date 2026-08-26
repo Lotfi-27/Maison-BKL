@@ -1394,9 +1394,10 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 <label class="text-[11px] text-neutral-600 font-medium">الصورة الرئيسية للمنتج</label>
                 <div class="bkl-media-buttons">
                     <label for="main-image-file"><i class="fa-solid fa-folder-open"></i> اختيار من الملفات</label>
-                    <button type="button" onclick="document.getElementById('main-image-file')?.click()"><i class="fa-solid fa-camera"></i> التقاط صورة</button>
+                    <button type="button" onclick="document.getElementById('main-image-camera')?.click()"><i class="fa-solid fa-camera"></i> التقاط صورة</button>
                 </div>
-                <input id="main-image-file" type="file" accept="image/*" capture="environment" style="display:none" onchange="setMainProductImage(this)">
+                <input id="main-image-file" type="file" accept="image/*" style="display:none" onchange="setMainProductImage(this)">
+                <input id="main-image-camera" type="file" accept="image/*" capture="environment" style="display:none" onchange="setMainProductImage(this)">
                 <div id="main-image-preview" class="min-h-[90px] flex items-center justify-center"></div>
             </div>
 
@@ -2393,14 +2394,202 @@ function buildChatComposer(prefix, sendFunction) {
         <div class="pt-3 border-t border-neutral-100 mt-2">
             <div id="${prefix}-attachment-preview" class="flex flex-wrap gap-1 mb-2"></div>
             <div class="flex gap-2 items-center">
-                <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold px-3 py-2.5 rounded-xl text-xs cursor-pointer" title="إرسال صورة أو فيديو">📎</label>
+                <button type="button" onclick="openComplaintCamera('${prefix}')" class="shrink-0 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold w-10 h-10 rounded-xl text-base cursor-pointer flex items-center justify-center" title="فتح الكاميرا لإرسال صورة أو فيديو" aria-label="فتح الكاميرا">📷</button>
+                <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold w-10 h-10 rounded-xl text-base cursor-pointer flex items-center justify-center" title="اختيار صورة أو فيديو من الملفات" aria-label="اختيار من الملفات">📎</label>
                 <input id="${prefix}-file-input" type="file" accept="image/*,video/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
                 <input id="${prefix}-text-input" type="text" placeholder="اكتب رسالتك..." class="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-indigo-500" onkeypress="if(event.key === 'Enter') ${sendFunction}()">
                 <button type="button" onclick="${sendFunction}()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer">إرسال</button>
             </div>
-            <div class="text-[9px] text-neutral-400 mt-1">يمكن إرسال نصوص وصور وفيديوهات.</div>
+            <div class="text-[9px] text-neutral-400 mt-1">📷 التقط صورة أو سجّل فيديو مباشرة، أو استخدم 📎 لاختيار ملف من الهاتف.</div>
         </div>`;
 }
+
+/* =========================================================
+   كاميرا محادثة الشكاوى: صورة أو فيديو مباشرة من الهاتف
+   يعمل لطرف الزبون وطرف صاحب المتجر، ويرسل الناتج كوسائط داخل الرسالة.
+   ========================================================= */
+let bklComplaintCameraStream = null;
+let bklComplaintCameraRecorder = null;
+let bklComplaintCameraChunks = [];
+let bklComplaintCameraPrefix = null;
+let bklComplaintCameraMode = 'photo';
+
+function ensureComplaintCameraModal() {
+    let modal = document.getElementById('bkl-complaint-camera-modal');
+    if (modal) return modal;
+    modal = document.createElement('div');
+    modal.id = 'bkl-complaint-camera-modal';
+    modal.className = 'fixed inset-0 bg-black/70 hidden items-center justify-center z-[400000] p-3';
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between gap-2 p-3 border-b border-neutral-100">
+                <div>
+                    <h3 class="text-sm font-extrabold text-neutral-900">إرسال صورة أو فيديو</h3>
+                    <p class="text-[9px] text-neutral-400">التقط صورة أو سجّل مقطعاً قصيراً وأرسله مباشرة في المحادثة.</p>
+                </div>
+                <button type="button" onclick="closeComplaintCamera()" class="w-9 h-9 rounded-full bg-neutral-100 text-neutral-600 font-bold">✕</button>
+            </div>
+            <div class="p-3">
+                <div class="relative bg-black rounded-2xl overflow-hidden aspect-[4/3] flex items-center justify-center">
+                    <video id="bkl-complaint-camera-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                    <canvas id="bkl-complaint-camera-canvas" class="hidden"></canvas>
+                    <div id="bkl-complaint-camera-status" class="absolute bottom-2 left-2 right-2 text-center text-[9px] text-white bg-black/50 rounded-lg px-2 py-1">جاهز</div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mt-3">
+                    <button type="button" id="bkl-camera-photo-btn" onclick="setComplaintCameraMode('photo')" class="bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs">📸 صورة</button>
+                    <button type="button" id="bkl-camera-video-btn" onclick="setComplaintCameraMode('video')" class="bg-neutral-100 text-neutral-700 font-bold py-2.5 rounded-xl text-xs">🎥 فيديو</button>
+                </div>
+                <button type="button" id="bkl-camera-capture-btn" onclick="captureComplaintCamera()" class="w-full mt-2 bg-neutral-900 text-white font-extrabold py-3 rounded-xl text-xs">📸 التقاط وإرفاق</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    return modal;
+}
+
+async function openComplaintCamera(prefix) {
+    const modal = ensureComplaintCameraModal();
+    bklComplaintCameraPrefix = prefix;
+    bklComplaintCameraMode = 'photo';
+    setComplaintCameraMode('photo');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    const video = document.getElementById('bkl-complaint-camera-video');
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('getUserMedia unsupported');
+        }
+        bklComplaintCameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: true
+        });
+        video.srcObject = bklComplaintCameraStream;
+        await video.play().catch(() => {});
+        document.getElementById('bkl-complaint-camera-status').textContent = 'يمكنك التقاط صورة أو تسجيل فيديو';
+    } catch (err) {
+        document.getElementById('bkl-complaint-camera-status').textContent = 'تعذر فتح الكاميرا. تأكد من السماح بالوصول إلى الكاميرا والميكروفون.';
+        alert('تعذر فتح الكاميرا. إذا كنت تستخدم الهاتف، اسمح للموقع بالوصول إلى الكاميرا والميكروفون ثم حاول مرة أخرى.');
+    }
+}
+
+function setComplaintCameraMode(mode) {
+    bklComplaintCameraMode = mode === 'video' ? 'video' : 'photo';
+    const photoBtn = document.getElementById('bkl-camera-photo-btn');
+    const videoBtn = document.getElementById('bkl-camera-video-btn');
+    const captureBtn = document.getElementById('bkl-camera-capture-btn');
+    if (!photoBtn || !videoBtn || !captureBtn) return;
+    photoBtn.className = bklComplaintCameraMode === 'photo'
+        ? 'bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs'
+        : 'bg-neutral-100 text-neutral-700 font-bold py-2.5 rounded-xl text-xs';
+    videoBtn.className = bklComplaintCameraMode === 'video'
+        ? 'bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs'
+        : 'bg-neutral-100 text-neutral-700 font-bold py-2.5 rounded-xl text-xs';
+    captureBtn.textContent = bklComplaintCameraMode === 'video' ? '🎥 بدء تسجيل الفيديو' : '📸 التقاط وإرفاق';
+}
+
+async function captureComplaintCamera() {
+    const video = document.getElementById('bkl-complaint-camera-video');
+    if (!video || !bklComplaintCameraStream) {
+        alert('الكاميرا غير متاحة حالياً.');
+        return;
+    }
+    if (bklComplaintCameraMode === 'photo') {
+        const canvas = document.getElementById('bkl-complaint-camera-canvas');
+        const maxW = 1280;
+        const scale = Math.min(1, maxW / (video.videoWidth || maxW));
+        canvas.width = Math.max(1, Math.round((video.videoWidth || maxW) * scale));
+        canvas.height = Math.max(1, Math.round((video.videoHeight || 720) * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(blob => {
+            if (!blob) return;
+            attachCameraBlob(blob, 'image/jpeg', 'camera-photo.jpg');
+            closeComplaintCamera();
+        }, 'image/jpeg', .84);
+        return;
+    }
+
+    if (bklComplaintCameraRecorder && bklComplaintCameraRecorder.state === 'recording') {
+        bklComplaintCameraRecorder.stop();
+        return;
+    }
+
+    if (!window.MediaRecorder) {
+        alert('تسجيل الفيديو غير مدعوم في هذا المتصفح. يمكنك التقاط صورة أو اختيار فيديو من الملفات.');
+        return;
+    }
+    bklComplaintCameraChunks = [];
+    let mime = '';
+    const candidates = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+    for (const c of candidates) {
+        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) { mime = c; break; }
+    }
+    try {
+        bklComplaintCameraRecorder = new MediaRecorder(bklComplaintCameraStream, mime ? {mimeType:mime} : undefined);
+    } catch (e) {
+        alert('تعذر بدء تسجيل الفيديو على هذا الجهاز.');
+        return;
+    }
+    bklComplaintCameraRecorder.ondataavailable = e => { if (e.data && e.data.size) bklComplaintCameraChunks.push(e.data); };
+    bklComplaintCameraRecorder.onstop = () => {
+        const type = mime || 'video/webm';
+        const blob = new Blob(bklComplaintCameraChunks, {type});
+        if (blob.size > 12 * 1024 * 1024) {
+            alert('حجم الفيديو كبير جداً. الحد الأقصى للمرفق هو 12 ميغابايت.');
+        } else {
+            attachCameraBlob(blob, type, `camera-video-${Date.now()}.webm`);
+        }
+        bklComplaintCameraRecorder = null;
+        bklComplaintCameraChunks = [];
+        closeComplaintCamera();
+    };
+    bklComplaintCameraRecorder.start();
+    const status = document.getElementById('bkl-complaint-camera-status');
+    const btn = document.getElementById('bkl-camera-capture-btn');
+    if (status) status.textContent = '🔴 جارٍ تسجيل الفيديو... اضغط الزر مرة أخرى للإيقاف';
+    if (btn) btn.textContent = '⏹️ إيقاف التسجيل وإرفاق الفيديو';
+}
+
+async function attachCameraBlob(blob, type, name) {
+    if (!bklComplaintCameraPrefix) return;
+    const input = document.getElementById(`${bklComplaintCameraPrefix}-file-input`);
+    const preview = document.getElementById(`${bklComplaintCameraPrefix}-attachment-preview`);
+    if (!input || !preview) return;
+    const file = new File([blob], name, {type});
+    try {
+        const dt = new DataTransfer();
+        Array.from(input.files || []).forEach(f => dt.items.add(f));
+        dt.items.add(file);
+        input.files = dt.files;
+        renderChatAttachmentPreview(input.id, preview.id);
+    } catch (e) {
+        alert('تعذر إرفاق الصورة/الفيديو بالمحادثة. يمكنك استخدام زر الملفات بدلاً من ذلك.');
+    }
+}
+
+function closeComplaintCamera() {
+    if (bklComplaintCameraRecorder && bklComplaintCameraRecorder.state === 'recording') {
+        try { bklComplaintCameraRecorder.stop(); } catch(e) {}
+        return;
+    }
+    if (bklComplaintCameraStream) {
+        bklComplaintCameraStream.getTracks().forEach(track => track.stop());
+        bklComplaintCameraStream = null;
+    }
+    const video = document.getElementById('bkl-complaint-camera-video');
+    if (video) video.srcObject = null;
+    const modal = document.getElementById('bkl-complaint-camera-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+    bklComplaintCameraPrefix = null;
+    bklComplaintCameraRecorder = null;
+    bklComplaintCameraChunks = [];
+}
+
+window.addEventListener('beforeunload', () => {
+    if (bklComplaintCameraStream) bklComplaintCameraStream.getTracks().forEach(track => track.stop());
+});
 
 function ensureComplaintMessages(complaint) {
     if (!Array.isArray(complaint.messages)) complaint.messages = [];
@@ -8183,7 +8372,64 @@ footer button{
     max-height:18px!important;
 }
 
-</style></head><body><div class="box"><div class="head"><strong>Maison BKL - متجر السوق الذكي</strong><strong>📒 دفتر الكريدي</strong></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة دفتر الكريدي</button><button class="close" onclick="window.close()">✕ إغلاق</button></div><div class="info"><b>رقم الفاتورة:</b> ${escapeOrderHtml(entry.invoiceId)}<br><b>الزبون:</b> ${escapeOrderHtml(entry.customerName)}<br><b>الهاتف:</b> ${escapeOrderHtml(entry.phone)}<br><b>الولاية:</b> ${escapeOrderHtml(entry.state)}<br><b>البلدية:</b> ${escapeOrderHtml(entry.municipality)}<br><b>العنوان:</b> ${escapeOrderHtml(entry.address)}<br><b>التاريخ:</b> ${escapeOrderHtml(entry.date)}<br><b>الحالة:</b> ${escapeOrderHtml(entry.status)}</div><table><thead><tr><th>المنتج</th><th>الكمية</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table><div class="totals">مجموع المنتجات: ${escapeOrderHtml(formatCreditAmount(entry.subtotal))}<br>سعر التوصيل: ${escapeOrderHtml(formatCreditAmount(entry.deliveryPrice))}<br>إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}<br><span class="paid">إجمالي المدفوع: ${escapeOrderHtml(formatCreditAmount(entry.paidAmount))}</span><br><span class="remaining">إجمالي الفاتورة بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</span><br>طريقة آخر تسديد: ${escapeOrderHtml(entry.lastPaymentMethod || 'لا يوجد')}</div><div class="lock">🔒 هذه النسخة محفوظة كسجل كريدي. لا يمكن تعديل بيانات الفاتورة الأصلية. تسجيل الدفعات يتم من دفتر صاحب المتجر فقط.</div></div></body></html>`);
+</style><style id="bkl-universal-window-system">
+/* ===== BKL Universal Windows: close + drag + touch ===== */
+.bkl-window-panel{
+  position:relative!important;
+  touch-action:auto;
+  will-change:transform;
+  transition:transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .16s ease;
+}
+.bkl-window-panel.bkl-window-dragging{
+  transition:none!important;
+  cursor:grabbing!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.22)!important;
+}
+.bkl-window-drag-handle{
+  cursor:grab!important;
+  user-select:none!important;
+  -webkit-user-select:none!important;
+  touch-action:none!important;
+}
+.bkl-window-drag-handle.bkl-window-dragging{cursor:grabbing!important}
+.bkl-universal-close{
+  position:absolute!important;
+  top:10px!important;
+  inset-inline-end:10px!important;
+  z-index:2147483000!important;
+  width:36px!important;
+  height:36px!important;
+  min-width:36px!important;
+  min-height:36px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:999px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:rgba(243,244,246,.96)!important;
+  color:#4b5563!important;
+  font-size:24px!important;
+  line-height:1!important;
+  font-weight:800!important;
+  box-shadow:0 3px 12px rgba(0,0,0,.10)!important;
+  cursor:pointer!important;
+  transition:transform .14s ease,background .14s ease,color .14s ease!important;
+  touch-action:manipulation!important;
+}
+.bkl-universal-close:hover{transform:scale(1.06);background:#e5e7eb!important;color:#111827!important}
+.bkl-universal-close:active{transform:scale(.94)}
+[dir="rtl"] .bkl-universal-close{inset-inline-end:10px!important}
+[dir="ltr"] .bkl-universal-close{inset-inline-end:10px!important}
+/* Give headers enough room so the close button never covers the title. */
+.bkl-window-panel .bkl-modal-head,
+.bkl-window-panel .bkl-om-head,
+.bkl-window-panel .bkl-window-header{padding-inline-end:54px!important}
+@media(max-width:600px){
+  .bkl-universal-close{width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;top:8px!important;inset-inline-end:8px!important;font-size:22px!important}
+}
+</style>
+</head><body><div class="box"><div class="head"><strong>Maison BKL - متجر السوق الذكي</strong><strong>📒 دفتر الكريدي</strong></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة دفتر الكريدي</button><button class="close" onclick="window.close()">✕ إغلاق</button></div><div class="info"><b>رقم الفاتورة:</b> ${escapeOrderHtml(entry.invoiceId)}<br><b>الزبون:</b> ${escapeOrderHtml(entry.customerName)}<br><b>الهاتف:</b> ${escapeOrderHtml(entry.phone)}<br><b>الولاية:</b> ${escapeOrderHtml(entry.state)}<br><b>البلدية:</b> ${escapeOrderHtml(entry.municipality)}<br><b>العنوان:</b> ${escapeOrderHtml(entry.address)}<br><b>التاريخ:</b> ${escapeOrderHtml(entry.date)}<br><b>الحالة:</b> ${escapeOrderHtml(entry.status)}</div><table><thead><tr><th>المنتج</th><th>الكمية</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table><div class="totals">مجموع المنتجات: ${escapeOrderHtml(formatCreditAmount(entry.subtotal))}<br>سعر التوصيل: ${escapeOrderHtml(formatCreditAmount(entry.deliveryPrice))}<br>إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}<br><span class="paid">إجمالي المدفوع: ${escapeOrderHtml(formatCreditAmount(entry.paidAmount))}</span><br><span class="remaining">إجمالي الفاتورة بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</span><br>طريقة آخر تسديد: ${escapeOrderHtml(entry.lastPaymentMethod || 'لا يوجد')}</div><div class="lock">🔒 هذه النسخة محفوظة كسجل كريدي. لا يمكن تعديل بيانات الفاتورة الأصلية. تسجيل الدفعات يتم من دفتر صاحب المتجر فقط.</div></div></body></html>`);
             w.document.close();
         }
 
@@ -9041,6 +9287,145 @@ document.addEventListener('DOMContentLoaded', function(){
   window.editOrderPrompt=openSafe;
   // ضمان أن استدعاءات الكود القديمة تستخدم النسخة الآمنة أيضاً.
   window.BKL_SAFE_EDIT_ORDER=openSafe;
+})();
+</script>
+<script id="bkl-universal-window-system-js">
+(function(){
+  'use strict';
+  const CLOSE_MAP={
+    'add-modal':'closeAddModal',
+    'category-modal':'closeAddCategoryModal',
+    'home-hero-editor-modal':'closeHomeHeroEditor',
+    'complaint-modal':'closeComplaintModal',
+    'admins-activity-modal':'closeAdminsActivityModal',
+    'branch-activity-modal':'closeBranchActivityModal',
+    'branch-admin-modal':'closeAddBranchAdminModal',
+    'add-branch-modal':'closeAddBranchModal',
+    'add-inventory-modal':'closeAddInventoryModal',
+    'delete-inventory-confirm-modal':'cancelDeleteInventoryItem',
+    'password-modal':'closePasswordModal',
+    'change-password-modal':'closeChangePasswordModal',
+    'owner-dashboard-modal':'closeOwnerDashboard',
+    'complaint-chat-modal':'closeComplaintChat',
+    'customer-complaint-chat-modal':'closeCustomerComplaintChat',
+    'customer-notification-detail-modal':'closeCustomerNotificationDetail',
+    'credit-payment-method-modal':'closeCreditPaymentMethodModal',
+    'admin-activity-log-modal':'closeAdminActivityLogModal',
+    'order-editor-modal':'closeOrderEditor',
+    'order-preview-modal':'closeOrderPreview',
+  };
+  const OVERLAY_SEL='[id][class*="fixed"][class*="inset-0"],#complaint-chat-modal,#customer-complaint-chat-modal,#customer-notification-detail-modal,#credit-payment-method-modal,#admin-activity-log-modal,#bkl-modern-order-modal';
+  const known=new WeakSet();
+
+  function isVisible(el){
+    return !!el && !el.classList.contains('hidden') && getComputedStyle(el).display!=='none';
+  }
+  function getPanel(modal){
+    if(!modal) return null;
+    if(modal.id==='bkl-modern-order-modal') return modal.querySelector('.bkl-om-card')||modal.firstElementChild;
+    return modal.firstElementChild;
+  }
+  function closeModal(modal){
+    if(!modal) return;
+    const fn=CLOSE_MAP[modal.id];
+    try{
+      if(fn && typeof window[fn]==='function') { window[fn](); return; }
+    }catch(e){ console.warn('BKL close handler:',e); }
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden','true');
+    modal.style.removeProperty('display');
+    modal.style.removeProperty('transform');
+    modal.style.removeProperty('left');
+    modal.style.removeProperty('top');
+    modal.style.removeProperty('margin');
+  }
+  function hasClose(panel){
+    return !!panel.querySelector('button[aria-label="إغلاق"],button.bkl-modal-close,.bkl-universal-close,[data-bkl-close-window],button[onclick*=\"close\"],button[onclick*=\"Close\"]') || [...panel.querySelectorAll('button')].some(b=>['×','✕','X','x'].includes((b.textContent||'').trim()));
+  }
+  function addClose(modal,panel){
+    if(!panel || hasClose(panel)) return;
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='bkl-universal-close';
+    b.setAttribute('aria-label','إغلاق');
+    b.setAttribute('title','إغلاق');
+    b.setAttribute('data-bkl-close-window','1');
+    b.textContent='×';
+    b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();closeModal(modal);});
+    panel.appendChild(b);
+  }
+  function findHandle(panel){
+    return panel.querySelector('.bkl-modal-head,.bkl-om-head,.bkl-window-header,[data-bkl-window-header]') || panel.firstElementChild;
+  }
+  function enableDrag(modal,panel){
+    if(!panel || panel.dataset.bklDragReady==='1') return;
+    panel.dataset.bklDragReady='1';
+    panel.classList.add('bkl-window-panel');
+    let handle=findHandle(panel);
+    if(!handle) handle=panel;
+    handle.classList.add('bkl-window-drag-handle');
+    let active=false,startX=0,startY=0,baseX=0,baseY=0,pointerId=null;
+    const getBase=()=>({x:parseFloat(panel.dataset.bklX||'0')||0,y:parseFloat(panel.dataset.bklY||'0')||0});
+    const apply=(x,y)=>{panel.dataset.bklX=String(x);panel.dataset.bklY=String(y);panel.style.transform=`translate3d(${x}px,${y}px,0)`;};
+    handle.addEventListener('pointerdown',function(e){
+      if(e.button!==undefined && e.button!==0) return;
+      if(e.target.closest('button,input,select,textarea,a,label,[contenteditable="true"]')) return;
+      active=true; pointerId=e.pointerId; const b=getBase(); baseX=b.x;baseY=b.y;startX=e.clientX;startY=e.clientY;
+      handle.classList.add('bkl-window-dragging');panel.classList.add('bkl-window-dragging');
+      try{handle.setPointerCapture(pointerId)}catch(_){ }
+      e.preventDefault();
+    },{passive:false});
+    handle.addEventListener('pointermove',function(e){
+      if(!active || (pointerId!==null && e.pointerId!==pointerId)) return;
+      const x=baseX+(e.clientX-startX), y=baseY+(e.clientY-startY);
+      apply(x,y); e.preventDefault();
+    },{passive:false});
+    const end=function(e){
+      if(!active) return;
+      active=false; pointerId=null;handle.classList.remove('bkl-window-dragging');panel.classList.remove('bkl-window-dragging');
+      try{handle.releasePointerCapture(e.pointerId)}catch(_){ }
+    };
+    handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);handle.addEventListener('lostpointercapture',function(){active=false;handle.classList.remove('bkl-window-dragging');panel.classList.remove('bkl-window-dragging');});
+  }
+  function prepare(modal){
+    if(!modal || modal.nodeType!==1) return;
+    if(known.has(modal) && modal.querySelector('.bkl-window-panel')) return;
+    const panel=getPanel(modal); if(!panel) return;
+    known.add(modal);
+    addClose(modal,panel);
+    enableDrag(modal,panel);
+    modal.setAttribute('aria-modal','true');
+    if(!modal.hasAttribute('aria-hidden')) modal.setAttribute('aria-hidden',modal.classList.contains('hidden')?'true':'false');
+  }
+  function scan(root=document){
+    if(root.nodeType===1 && (root.matches?.(OVERLAY_SEL))) prepare(root);
+    root.querySelectorAll?.(OVERLAY_SEL).forEach(prepare);
+  }
+  document.addEventListener('click',function(e){
+    const close=e.target.closest?.('[data-bkl-close-window]');
+    if(close){const modal=close.closest(OVERLAY_SEL);if(modal){e.preventDefault();e.stopPropagation();closeModal(modal);}}
+  },true);
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape') return;
+    const open=[...document.querySelectorAll(OVERLAY_SEL)].filter(isVisible);
+    const top=open[open.length-1]; if(top){e.preventDefault();closeModal(top);}
+  },true);
+  document.addEventListener('click',function(e){
+    const modal=e.target.closest?.(OVERLAY_SEL); if(!modal || e.target!==modal) return;
+    if(modal.dataset.bklNoBackdropClose==='1') return;
+    closeModal(modal);
+  },true);
+  scan();
+  const mo=new MutationObserver(function(records){
+    for(const r of records){
+      r.addedNodes.forEach(n=>{if(n.nodeType===1) scan(n);});
+      if(r.type==='attributes' && r.attributeName==='class'){
+        const el=r.target;
+        if(el.matches?.(OVERLAY_SEL)) prepare(el);
+      }
+    }
+  });
+  mo.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
 })();
 </script>
 </body>
