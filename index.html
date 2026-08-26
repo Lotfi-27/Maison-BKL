@@ -2494,7 +2494,6 @@ function ensureComplaintCameraModal() {
     videoInput.id = 'bkl-native-complaint-video';
     videoInput.accept = 'video/*';
     videoInput.setAttribute('capture', 'environment');
-    videoInput.setAttribute('data-bkl-camera-mode', 'video');
     videoInput.className = 'hidden';
     videoInput.onchange = () => handleNativeComplaintCameraFile(videoInput);
     document.body.appendChild(videoInput);
@@ -2523,9 +2522,54 @@ function openNativeComplaintCamera(mode) {
     input.click();
 }
 
-function startComplaintVideoCapture() {
-    // مهم: لا نستخدم حقل الصورة هنا. يجب فتح input مخصص للفيديو.
-    openNativeComplaintCamera('video');
+async function startComplaintVideoCapture() {
+    ensureComplaintCameraModal();
+    bklComplaintCameraMode = 'video';
+    const choice = document.getElementById('bkl-camera-choice-buttons');
+    const panel = document.getElementById('bkl-video-capture-panel');
+    if (choice) choice.classList.add('hidden');
+    if (panel) panel.classList.remove('hidden');
+    const preview = document.getElementById('bkl-complaint-video-preview');
+    try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
+            // Fallback: اطلب من نظام الهاتف اختيار/تسجيل فيديو حقيقي، وليس صورة.
+            const input = document.getElementById('bkl-native-complaint-video');
+            if (!input) throw new Error('video input unavailable');
+            input.value = '';
+            input.click();
+            return;
+        }
+        if (!window.isSecureContext) {
+            const input = document.getElementById('bkl-native-complaint-video');
+            if (!input) throw new Error('video input unavailable');
+            input.value = '';
+            input.click();
+            return;
+        }
+        bklComplaintVideoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: true
+        });
+        if (preview) {
+            preview.srcObject = bklComplaintVideoStream;
+            await preview.play().catch(()=>{});
+        }
+        const preferred = [
+            'video/mp4',
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/webm'
+        ];
+        const mime = preferred.find(t => MediaRecorder.isTypeSupported(t)) || '';
+        bklComplaintVideoChunks = [];
+        bklComplaintVideoRecorder = mime ? new MediaRecorder(bklComplaintVideoStream, {mimeType:mime}) : new MediaRecorder(bklComplaintVideoStream);
+        bklComplaintVideoRecorder.ondataavailable = e => { if (e.data && e.data.size) bklComplaintVideoChunks.push(e.data); };
+        bklComplaintVideoRecorder.start(500);
+    } catch (err) {
+        cleanupComplaintVideoCapture();
+        const input = document.getElementById('bkl-native-complaint-video');
+        if (input) { input.value=''; input.click(); }
+    }
 }
 
 function stopComplaintVideoCapture(attach) {
@@ -2700,7 +2744,7 @@ function renderComplaintChatMessages(complaint) {
             <div class="flex flex-col ${isOwner ? 'items-end' : 'items-start'}">
                 <div class="max-w-[82%] rounded-2xl p-2.5 ${isOwner ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-none'} shadow-sm">
                     ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
-                    ${getChatMessageMediaHtml(msg, true, complaint.id, idx)}
+                    ${getChatMessageMediaHtml(msg, true, complaint.id, messages.indexOf(msg))}
                 </div>
                 <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span>
             </div>`;
