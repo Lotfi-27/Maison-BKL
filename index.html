@@ -2405,12 +2405,10 @@ function buildChatComposer(prefix, sendFunction) {
 }
 
 /* =========================================================
-   كاميرا محادثة الشكاوى: صورة أو فيديو مباشرة من الهاتف
-   يعمل لطرف الزبون وطرف صاحب المتجر، ويرسل الناتج كوسائط داخل الرسالة.
+   كاميرا محادثة الشكاوى - استخدام كاميرا الهاتف الأصلية
+   لا نعتمد على getUserMedia حتى تعمل الكاميرا أيضاً عند فتح المتجر
+   من هاتف عبر رابط/استضافة لا توفر Secure Context.
    ========================================================= */
-let bklComplaintCameraStream = null;
-let bklComplaintCameraRecorder = null;
-let bklComplaintCameraChunks = [];
 let bklComplaintCameraPrefix = null;
 let bklComplaintCameraMode = 'photo';
 
@@ -2421,175 +2419,101 @@ function ensureComplaintCameraModal() {
     modal.id = 'bkl-complaint-camera-modal';
     modal.className = 'fixed inset-0 bg-black/70 hidden items-center justify-center z-[400000] p-3';
     modal.innerHTML = `
-        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
             <div class="flex items-center justify-between gap-2 p-3 border-b border-neutral-100">
                 <div>
-                    <h3 class="text-sm font-extrabold text-neutral-900">إرسال صورة أو فيديو</h3>
-                    <p class="text-[9px] text-neutral-400">التقط صورة أو سجّل مقطعاً قصيراً وأرسله مباشرة في المحادثة.</p>
+                    <h3 class="text-sm font-extrabold text-neutral-900">استخدام كاميرا الهاتف</h3>
+                    <p class="text-[9px] text-neutral-400">اختر ما تريد إرساله مباشرة إلى المحادثة.</p>
                 </div>
                 <button type="button" onclick="closeComplaintCamera()" class="w-9 h-9 rounded-full bg-neutral-100 text-neutral-600 font-bold">✕</button>
             </div>
-            <div class="p-3">
-                <div class="relative bg-black rounded-2xl overflow-hidden aspect-[4/3] flex items-center justify-center">
-                    <video id="bkl-complaint-camera-video" autoplay playsinline muted class="w-full h-full object-cover"></video>
-                    <canvas id="bkl-complaint-camera-canvas" class="hidden"></canvas>
-                    <div id="bkl-complaint-camera-status" class="absolute bottom-2 left-2 right-2 text-center text-[9px] text-white bg-black/50 rounded-lg px-2 py-1">جاهز</div>
-                </div>
-                <div class="grid grid-cols-2 gap-2 mt-3">
-                    <button type="button" id="bkl-camera-photo-btn" onclick="setComplaintCameraMode('photo')" class="bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs">📸 صورة</button>
-                    <button type="button" id="bkl-camera-video-btn" onclick="setComplaintCameraMode('video')" class="bg-neutral-100 text-neutral-700 font-bold py-2.5 rounded-xl text-xs">🎥 فيديو</button>
-                </div>
-                <button type="button" id="bkl-camera-capture-btn" onclick="captureComplaintCamera()" class="w-full mt-2 bg-neutral-900 text-white font-extrabold py-3 rounded-xl text-xs">📸 التقاط وإرفاق</button>
+            <div class="p-4 grid grid-cols-2 gap-3">
+                <button type="button" onclick="openNativeComplaintCamera('photo')" class="bg-indigo-600 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2">
+                    <span class="text-2xl">📸</span><span>التقاط صورة</span>
+                </button>
+                <button type="button" onclick="openNativeComplaintCamera('video')" class="bg-neutral-900 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2">
+                    <span class="text-2xl">🎥</span><span>تسجيل فيديو</span>
+                </button>
             </div>
+            <div class="px-4 pb-4 text-[9px] text-neutral-400 text-center">سيتم فتح كاميرا الهاتف مباشرة. اسمح بالوصول إلى الكاميرا عند ظهور طلب الإذن.</div>
         </div>`;
     document.body.appendChild(modal);
+
+    // حقول منفصلة: الصورة تفتح الكاميرا، والفيديو يفتح تسجيل الفيديو.
+    const photoInput = document.createElement('input');
+    photoInput.type = 'file';
+    photoInput.id = 'bkl-native-complaint-photo';
+    photoInput.accept = 'image/*';
+    photoInput.capture = 'environment';
+    photoInput.className = 'hidden';
+    photoInput.onchange = () => handleNativeComplaintCameraFile(photoInput);
+
+    const videoInput = document.createElement('input');
+    videoInput.type = 'file';
+    videoInput.id = 'bkl-native-complaint-video';
+    videoInput.accept = 'video/*';
+    videoInput.capture = 'environment';
+    videoInput.className = 'hidden';
+    videoInput.onchange = () => handleNativeComplaintCameraFile(videoInput);
+
+    document.body.appendChild(photoInput);
+    document.body.appendChild(videoInput);
     return modal;
 }
 
-async function openComplaintCamera(prefix) {
+function openComplaintCamera(prefix) {
     const modal = ensureComplaintCameraModal();
     bklComplaintCameraPrefix = prefix;
-    bklComplaintCameraMode = 'photo';
-    setComplaintCameraMode('photo');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    const video = document.getElementById('bkl-complaint-camera-video');
-    try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('getUserMedia unsupported');
-        }
-        bklComplaintCameraStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
-            audio: true
-        });
-        video.srcObject = bklComplaintCameraStream;
-        await video.play().catch(() => {});
-        document.getElementById('bkl-complaint-camera-status').textContent = 'يمكنك التقاط صورة أو تسجيل فيديو';
-    } catch (err) {
-        document.getElementById('bkl-complaint-camera-status').textContent = 'تعذر فتح الكاميرا. تأكد من السماح بالوصول إلى الكاميرا والميكروفون.';
-        alert('تعذر فتح الكاميرا. إذا كنت تستخدم الهاتف، اسمح للموقع بالوصول إلى الكاميرا والميكروفون ثم حاول مرة أخرى.');
-    }
 }
 
-function setComplaintCameraMode(mode) {
+function openNativeComplaintCamera(mode) {
+    ensureComplaintCameraModal();
     bklComplaintCameraMode = mode === 'video' ? 'video' : 'photo';
-    const photoBtn = document.getElementById('bkl-camera-photo-btn');
-    const videoBtn = document.getElementById('bkl-camera-video-btn');
-    const captureBtn = document.getElementById('bkl-camera-capture-btn');
-    if (!photoBtn || !videoBtn || !captureBtn) return;
-    photoBtn.className = bklComplaintCameraMode === 'photo'
-        ? 'bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs'
-        : 'bg-neutral-100 text-neutral-700 font-bold py-2.5 rounded-xl text-xs';
-    videoBtn.className = bklComplaintCameraMode === 'video'
-        ? 'bg-indigo-600 text-white font-bold py-2.5 rounded-xl text-xs'
-        : 'bg-neutral-100 text-neutral-700 font-bold py-2.5 rounded-xl text-xs';
-    captureBtn.textContent = bklComplaintCameraMode === 'video' ? '🎥 بدء تسجيل الفيديو' : '📸 التقاط وإرفاق';
+    const input = document.getElementById(bklComplaintCameraMode === 'video' ? 'bkl-native-complaint-video' : 'bkl-native-complaint-photo');
+    if (!input) {
+        alert('تعذر تجهيز كاميرا الهاتف.');
+        return;
+    }
+    // إعادة ضبط value حتى يمكن التقاط صورة/فيديو جديد حتى لو كان نفس الملف السابق.
+    input.value = '';
+    input.click();
 }
 
-async function captureComplaintCamera() {
-    const video = document.getElementById('bkl-complaint-camera-video');
-    if (!video || !bklComplaintCameraStream) {
-        alert('الكاميرا غير متاحة حالياً.');
+function handleNativeComplaintCameraFile(input) {
+    const file = input && input.files && input.files[0];
+    if (!file || !bklComplaintCameraPrefix) return;
+    const expected = bklComplaintCameraMode === 'video' ? 'video/' : 'image/';
+    if (!String(file.type || '').startsWith(expected)) {
+        alert(bklComplaintCameraMode === 'video' ? 'يرجى تسجيل فيديو من الكاميرا.' : 'يرجى التقاط صورة من الكاميرا.');
+        input.value = '';
         return;
     }
-    if (bklComplaintCameraMode === 'photo') {
-        const canvas = document.getElementById('bkl-complaint-camera-canvas');
-        const maxW = 1280;
-        const scale = Math.min(1, maxW / (video.videoWidth || maxW));
-        canvas.width = Math.max(1, Math.round((video.videoWidth || maxW) * scale));
-        canvas.height = Math.max(1, Math.round((video.videoHeight || 720) * scale));
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(blob => {
-            if (!blob) return;
-            attachCameraBlob(blob, 'image/jpeg', 'camera-photo.jpg');
-            closeComplaintCamera();
-        }, 'image/jpeg', .84);
-        return;
-    }
-
-    if (bklComplaintCameraRecorder && bklComplaintCameraRecorder.state === 'recording') {
-        bklComplaintCameraRecorder.stop();
-        return;
-    }
-
-    if (!window.MediaRecorder) {
-        alert('تسجيل الفيديو غير مدعوم في هذا المتصفح. يمكنك التقاط صورة أو اختيار فيديو من الملفات.');
-        return;
-    }
-    bklComplaintCameraChunks = [];
-    let mime = '';
-    const candidates = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
-    for (const c of candidates) {
-        if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(c)) { mime = c; break; }
-    }
-    try {
-        bklComplaintCameraRecorder = new MediaRecorder(bklComplaintCameraStream, mime ? {mimeType:mime} : undefined);
-    } catch (e) {
-        alert('تعذر بدء تسجيل الفيديو على هذا الجهاز.');
-        return;
-    }
-    bklComplaintCameraRecorder.ondataavailable = e => { if (e.data && e.data.size) bklComplaintCameraChunks.push(e.data); };
-    bklComplaintCameraRecorder.onstop = () => {
-        const type = mime || 'video/webm';
-        const blob = new Blob(bklComplaintCameraChunks, {type});
-        if (blob.size > 12 * 1024 * 1024) {
-            alert('حجم الفيديو كبير جداً. الحد الأقصى للمرفق هو 12 ميغابايت.');
-        } else {
-            attachCameraBlob(blob, type, `camera-video-${Date.now()}.webm`);
-        }
-        bklComplaintCameraRecorder = null;
-        bklComplaintCameraChunks = [];
-        closeComplaintCamera();
-    };
-    bklComplaintCameraRecorder.start();
-    const status = document.getElementById('bkl-complaint-camera-status');
-    const btn = document.getElementById('bkl-camera-capture-btn');
-    if (status) status.textContent = '🔴 جارٍ تسجيل الفيديو... اضغط الزر مرة أخرى للإيقاف';
-    if (btn) btn.textContent = '⏹️ إيقاف التسجيل وإرفاق الفيديو';
-}
-
-async function attachCameraBlob(blob, type, name) {
-    if (!bklComplaintCameraPrefix) return;
-    const input = document.getElementById(`${bklComplaintCameraPrefix}-file-input`);
+    const targetInput = document.getElementById(`${bklComplaintCameraPrefix}-file-input`);
     const preview = document.getElementById(`${bklComplaintCameraPrefix}-attachment-preview`);
-    if (!input || !preview) return;
-    const file = new File([blob], name, {type});
+    if (!targetInput || !preview) return;
     try {
         const dt = new DataTransfer();
-        Array.from(input.files || []).forEach(f => dt.items.add(f));
+        Array.from(targetInput.files || []).forEach(f => dt.items.add(f));
         dt.items.add(file);
-        input.files = dt.files;
-        renderChatAttachmentPreview(input.id, preview.id);
+        targetInput.files = dt.files;
+        renderChatAttachmentPreview(targetInput.id, preview.id);
+        closeComplaintCamera();
     } catch (e) {
-        alert('تعذر إرفاق الصورة/الفيديو بالمحادثة. يمكنك استخدام زر الملفات بدلاً من ذلك.');
+        alert('تعذر إرفاق الصورة أو الفيديو. استخدم زر الملفات إذا لزم الأمر.');
     }
+    input.value = '';
 }
 
 function closeComplaintCamera() {
-    if (bklComplaintCameraRecorder && bklComplaintCameraRecorder.state === 'recording') {
-        try { bklComplaintCameraRecorder.stop(); } catch(e) {}
-        return;
-    }
-    if (bklComplaintCameraStream) {
-        bklComplaintCameraStream.getTracks().forEach(track => track.stop());
-        bklComplaintCameraStream = null;
-    }
-    const video = document.getElementById('bkl-complaint-camera-video');
-    if (video) video.srcObject = null;
     const modal = document.getElementById('bkl-complaint-camera-modal');
     if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
     }
     bklComplaintCameraPrefix = null;
-    bklComplaintCameraRecorder = null;
-    bklComplaintCameraChunks = [];
 }
-
-window.addEventListener('beforeunload', () => {
-    if (bklComplaintCameraStream) bklComplaintCameraStream.getTracks().forEach(track => track.stop());
-});
 
 function ensureComplaintMessages(complaint) {
     if (!Array.isArray(complaint.messages)) complaint.messages = [];
