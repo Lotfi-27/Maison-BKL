@@ -2578,13 +2578,16 @@ function openComplaintCamera(prefix) {
 function openNativeComplaintCamera(mode) {
     ensureComplaintCameraModal();
     bklComplaintCameraMode = mode === 'video' ? 'video' : 'photo';
-    const inputId = bklComplaintCameraMode === 'video'
-        ? 'bkl-native-complaint-video'
-        : 'bkl-native-complaint-photo';
-    const input = document.getElementById(inputId);
-    if (!input) { alert('تعذر تجهيز كاميرا الهاتف.'); return; }
-    input.value = '';
-    input.click();
+    if (bklComplaintCameraMode === 'photo') {
+        const input = document.getElementById('bkl-native-complaint-photo');
+        if (!input) { alert('تعذر تجهيز كاميرا الهاتف.'); return; }
+        input.value = '';
+        input.click();
+        return;
+    }
+    // لا نستخدم input للفيديو أولاً؛ بعض الهواتف تتجاهل accept="video/*"
+    // وcapture وتفتح وضع الصور. الفيديو الحقيقي يسجل عبر MediaRecorder.
+    startComplaintVideoCapture();
 }
 
 async function startComplaintVideoCapture() {
@@ -2597,45 +2600,23 @@ async function startComplaintVideoCapture() {
     const preview = document.getElementById('bkl-complaint-video-preview');
     if (choice) choice.classList.add('hidden');
     if (panel) panel.classList.remove('hidden');
-    if (startBtn) {
-        startBtn.disabled = true;
-        startBtn.classList.add('opacity-50');
-        startBtn.textContent = '⏳ تجهيز الكاميرا...';
-    }
-    if (stopBtn) { stopBtn.disabled = true; stopBtn.classList.add('opacity-50'); }
-    bklComplaintVideoReady = false;
+    if (startBtn) { startBtn.disabled=true; startBtn.classList.add('opacity-50'); startBtn.textContent='⏳ فتح كاميرا الفيديو...'; }
+    if (stopBtn) { stopBtn.disabled=true; stopBtn.classList.add('opacity-50'); }
+    bklComplaintVideoReady=false;
     try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined' || !window.isSecureContext) {
-            throw new Error('SECURE_CONTEXT_REQUIRED');
-        }
-        // Keep the promise so a fast tap on "بدء التصوير" waits for the camera instead of reporting "not ready".
-        bklComplaintVideoReadyPromise = navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
-            audio: true
-        });
-        bklComplaintVideoStream = await bklComplaintVideoReadyPromise;
-        if (!bklComplaintVideoStream) throw new Error('NO_STREAM');
-        bklComplaintVideoReady = true;
-        if (preview) {
-            preview.srcObject = bklComplaintVideoStream;
-            preview.muted = true;
-            preview.autoplay = true;
-            preview.playsInline = true;
-            await preview.play().catch(()=>{});
-        }
-        if (startBtn) {
-            startBtn.disabled = false;
-            startBtn.classList.remove('opacity-50');
-            startBtn.textContent = '▶️ بدء التصوير';
-        }
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined' || !window.isSecureContext) throw new Error('VIDEO_CAMERA_UNAVAILABLE');
+        const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}, audio:true});
+        bklComplaintVideoStream=stream;
+        if (preview) { preview.srcObject=stream; preview.muted=true; preview.playsInline=true; await preview.play().catch(()=>{}); }
+        bklComplaintVideoReady=true;
+        bklComplaintVideoReadyPromise=Promise.resolve(true);
+        if (startBtn) { startBtn.disabled=false; startBtn.classList.remove('opacity-50'); startBtn.textContent='▶️ بدء التصوير'; }
     } catch (err) {
-        bklComplaintVideoReady = false;
-        bklComplaintVideoReadyPromise = null;
         cleanupComplaintVideoCapture();
-        const msg = err && err.message === 'SECURE_CONTEXT_REQUIRED'
-            ? 'تسجيل الفيديو داخل الصفحة يحتاج إلى HTTPS ومتصفح يسمح بالكاميرا والميكروفون.'
-            : 'تعذر فتح الكاميرا. اسمح للمتصفح باستخدام الكاميرا والميكروفون ثم حاول مرة أخرى.';
-        alert(msg);
+        // لا نعرض زر الصورة. إذا تعذر التسجيل داخل الصفحة، نستخدم مدخل الفيديو كحل أخير.
+        const nativeVideo=document.getElementById('bkl-native-complaint-video');
+        if (nativeVideo) { nativeVideo.value=''; nativeVideo.click(); }
+        else alert('تعذر فتح كاميرا الفيديو.');
     }
 }
 
