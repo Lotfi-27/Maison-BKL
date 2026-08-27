@@ -2055,8 +2055,10 @@ function getStoredData(key, fallback) {
 function setStoredData(key, value) {
     try {
         localStorage.setItem(key, JSON.stringify(value));
+        return true;
     } catch(e) {
         console.error("خطأ في حفظ البيانات:", e);
+        return false;
     }
 }
 
@@ -2341,6 +2343,7 @@ function submitComplaintForm(param) {
         text: text,
         media: [...currentComplaintMediaFiles],
         messages: [{
+            id: 'MSG-' + Date.now() + '-initial',
             sender: 'customer',
             text: text,
             media: [...currentComplaintMediaFiles],
@@ -2630,55 +2633,108 @@ function closeComplaintCamera() {
 }
 
 function ensureComplaintMessages(complaint) {
+    if (!complaint) return;
+
     if (!Array.isArray(complaint.messages)) complaint.messages = [];
-    if (!complaint.messages.length && (complaint.details || complaint.text)) {
+
+    if (!complaint.messages.length && (complaint.details || complaint.text || (Array.isArray(complaint.media) && complaint.media.length))) {
         complaint.messages.push({
+            id: 'MSG-' + String(complaint.id) + '-initial',
             sender: 'customer',
             text: complaint.details || complaint.text || '',
             time: complaint.date || getCurrentFullDateTime(),
             readByOwner: false,
             readByCustomer: true,
-            media: Array.isArray(complaint.media) ? complaint.media : []
+            media: Array.isArray(complaint.media) ? [...complaint.media] : []
         });
     }
-    complaint.messages.forEach(msg => {
+
+    complaint.messages.forEach((msg, index) => {
+        if (!msg) return;
+        if (!msg.id) {
+            msg.id = 'MSG-' + String(complaint.id) + '-' + String(msg.sender || 'unknown') + '-' + String(msg.time || Date.now()) + '-' + index;
+        }
         if (!Array.isArray(msg.media)) msg.media = [];
         if (msg.sender === 'owner' && typeof msg.customerRead !== 'boolean') msg.customerRead = false;
         if (msg.sender === 'customer' && typeof msg.readByOwner !== 'boolean') msg.readByOwner = false;
+        if (msg.sender === 'customer' && typeof msg.readByCustomer !== 'boolean') msg.readByCustomer = true;
+        if (msg.sender === 'owner' && typeof msg.readByCustomer !== 'boolean') msg.readByCustomer = false;
+    });
+
+    const unique = new Map();
+    complaint.messages.forEach(msg => {
+        if (!msg) return;
+        const key = String(msg.id);
+        const previous = unique.get(key);
+        if (!previous) {
+            unique.set(key, msg);
+            return;
+        }
+        if ((!Array.isArray(previous.media) || !previous.media.length) && Array.isArray(msg.media) && msg.media.length) {
+            previous.media = [...msg.media];
+        }
+        if (!previous.text && msg.text) previous.text = msg.text;
+        if (msg.readByOwner === true) previous.readByOwner = true;
+        if (msg.readByCustomer === true) previous.readByCustomer = true;
+        if (msg.customerRead === true) previous.customerRead = true;
+    });
+
+    complaint.messages = Array.from(unique.values()).sort((a, b) => {
+        return (new Date(a.time || 0).getTime() || 0) - (new Date(b.time || 0).getTime() || 0);
     });
 }
 
 function saveComplaintChatData() {
-    // توحيد مصدر بيانات الشكاوى حتى تعمل لوحة التحكم والمحادثة على نفس السجل.
-    setStoredData('store_complaints', storeComplaints);
-    setStoredData('storeComplaints', storeComplaints);
-    setStoredData('complaints_data', storeComplaints);
-    try { localStorage.setItem('store_complaints', JSON.stringify(storeComplaints)); } catch (e) { console.error('تعذر حفظ الشكاوى:', e); }
-
-    // مزامنة تجريبية بين جهاز الزبون والتاجر عند توفر اتصال Demo.
     try {
-        if (typeof window.bklDemoBroadcastComplaints === 'function') {
-            window.bklDemoBroadcastComplaints();
+        // المصدر الأساسي الوحيد للشكاوى.
+        setStoredData('storeComplaints', storeComplaints);
+
+        // إزالة النسخ القديمة حتى لا تتكرر الصور والوسائط داخل localStorage.
+        try { localStorage.removeItem('store_complaints'); } catch (e) {}
+        try { localStorage.removeItem('complaints_data'); } catch (e) {}
+
+        // مزامنة Demo بين الطرفين.
+        try {
+            if (typeof window.bklDemoBroadcastComplaints === 'function') {
+                window.bklDemoBroadcastComplaints();
+            }
+        } catch (e) {
+            console.warn('تعذر إرسال مزامنة الشكاوى:', e);
         }
-    } catch (e) {}
+
+        return true;
+    } catch (e) {
+        console.error('تعذر حفظ الشكاوى:', e);
+        return false;
+    }
 }
 
 function loadUnifiedComplaints() {
-    const sources = [
-        getStoredData('store_complaints', []),
-        getStoredData('storeComplaints', []),
-        getStoredData('complaints_data', [])
-    ];
-    const map = new Map();
-    sources.flat().forEach(c => {
-        if (c && c.id != null) map.set(String(c.id), c);
+    let complaints = getStoredData('storeComplaints', null);
+
+    // ترحيل البيانات القديمة مرة واحدة فقط.
+    if (!Array.isArray(complaints)) {
+        complaints = getStoredData('store_complaints', null);
+        if (!Array.isArray(complaints)) {
+            complaints = getStoredData('complaints_data', []);
+        }
+        if (!Array.isArray(complaints)) complaints = [];
+        storeComplaints = complaints;
+        saveComplaintChatData();
+    } else {
+        storeComplaints = complaints;
+    }
+
+    storeComplaints.forEach(complaint => {
+        ensureComplaintMessages(complaint);
     });
-    storeComplaints = Array.from(map.values()).sort((a,b) => {
+
+    storeComplaints.sort((a, b) => {
         const da = new Date(a.date || 0).getTime() || 0;
         const db = new Date(b.date || 0).getTime() || 0;
         return db - da;
     });
-    saveComplaintChatData();
+
     return storeComplaints;
 }
 
@@ -2767,6 +2823,7 @@ async function sendComplaintReply() {
     if (!complaint) return;
     ensureComplaintMessages(complaint);
     complaint.messages.push({
+        id: 'MSG-' + Date.now() + '-' + Math.random().toString(36).slice(2),
         sender: 'owner',
         text,
         media,
@@ -2905,6 +2962,7 @@ async function sendCustomerComplaintMessage() {
     if (!complaint || !getCustomerComplaintsForAccount().some(c => String(c.id) === String(id))) return;
     ensureComplaintMessages(complaint);
     complaint.messages.push({
+        id: 'MSG-' + Date.now() + '-' + Math.random().toString(36).slice(2),
         sender: 'customer',
         text,
         media,
@@ -9761,43 +9819,64 @@ document.addEventListener('DOMContentLoaded', function(){
 
     function bklDemoMergeComplaints(localItems, incomingItems) {
         const map = new Map();
-        const clone = x => {
-            try { return JSON.parse(JSON.stringify(x)); } catch(e) { return x; }
+
+        const clone = value => {
+            try { return JSON.parse(JSON.stringify(value)); } catch (e) { return value; }
         };
 
-        [...(Array.isArray(localItems) ? localItems : []),
-         ...(Array.isArray(incomingItems) ? incomingItems : [])].forEach(c => {
-            if (!c || c.id == null) return;
-            const id = String(c.id);
-            const old = map.get(id);
-            if (!old) {
-                map.set(id, clone(c));
+        const addComplaint = complaint => {
+            if (!complaint || complaint.id == null) return;
+
+            const id = String(complaint.id);
+            const incoming = clone(complaint);
+            if (typeof ensureComplaintMessages === 'function') ensureComplaintMessages(incoming);
+
+            const existing = map.get(id);
+            if (!existing) {
+                map.set(id, incoming);
                 return;
             }
 
-            const merged = Object.assign({}, old, c);
-            const msgs = new Map();
-            [...(Array.isArray(old.messages) ? old.messages : []),
-             ...(Array.isArray(c.messages) ? c.messages : [])].forEach(m => {
-                if (!m) return;
-                const key = String(m.id || (
-                    String(m.sender || '') + '|' +
-                    String(m.time || '') + '|' +
-                    String(m.text || '')
-                ));
-                msgs.set(key, m);
-            });
-            merged.messages = Array.from(msgs.values()).sort((a,b) =>
-                (new Date(a.time || 0).getTime() || 0) -
-                (new Date(b.time || 0).getTime() || 0)
-            );
-            map.set(id, merged);
-        });
+            if (typeof ensureComplaintMessages === 'function') ensureComplaintMessages(existing);
+            const merged = Object.assign({}, existing, incoming);
+            const messages = new Map();
 
-        return Array.from(map.values()).sort((a,b) =>
-            (new Date(b.date || 0).getTime() || 0) -
-            (new Date(a.date || 0).getTime() || 0)
-        );
+            [...existing.messages, ...incoming.messages].forEach(msg => {
+                if (!msg) return;
+                if (!msg.id) {
+                    msg.id = 'MSG-' + id + '-' + String(msg.sender || '') + '-' + String(msg.time || '') + '-' + Math.random().toString(36).slice(2);
+                }
+                const key = String(msg.id);
+                const previous = messages.get(key);
+                if (!previous) {
+                    messages.set(key, clone(msg));
+                    return;
+                }
+                if ((!Array.isArray(previous.media) || !previous.media.length) && Array.isArray(msg.media) && msg.media.length) {
+                    previous.media = [...msg.media];
+                }
+                if (!previous.text && msg.text) previous.text = msg.text;
+                if (msg.readByOwner === true) previous.readByOwner = true;
+                if (msg.readByCustomer === true) previous.readByCustomer = true;
+                if (msg.customerRead === true) previous.customerRead = true;
+            });
+
+            merged.messages = Array.from(messages.values()).sort((a, b) => {
+                return (new Date(a.time || 0).getTime() || 0) - (new Date(b.time || 0).getTime() || 0);
+            });
+
+            if ((!Array.isArray(merged.media) || !merged.media.length) && Array.isArray(existing.media) && existing.media.length) {
+                merged.media = [...existing.media];
+            }
+            map.set(id, merged);
+        };
+
+        (Array.isArray(localItems) ? localItems : []).forEach(addComplaint);
+        (Array.isArray(incomingItems) ? incomingItems : []).forEach(addComplaint);
+
+        return Array.from(map.values()).sort((a, b) => {
+            return (new Date(b.date || 0).getTime() || 0) - (new Date(a.date || 0).getTime() || 0);
+        });
     }
 
     function bklDemoLocalComplaints() {
