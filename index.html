@@ -2521,7 +2521,7 @@ function buildChatComposer(prefix, sendFunction) {
                 <input id="${prefix}-file-input" type="file" accept="image/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
                 <button type="button" onclick="${sendFunction}()" class="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold min-w-20 h-10 px-4 rounded-xl text-xs cursor-pointer flex items-center justify-center gap-1">إرسال <span>➤</span></button>
             </div>
-            <div class="text-[9px] text-neutral-400 mt-1">يمكن تمرير الأزرار يميناً ويساراً على الهاتف. 📷 للتصوير أو تسجيل الفيديو، و📎 للملفات.</div>
+            <div class="text-[9px] text-neutral-400 mt-1">يمكن تمرير الأزرار يميناً ويساراً على الهاتف. 📷 للتصوير، و📎 لاختيار الصور من الملفات.</div>
         </div>`;
 }
 
@@ -2548,7 +2548,7 @@ function ensureComplaintCameraModal() {
             <div class="flex items-center justify-between gap-2 p-3 border-b border-neutral-100">
                 <div>
                     <h3 class="text-sm font-extrabold text-neutral-900">استخدام كاميرا الهاتف</h3>
-                    <p class="text-[9px] text-neutral-400">التقاط صورة مباشرة وإرسالها إلى المحادثة.</p>
+                    <p class="text-[9px] text-neutral-400">التقاط صورة مباشرة وإرفاقها بالمحادثة.</p>
                 </div>
                 <button type="button" onclick="closeComplaintCamera()" class="w-9 h-9 rounded-full bg-neutral-100 text-neutral-600 font-bold">✕</button>
             </div>
@@ -2623,7 +2623,6 @@ function attachComplaintCameraFile(file) {
 }
 
 function closeComplaintCamera() {
-    stopComplaintVideoCapture(false);
     const modal = document.getElementById('bkl-complaint-camera-modal');
     if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
     bklComplaintCameraPrefix = null;
