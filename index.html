@@ -3836,12 +3836,15 @@ function printOrderInvoice(orderId, action = 'print') {
                     padding-top: 10px;
                 }
                 .invoice-actions {
+                    position: fixed;
+                    top: 12px;
+                    right: 12px;
+                    z-index: 9999;
                     display: flex;
-                    justify-content: center;
-                    gap: 10px;
-                    flex-wrap: wrap;
-                    margin: 0 auto 20px;
-                    max-width: 850px;
+                    align-items: center;
+                    justify-content: flex-end;
+                    gap: 8px;
+                    margin: 0;
                 }
                 .invoice-actions button {
                     border: 0;
@@ -3852,7 +3855,17 @@ function printOrderInvoice(orderId, action = 'print') {
                     cursor: pointer;
                 }
                 .invoice-actions .save-btn { background: #059669; color: #fff; }
-                .invoice-actions .close-btn { background: #eef2f7; color: #111827; }
+                .invoice-actions .close-btn {
+                    background: #dc2626;
+                    color: #fff;
+                    width: 42px;
+                    height: 42px;
+                    padding: 0;
+                    border-radius: 50%;
+                    font-size: 22px;
+                    line-height: 42px;
+                    text-align: center;
+                }
                 .invoice-actions button:hover { filter: brightness(.95); }
                 @media (max-width: 600px) {
                     body { padding: 12px; }
@@ -3872,8 +3885,7 @@ function printOrderInvoice(orderId, action = 'print') {
         </head>
         <body>
             <div class="invoice-actions" data-no-print>
-                <button type="button" class="save-btn" onclick="saveInvoiceFile()">💾 حفظ الفاتورة</button>
-                <button type="button" class="close-btn" onclick="closeInvoiceWindow()">↩️ رجوع / إغلاق</button>
+                <button type="button" class="close-btn" aria-label="إغلاق الفاتورة" onclick="closeInvoiceWindow()">×</button>
             </div>
 
             <div class="invoice-box">
@@ -3976,7 +3988,20 @@ function printOrderInvoice(orderId, action = 'print') {
                     }
                 }
                 function closeInvoiceWindow() {
-                    try { window.close(); } catch(e) {}
+                    try {
+                        if (window.opener && !window.opener.closed) {
+                            window.opener.focus();
+                            window.close();
+                            return;
+                        }
+                    } catch(e) {}
+                    try {
+                        if (window.history.length > 1) {
+                            window.history.go(-1);
+                            return;
+                        }
+                    } catch(e) {}
+                    // لا نغلق التطبيق الرئيسي إذا كانت الفاتورة هي نفس نافذة المتجر.
                 }
                 window.onload = function() { setTimeout(function(){ window.print(); }, 120); };
             <\/script>
