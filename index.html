@@ -831,6 +831,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -2653,6 +2654,13 @@ function saveComplaintChatData() {
     setStoredData('storeComplaints', storeComplaints);
     setStoredData('complaints_data', storeComplaints);
     try { localStorage.setItem('store_complaints', JSON.stringify(storeComplaints)); } catch (e) { console.error('تعذر حفظ الشكاوى:', e); }
+
+    // مزامنة تجريبية بين جهاز الزبون والتاجر عند توفر اتصال Demo.
+    try {
+        if (typeof window.bklDemoBroadcastComplaints === 'function') {
+            window.bklDemoBroadcastComplaints();
+        }
+    } catch (e) {}
 }
 
 function loadUnifiedComplaints() {
@@ -9729,4 +9737,201 @@ document.addEventListener('DOMContentLoaded', function(){
 
     // تم حذف معالج النقر العام القديم: كان يلتقط أزرار نوافذ الفواتير أيضاً ويشغل أكثر من دالة في النقرة الواحدة.
 })();
+
+/* =========================================================
+   Maison BKL - مزامنة تجريبية للشكاوى بين هاتف الزبون والتاجر
+   لا تغيّر الواجهة الحالية. تعمل عبر PeerJS فقط للـ Demo.
+   التاجر: الصفحة العادية
+   الزبون للعرض: أضف ?demo=customer إلى رابط المتجر.
+   ========================================================= */
+(function () {
+    const DEMO_OWNER_PEER_ID = 'maison-bkl-demo-owner-v1';
+    let bklDemoPeer = null;
+    let bklDemoConnections = [];
+    let bklDemoReady = false;
+    let bklDemoIsCustomer = false;
+
+    function bklDemoIsCustomerMode() {
+        try {
+            return new URLSearchParams(location.search).get('demo') === 'customer';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function bklDemoMergeComplaints(localItems, incomingItems) {
+        const map = new Map();
+        const clone = x => {
+            try { return JSON.parse(JSON.stringify(x)); } catch(e) { return x; }
+        };
+
+        [...(Array.isArray(localItems) ? localItems : []),
+         ...(Array.isArray(incomingItems) ? incomingItems : [])].forEach(c => {
+            if (!c || c.id == null) return;
+            const id = String(c.id);
+            const old = map.get(id);
+            if (!old) {
+                map.set(id, clone(c));
+                return;
+            }
+
+            const merged = Object.assign({}, old, c);
+            const msgs = new Map();
+            [...(Array.isArray(old.messages) ? old.messages : []),
+             ...(Array.isArray(c.messages) ? c.messages : [])].forEach(m => {
+                if (!m) return;
+                const key = String(m.id || (
+                    String(m.sender || '') + '|' +
+                    String(m.time || '') + '|' +
+                    String(m.text || '')
+                ));
+                msgs.set(key, m);
+            });
+            merged.messages = Array.from(msgs.values()).sort((a,b) =>
+                (new Date(a.time || 0).getTime() || 0) -
+                (new Date(b.time || 0).getTime() || 0)
+            );
+            map.set(id, merged);
+        });
+
+        return Array.from(map.values()).sort((a,b) =>
+            (new Date(b.date || 0).getTime() || 0) -
+            (new Date(a.date || 0).getTime() || 0)
+        );
+    }
+
+    function bklDemoLocalComplaints() {
+        try {
+            return typeof storeComplaints !== 'undefined' && Array.isArray(storeComplaints)
+                ? storeComplaints : [];
+        } catch(e) {
+            return [];
+        }
+    }
+
+    function bklDemoSend(payload, exceptConn) {
+        if (!bklDemoReady) return;
+        bklDemoConnections = bklDemoConnections.filter(c => c && !c.destroyed);
+        bklDemoConnections.forEach(c => {
+            if (c === exceptConn || !c.open) return;
+            try { c.send(payload); } catch(e) {}
+        });
+    }
+
+    function bklDemoApplyRemote(payload) {
+        if (!payload || payload.type !== 'bkl_complaints_sync') return;
+        try {
+            const merged = bklDemoMergeComplaints(bklDemoLocalComplaints(), payload.complaints || []);
+            storeComplaints = merged;
+            if (typeof saveComplaintChatData === 'function') {
+                // الحفظ محلي فقط؛ لا نعيد بث الرسالة الواردة حتى لا ندخل في حلقة.
+                setStoredData('store_complaints', storeComplaints);
+                setStoredData('storeComplaints', storeComplaints);
+                setStoredData('complaints_data', storeComplaints);
+            }
+            if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+            if (typeof renderCustomerComplaintChats === 'function') renderCustomerComplaintChats();
+            if (typeof activeComplaintChatId !== 'undefined' &&
+                activeComplaintChatId != null &&
+                typeof renderComplaintChatMessages === 'function') {
+                const c = storeComplaints.find(x => String(x.id) === String(activeComplaintChatId));
+                if (c) renderComplaintChatMessages(c);
+            }
+            if (typeof window.activeCustomerComplaintChatId !== 'undefined' &&
+                window.activeCustomerComplaintChatId != null &&
+                typeof renderCustomerComplaintChatMessages === 'function') {
+                const c = storeComplaints.find(x => String(x.id) === String(window.activeCustomerComplaintChatId));
+                if (c) renderCustomerComplaintChatMessages(c);
+            }
+        } catch(e) {
+            console.warn('BKL demo sync apply error', e);
+        }
+    }
+
+    function bklDemoBroadcast() {
+        bklDemoSend({
+            type: 'bkl_complaints_sync',
+            version: 1,
+            complaints: bklDemoLocalComplaints()
+        });
+    }
+
+    function bklDemoSetupConnection(conn) {
+        if (!conn) return;
+        bklDemoConnections.push(conn);
+
+        conn.on('open', function() {
+            try {
+                conn.send({
+                    type: 'bkl_complaints_sync',
+                    version: 1,
+                    complaints: bklDemoLocalComplaints()
+                });
+            } catch(e) {}
+        });
+
+        conn.on('data', function(data) {
+            bklDemoApplyRemote(data);
+            // صاحب المتجر يوزع التحديث الوارد على بقية العملاء في العرض.
+            if (!bklDemoIsCustomer) bklDemoSend(data, conn);
+        });
+
+        conn.on('close', function() {
+            bklDemoConnections = bklDemoConnections.filter(c => c !== conn);
+        });
+        conn.on('error', function() {
+            bklDemoConnections = bklDemoConnections.filter(c => c !== conn);
+        });
+    }
+
+    function bklDemoStart() {
+        if (typeof Peer === 'undefined') {
+            console.warn('PeerJS لم يتم تحميله؛ ستستمر المحادثة محلياً.');
+            return;
+        }
+
+        bklDemoIsCustomer = bklDemoIsCustomerMode();
+
+        if (!bklDemoIsCustomer) {
+            bklDemoPeer = new Peer(DEMO_OWNER_PEER_ID);
+            bklDemoPeer.on('open', function() {
+                bklDemoReady = true;
+                console.log('Maison BKL Demo Sync: التاجر جاهز للمزامنة.');
+            });
+            bklDemoPeer.on('connection', function(conn) {
+                bklDemoSetupConnection(conn);
+            });
+            bklDemoPeer.on('error', function(err) {
+                console.warn('Maison BKL Demo Sync:', err && err.type ? err.type : err);
+            });
+        } else {
+            bklDemoPeer = new Peer();
+            bklDemoPeer.on('open', function() {
+                bklDemoReady = true;
+                const conn = bklDemoPeer.connect(DEMO_OWNER_PEER_ID, {
+                    reliable: true,
+                    serialization: 'json'
+                });
+                bklDemoSetupConnection(conn);
+            });
+            bklDemoPeer.on('error', function(err) {
+                console.warn('Maison BKL Demo Sync:', err && err.type ? err.type : err);
+            });
+        }
+    }
+
+    // API صغيرة تستخدمها saveComplaintChatData دون تغيير بقية التطبيق.
+    window.bklDemoBroadcastComplaints = bklDemoBroadcast;
+    window.bklDemoStart = bklDemoStart;
+
+    // يبدأ بعد تحميل الصفحة حتى لا يؤثر على رسم الواجهة.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(bklDemoStart, 700);
+        });
+    } else {
+        setTimeout(bklDemoStart, 700);
+    }
+})();
+
 </script>
