@@ -8001,83 +8001,40 @@ function buildCreditDebtorsRegistryRows(debtors) {
 
         function openCreditDebtorsRegistryViewer() {
             const data = getCreditDebtorsRegistryHtml();
-            let modal = document.getElementById('credit-debtors-registry-viewer-modal');
-            if (!modal) {
-                modal = document.createElement('div');
-                modal.id = 'credit-debtors-registry-viewer-modal';
-                modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;direction:rtl;';
-                document.body.appendChild(modal);
-            }
-            modal.innerHTML = `
-                <style>
-                  #credit-debtors-registry-viewer-modal *{box-sizing:border-box}
-                  #credit-debtors-registry-viewer-modal .credit-viewer-sheet{font-family:Arial,"Corps CS",sans-serif;background:#f3f4f6;color:#111;width:100%;max-width:1400px;height:calc(100vh - 24px);overflow:auto;padding:20px;border-radius:18px;box-shadow:0 10px 35px rgba(0,0,0,.2)}
-                  #credit-debtors-registry-viewer-modal .credit-viewer-head{display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:3px solid #f59e0b;padding-bottom:15px}
-                  #credit-debtors-registry-viewer-modal .credit-viewer-head h1{font-size:23px;margin:0}
-                  #credit-debtors-registry-viewer-modal .credit-viewer-head p{font-size:12px;color:#666;margin:6px 0 0}
-                  #credit-debtors-registry-viewer-modal .credit-viewer-actions{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}
-                  #credit-debtors-registry-viewer-modal .credit-viewer-actions button{border:0;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;font-family:inherit}
-                  #credit-debtors-registry-viewer-modal .credit-print{background:#059669;color:#fff}.credit-share{background:#2563eb;color:#fff}.credit-close{background:#e5e7eb;color:#111}.credit-refresh{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa!important}
-                  #credit-debtors-registry-viewer-modal .credit-summary{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.credit-card{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 15px;min-width:190px}.credit-card b{display:block;font-size:11px;color:#9a3412;margin-bottom:4px}.credit-card span{font-size:17px;font-weight:900}
-                  #credit-debtors-registry-viewer-modal table{width:100%;border-collapse:collapse;margin-top:18px;font-size:10px}#credit-debtors-registry-viewer-modal th,#credit-debtors-registry-viewer-modal td{border:1px solid #e5e7eb;padding:8px;text-align:right;vertical-align:top}#credit-debtors-registry-viewer-modal th{background:#111;color:#fff;font-weight:800}
-                  #credit-debtors-registry-viewer-modal .credit-note{margin-top:18px;padding:10px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#92400e}.credit-hint{font-size:10px;color:#64748b;margin-top:8px}
-                  @media(max-width:800px){#credit-debtors-registry-viewer-modal .credit-viewer-sheet{padding:12px}.credit-viewer-head{align-items:flex-start!important;flex-direction:column!important}#credit-debtors-registry-viewer-modal .credit-table-wrap{overflow-x:auto}#credit-debtors-registry-viewer-modal table{min-width:1050px}}
-                </style>
-                <div class="credit-viewer-sheet">
-                  <div class="credit-viewer-head">
-                    <div><h1>Maison BKL - متجر السوق الذكي</h1><p>سجل أصحاب الكريدي المستحقين</p></div>
-                    <div><strong>التاريخ: ${escapeOrderHtml(getCurrentFullDateTime())}</strong></div>
-                  </div>
-                  <div class="credit-viewer-actions">
-                    <button type="button" class="credit-print" onclick="printCreditDebtorsRegistry()">🖨️ طباعة / حفظ PDF</button>
-                    <button type="button" class="credit-share" onclick="shareCreditRegistryPDFFromModal()">📤 Partage / مشاركة PDF</button>
-                    <button type="button" class="credit-refresh" onclick="openCreditDebtorsRegistryViewer()">🔄 تحديث</button>
-                    <button type="button" class="credit-close" onclick="closeCreditDebtorsRegistryViewer()">✕ إغلاق</button>
-                  </div>
-                  <div class="credit-summary"><div class="credit-card"><b>عدد أصحاب الكريدي</b><span>${data.debtors.length}</span></div><div class="credit-card"><b>إجمالي الدين المتبقي</b><span>${escapeOrderHtml(formatCreditAmount(data.totalDebt))}</span></div></div>
-                  <div class="credit-table-wrap">${data.html}</div>
-                  <div class="credit-note">هذا العرض داخل المتجر ويمكن طباعته أو حفظه بصيغة PDF. زر المشاركة يستخدم خاصية المشاركة في الجهاز إذا كانت متاحة.</div>
-                  <div class="credit-hint">لحفظ السجل: اضغط «طباعة / حفظ PDF». ولإرساله كملف PDF عبر المشاركة، اختر ملف PDF المحفوظ.</div>
-                </div>`;
-            modal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        }
-
-        function closeCreditDebtorsRegistryViewer() {
-            const modal = document.getElementById('credit-debtors-registry-viewer-modal');
-            if (!modal) return;
-            modal.remove();
-            document.body.style.overflow = '';
-        }
-
-        async function shareCreditRegistryPDFFromModal() {
-            if (!navigator.share) {
-                alert('المشاركة المباشرة للملفات غير متاحة في هذا المتصفح. احفظ السجل بصيغة PDF ثم أرسله يدوياً عبر وسيلة التواصل.');
-                return;
-            }
-            const picker = document.createElement('input');
-            picker.type = 'file';
-            picker.accept = 'application/pdf,.pdf';
-            picker.style.display = 'none';
-            document.body.appendChild(picker);
-            picker.onchange = async function() {
-                const file = picker.files && picker.files[0];
-                if (!file) { picker.remove(); return; }
-                if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
-                    alert('يرجى اختيار ملف PDF فقط.'); picker.remove(); return;
-                }
-                try {
-                    if (navigator.canShare && !navigator.canShare({files:[file]})) {
-                        alert('هذا الجهاز أو المتصفح لا يدعم مشاركة ملفات PDF مباشرة. احفظ الملف ثم أرسله يدوياً.');
-                        picker.remove(); return;
+            const w = window.open('', '_blank', 'width=1400,height=950,scrollbars=yes,resizable=yes');
+            if (!w) { alert('تعذر فتح سجل أصحاب الكريدي. يرجى السماح بالنوافذ المنبثقة.'); return; }
+            const shareText = `سجل أصحاب الكريدي المستحقين - Maison BKL\nعدد أصحاب الكريدي: ${data.debtors.length}\nإجمالي الدين المتبقي: ${formatCreditAmount(data.totalDebt)}`;
+            w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>عرض سجل أصحاب الكريدي - Maison BKL</title><style>
+                *{box-sizing:border-box}body{font-family:Arial,"Corps CS",sans-serif;background:#f3f4f6;color:#111;margin:0;padding:20px}.sheet{max-width:1350px;margin:auto;background:#fff;padding:25px;border-radius:18px;box-shadow:0 10px 35px rgba(0,0,0,.08)}.head{display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:3px solid #f59e0b;padding-bottom:15px}.head h1{font-size:23px;margin:0}.head p{font-size:12px;color:#666;margin:6px 0 0}.actions{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}.actions button{border:0;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;font-family:inherit}.print{background:#059669;color:#fff}.share{background:#2563eb;color:#fff}.close{background:#e5e7eb;color:#111}.refresh{background:#fff7ed;color:#9a3412;border:1px solid #fed7aa!important}.summary{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.card{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 15px;min-width:190px}.card b{display:block;font-size:11px;color:#9a3412;margin-bottom:4px}.card span{font-size:17px;font-weight:900}table{width:100%;border-collapse:collapse;margin-top:18px;font-size:10px}th,td{border:1px solid #e5e7eb;padding:8px;text-align:right;vertical-align:top}th{background:#111;color:#fff;font-weight:800}.debt-box{background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:5px;margin-bottom:5px;line-height:1.7}.debt{color:#b91c1c;font-weight:900}.paid{color:#047857;font-weight:900}.note{margin-top:18px;padding:10px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#92400e}.hint{font-size:10px;color:#64748b;margin-top:8px}@media(max-width:800px){body{padding:8px}.sheet{padding:12px}.head{align-items:flex-start;flex-direction:column}.table-wrap{overflow-x:auto}table{min-width:1050px}}@media print{body{background:#fff;padding:0}.sheet{max-width:none;border-radius:0;box-shadow:none;padding:8px}.actions,.hint{display:none}.head{border-bottom:2px solid #111}table{font-size:8px}.debt-box{break-inside:avoid}}
+            </style></head><body><div class="sheet"><div class="head"><div><h1>Maison BKL - متجر السوق الذكي</h1><p>سجل أصحاب الكريدي المستحقين</p></div><div><strong>التاريخ: ${escapeOrderHtml(getCurrentFullDateTime())}</strong></div></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة / حفظ PDF</button><button class="share" onclick="shareCreditRegistryPDF()">📤 Partage / مشاركة PDF</button><button class="refresh" onclick="location.reload()">🔄 تحديث</button><button class="close" onclick="window.close()">✕ إغلاق</button></div><div class="summary"><div class="card"><b>عدد أصحاب الكريدي</b><span id="debtorCount">${data.debtors.length}</span></div><div class="card"><b>إجمالي الدين المتبقي</b><span id="totalDebt">${escapeOrderHtml(formatCreditAmount(data.totalDebt))}</span></div></div><div class="table-wrap">${data.html}</div><div class="note">هذا العرض مستقل عن لوحة التحكم ويمكن طباعته أو حفظه بصيغة PDF. زر المشاركة يستخدم خاصية المشاركة في الجهاز إذا كانت متاحة.</div><div class="hint" id="shareHint">لحفظ السجل: اضغط «طباعة / حفظ PDF». ولإرساله كملف PDF عبر المشاركة، اضغط «Partage / مشاركة PDF» واختر ملف PDF المحفوظ.</div><input id="creditPdfFilePicker" type="file" accept="application/pdf,.pdf" style="display:none"></div><script>
+                async function shareCreditRegistryPDF(){
+                    const picker=document.getElementById('creditPdfFilePicker');
+                    if(!picker) return;
+                    if(!navigator.share){
+                        alert('المشاركة المباشرة للملفات غير متاحة في هذا المتصفح. احفظ السجل بصيغة PDF ثم أرسله يدوياً عبر وسيلة التواصل.');
+                        return;
                     }
-                    await navigator.share({title:'سجل أصحاب الكريدي المستحقين - Maison BKL',text:'سجل أصحاب الكريدي المستحقين',files:[file]});
-                } catch(e) {
-                    if (!e || e.name !== 'AbortError') alert('تعذر مشاركة ملف PDF. يمكنك إرساله يدوياً عبر وسيلة التواصل.');
+                    picker.value='';
+                    picker.onchange=async function(){
+                        const file=picker.files && picker.files[0];
+                        if(!file) return;
+                        if(file.type!=='application/pdf' && !/\.pdf$/i.test(file.name)){
+                            alert('يرجى اختيار ملف PDF فقط.');
+                            return;
+                        }
+                        try{
+                            if(navigator.canShare && !navigator.canShare({files:[file]})){
+                                alert('هذا الجهاز أو المتصفح لا يدعم مشاركة ملفات PDF مباشرة. احفظ الملف ثم أرسله يدوياً.');
+                                return;
+                            }
+                            await navigator.share({title:'سجل أصحاب الكريدي المستحقين - Maison BKL',text:'سجل أصحاب الكريدي المستحقين',files:[file]});
+                        }catch(e){ if(e && e.name!=='AbortError') alert('تعذر مشاركة ملف PDF. يمكنك إرساله يدوياً عبر وسيلة التواصل.'); }
+                    };
+                    picker.click();
                 }
-                picker.remove();
-            };
-            picker.click();
+            <\/script></body></html>`);
+            w.document.close();
+            setTimeout(() => { try { w.focus(); } catch(e) {} }, 150);
         }
 
         function printCreditDebtorsRegistry() {
