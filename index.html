@@ -2424,7 +2424,57 @@ function deleteComplaintChatMedia(complaintId, messageIndex, mediaIndex) {
     if (typeof renderCustomerComplaintChats === 'function') renderCustomerComplaintChats();
 }
 
-function chatReadFileAsDataURL(file) {
+async function compressChatImageFile(file) {
+    if (!file || !String(file.type || '').startsWith('image/')) return null;
+    try {
+        const originalData = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+
+        const img = await new Promise((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+            image.src = originalData;
+        });
+
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
+        canvas.height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) return { data: originalData, type: file.type, size: file.size };
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        let quality = 0.78;
+        let data = canvas.toDataURL('image/jpeg', quality);
+        while (data.length > 650000 && quality > 0.45) {
+            quality -= 0.08;
+            data = canvas.toDataURL('image/jpeg', quality);
+        }
+        return { data, type: 'image/jpeg', size: Math.round((data.length * 3) / 4) };
+    } catch (e) {
+        console.warn('تعذر ضغط الصورة، سيتم استخدام الأصل:', e);
+        return null;
+    }
+}
+
+async function chatReadFileAsDataURL(file) {
+    if (String(file.type || '').startsWith('image/')) {
+        const compressed = await compressChatImageFile(file);
+        if (compressed) {
+            return {
+                name: file.name,
+                type: compressed.type,
+                size: compressed.size,
+                data: compressed.data
+            };
+        }
+    }
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve({
@@ -4074,7 +4124,24 @@ function printOrderInvoice(orderId, action = 'print') {
                     border-top: 1px solid #eee;
                     padding-top: 10px;
                 }
-                .invoice-window-close { position: fixed; top: 10px; right: 10px; z-index: 99999; width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f3f4f6; color: #4b5563; font-size: 24px; font-weight: 800; line-height: 36px; text-align: center; cursor: pointer; box-shadow: 0 3px 12px rgba(0,0,0,.10); }
+                .invoice-window-close {
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    z-index: 99999;
+                    width: 36px;
+                    height: 36px;
+                    border: 0;
+                    border-radius: 50%;
+                    background: #f3f4f6;
+                    color: #4b5563;
+                    font-size: 24px;
+                    font-weight: 800;
+                    line-height: 36px;
+                    text-align: center;
+                    cursor: pointer;
+                    box-shadow: 0 3px 12px rgba(0,0,0,.10);
+                }
                 .invoice-window-close:hover { background: #e5e7eb; color: #111827; }
                 @media print {
                     .invoice-window-close { display: none; }
@@ -4423,8 +4490,8 @@ function renderOwnerDashboardData() {
             const mediaHTML = mediaItems.length > 0 ? `
                 <div class="flex items-center gap-2 overflow-x-auto py-2 bg-neutral-100 p-2 rounded-xl border border-neutral-200 my-1">
                     ${mediaItems.map(m => {
-                        const mediaUrl = typeof m === 'string' ? m : (m.url || m.src || '');
-                        const isVideo = (typeof m === 'object' && m.type === 'video') || (mediaUrl && (mediaUrl.includes('data:video') || mediaUrl.match(/\.(mp4|webm|ogg)$/i)));
+                        const mediaUrl = typeof m === 'string' ? m : (m.data || m.url || m.src || '');
+                        const isVideo = (typeof m === 'object' && String(m.type || '').startsWith('video/')) || (mediaUrl && (mediaUrl.includes('data:video') || mediaUrl.match(/\.(mp4|webm|ogg)$/i)));
                         
                         if (!mediaUrl) return '';
 
@@ -8674,13 +8741,14 @@ let activeComplaintChatId = null;
 
                     Array.from(files).forEach(file => {
                         const reader = new FileReader();
-                        reader.onload = function(event) {
-                            const base64Data = event.target.result;
-                            complaintFilesBase64.push({ type: file.type, data: base64Data });
-
+                        reader.onload = async function(event) {
                             if (file.type.startsWith('image/')) {
+                                const compressed = await compressChatImageFile(file);
+                                const base64Data = compressed ? compressed.data : event.target.result;
+                                complaintFilesBase64.push({ type: compressed ? compressed.type : file.type, data: base64Data, name: file.name });
                                 previewContainer.innerHTML += `<div class="relative w-12 h-12 rounded-lg overflow-hidden border border-neutral-200 shrink-0"><img src="${base64Data}" class="w-full h-full object-cover"></div>`;
                             } else if (file.type.startsWith('video/')) {
+                                complaintFilesBase64.push({ type: file.type, data: event.target.result, name: file.name });
                                 previewContainer.innerHTML += `<div class="relative w-12 h-12 rounded-lg overflow-hidden border border-neutral-200 bg-neutral-900 flex items-center justify-center text-white text-[10px] shrink-0"><i class="fa-solid fa-video"></i></div>`;
                             }
                         };
