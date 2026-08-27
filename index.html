@@ -9563,7 +9563,7 @@ document.addEventListener('DOMContentLoaded', function(){
 (function(){
   window.addEventListener('message',function(e){
     var t=e.data&&e.data.type;
-    var id=t==='BKL_CLOSE_INVOICE_WINDOW'?'bkl-invoice-print-modal':(t==='BKL_CLOSE_CREDIT_WINDOW'?'bkl-credit-view-modal':null);
+    var id=t==='BKL_CLOSE_INVOICE_WINDOW'?'bkl-invoice-print-modal':null;
     if(!id)return;
     var m=document.getElementById(id);
     if(m&&typeof m.__bklClose==='function')m.__bklClose();
