@@ -683,16 +683,154 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
   const supported=['ar','en','fr','es','de','zh'];
   let lang='';
   try { lang=localStorage.getItem('store_language')||''; } catch(e){}
-  if(!supported.includes(lang)){
-    const raw=(navigator.language||navigator.userLanguage||'en').toLowerCase();
-    const base=raw.split('-')[0];
-    lang=supported.includes(base)?base:'en';
-  }
+  // Keep Arabic as the safe/default store language.
+  // Do not silently replace the store's Arabic UI based on the phone/browser language.
+  // A language other than Arabic is used only when the customer explicitly selected it
+  // and that choice was saved in localStorage.
+  if(!supported.includes(lang)) lang='ar';
   document.documentElement.lang=lang;
   document.documentElement.dir=lang==='ar'?'rtl':'ltr';
   if(lang!=='ar') document.documentElement.classList.add('bkl-i18n-pending');
 })();
 </script>
+
+<style id="bkl-mobile-responsive-fix">
+/* =========================================================
+   BKL MOBILE RESPONSIVE FIX
+   - Keep desktop layout unchanged.
+   - Never hide essential header icons on phones.
+   - Use two compact header rows on narrow screens.
+   - Keep Arabic as the default UI language (handled by bootstrap above).
+   ========================================================= */
+@media (max-width: 760px){
+  header.bkl-header{width:100%!important;overflow:visible!important;}
+  .bkl-header-inner{
+    width:100%!important;
+    height:auto!important;
+    min-height:116px!important;
+    padding:7px 8px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:50px 50px!important;
+    grid-template-areas:
+      "brand actions"
+      "center center"!important;
+    gap:5px 8px!important;
+    align-items:center!important;
+    box-sizing:border-box!important;
+  }
+  .bkl-brand{
+    grid-area:brand!important;
+    order:initial!important;
+    min-width:0!important;
+    width:auto!important;
+    gap:7px!important;
+    overflow:hidden!important;
+  }
+  .bkl-logo{width:40px!important;height:40px!important;font-size:22px!important;flex:0 0 40px!important;}
+  .bkl-brand-text{min-width:0!important;overflow:hidden!important;}
+  .bkl-brand-name{font-size:17px!important;white-space:nowrap!important;}
+  .bkl-brand-sub{font-size:9px!important;white-space:nowrap!important;}
+
+  /* All important header controls remain visible. */
+  .bkl-header-actions{
+    grid-area:actions!important;
+    order:initial!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    gap:5px!important;
+    min-width:0!important;
+  }
+  .bkl-currency{
+    height:40px!important;
+    min-width:72px!important;
+    width:72px!important;
+    padding:0 5px!important;
+    font-size:11px!important;
+  }
+  .bkl-header-actions .bkl-icon-btn{
+    display:flex!important;
+    width:40px!important;
+    min-width:40px!important;
+    height:40px!important;
+    flex:0 0 40px!important;
+  }
+
+  .bkl-header-center{
+    grid-area:center!important;
+    order:initial!important;
+    display:flex!important;
+    width:100%!important;
+    min-width:0!important;
+    justify-content:center!important;
+    align-items:center!important;
+    gap:5px!important;
+    overflow:visible!important;
+  }
+  .bkl-header-center > .bkl-icon-btn{
+    display:flex!important;
+    width:40px!important;
+    min-width:40px!important;
+    height:40px!important;
+    flex:0 0 40px!important;
+    padding:0!important;
+    font-size:16px!important;
+  }
+  .bkl-header-center > .bkl-icon-btn i{font-size:16px!important;}
+  .bkl-dashboard-btn span{display:none!important;}
+
+  .bkl-language{
+    display:block!important;
+    height:40px!important;
+    min-width:88px!important;
+    width:88px!important;
+    max-width:88px!important;
+    padding:0 5px!important;
+    font-size:11px!important;
+    flex:0 0 88px!important;
+  }
+  /* Search remains available without consuming the mobile header row. */
+  .bkl-search-wrap{display:none!important;}
+
+  .bkl-cart-top .bkl-cart-badge{
+    min-width:15px!important;height:15px!important;line-height:15px!important;
+    font-size:8px!important;top:-3px!important;right:-3px!important;
+  }
+
+  /* Bottom navigation: equal flexible widths instead of fixed widths. */
+  footer > div{
+    height:64px!important;
+    width:100%!important;
+    padding:0 4px!important;
+    display:flex!important;
+    justify-content:space-around!important;
+    gap:2px!important;
+  }
+  footer button{
+    min-width:0!important;
+    width:33.333%!important;
+    flex:1 1 0!important;
+    padding:4px 2px!important;
+  }
+  footer button i{font-size:20px!important;}
+  footer button span{font-size:9px!important;white-space:nowrap!important;}
+}
+
+@media (max-width: 370px){
+  .bkl-header-inner{padding-left:5px!important;padding-right:5px!important;gap:4px 5px!important;}
+  .bkl-brand-name{font-size:15px!important;}
+  .bkl-brand-sub{font-size:8px!important;}
+  .bkl-logo{width:36px!important;height:36px!important;flex-basis:36px!important;font-size:20px!important;}
+  .bkl-currency{min-width:66px!important;width:66px!important;}
+  .bkl-header-center{gap:3px!important;}
+  .bkl-header-center > .bkl-icon-btn{width:37px!important;min-width:37px!important;height:37px!important;flex-basis:37px!important;}
+  .bkl-header-center > .bkl-icon-btn i{font-size:15px!important;}
+  .bkl-language{width:82px!important;min-width:82px!important;max-width:82px!important;font-size:10px!important;flex-basis:82px!important;}
+  .bkl-header-actions .bkl-icon-btn{width:37px!important;min-width:37px!important;height:37px!important;flex-basis:37px!important;}
+}
+</style>
+
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -1197,11 +1335,69 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 </div>
 
                 <div class="flex gap-2 pt-2">
-                    <button type="button" onclick="goToPage('page-account-register')" class="flex-1 bg-amber-100 text-amber-700 hover:bg-amber-200 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer">تعديل البيانات</button>
+                    <button type="button" onclick="openCustomerProfileEdit()" class="flex-1 bg-amber-100 text-amber-700 hover:bg-amber-200 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer"><i class="fa-solid fa-pen-to-square ml-1"></i>تعديل الحساب</button>
                     <button type="button" onclick="logoutCustomer()" class="flex-1 bg-red-100 text-red-700 hover:bg-red-200 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer">تسجيل الخروج</button>
                 </div>
             </div>
         </div>
+
+    <!-- ================= CUSTOMER PROFILE EDIT MODAL ================= -->
+    <div id="customer-profile-edit-modal" class="fixed inset-0 z-[10050] hidden items-center justify-center p-3 bg-black/50 backdrop-blur-sm">
+        <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white rounded-3xl shadow-2xl border border-neutral-200 relative" dir="rtl">
+            <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-extrabold text-neutral-900">تعديل الحساب</h3>
+                    <p class="text-[10px] text-neutral-500">عدّل بياناتك وصورة ملفك الشخصي ثم اضغط حفظ.</p>
+                </div>
+                <button type="button" onclick="closeCustomerProfileEdit()" class="w-9 h-9 rounded-full bg-neutral-100 hover:bg-red-50 text-neutral-700 hover:text-red-600 flex items-center justify-center" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="customer-profile-edit-form" onsubmit="saveCustomerProfileEdit(event)" class="p-4 sm:p-5 flex flex-col gap-3">
+                <div class="flex flex-col items-center gap-2">
+                    <div class="relative w-24 h-24 rounded-full overflow-hidden bg-amber-50 border-2 border-amber-500 shadow-md">
+                        <img id="edit-profile-avatar-preview" class="w-full h-full object-cover hidden" alt="صورة الملف الشخصي">
+                        <div id="edit-profile-avatar-placeholder" class="w-full h-full flex items-center justify-center text-amber-700 text-3xl"><i class="fa-solid fa-user"></i></div>
+                        <label for="edit-profile-avatar-input" class="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[10px] font-bold text-center py-1 cursor-pointer">تغيير الصورة</label>
+                        <input id="edit-profile-avatar-input" type="file" accept="image/*" class="hidden" onchange="previewEditedProfileAvatar(event)">
+                    </div>
+                    <button type="button" onclick="removeEditedProfileAvatar()" class="text-[10px] text-red-600 font-bold hover:underline">حذف صورة البروفايل</button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">الاسم<input id="edit-profile-firstname" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                    <label class="text-[11px] font-bold text-neutral-700">اللقب<input id="edit-profile-lastname" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <label class="text-[11px] font-bold text-neutral-700">اسم المستخدم<input id="edit-profile-username" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">رقم الهاتف<input id="edit-profile-phone" type="tel" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                    <label class="text-[11px] font-bold text-neutral-700">البريد الإلكتروني<input id="edit-profile-email" type="email" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">البلد
+                        <select id="edit-profile-country" class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600">
+                            <option value="الجزائر">الجزائر</option><option value="فرنسا">فرنسا</option><option value="المغرب">المغرب</option><option value="تونس">تونس</option>
+                        </select>
+                    </label>
+                    <label class="text-[11px] font-bold text-neutral-700">الولاية<input id="edit-profile-state" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">البلدية<input id="edit-profile-municipality" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                    <label class="text-[11px] font-bold text-neutral-700">العنوان بالتفصيل<input id="edit-profile-address" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <div class="border-t border-neutral-200 pt-3">
+                    <p class="text-[10px] text-neutral-500 mb-2">تغيير كلمة المرور اختياري. اترك الحقلين فارغين للاحتفاظ بكلمة المرور الحالية.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="text-[11px] font-bold text-neutral-700">كلمة مرور جديدة<input id="edit-profile-password" type="password" class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600" autocomplete="new-password"></label>
+                        <label class="text-[11px] font-bold text-neutral-700">تأكيد كلمة المرور<input id="edit-profile-confirm-password" type="password" class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600" autocomplete="new-password"></label>
+                    </div>
+                </div>
+                <div id="edit-profile-error" class="hidden text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl p-2"></div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" onclick="closeCustomerProfileEdit()" class="flex-1 bg-neutral-100 text-neutral-700 font-bold text-xs py-3 rounded-xl">إلغاء</button>
+                    <button type="submit" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-3 rounded-xl"><i class="fa-solid fa-check ml-1"></i>حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     </main>
 
@@ -1256,9 +1452,10 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 <label class="text-[11px] text-neutral-600 font-medium">الصورة الرئيسية للمنتج</label>
                 <div class="bkl-media-buttons">
                     <label for="main-image-file"><i class="fa-solid fa-folder-open"></i> اختيار من الملفات</label>
-                    <button type="button" onclick="document.getElementById('main-image-file')?.click()"><i class="fa-solid fa-camera"></i> التقاط صورة</button>
+                    <button type="button" onclick="document.getElementById('main-image-camera')?.click()"><i class="fa-solid fa-camera"></i> التقاط صورة</button>
                 </div>
-                <input id="main-image-file" type="file" accept="image/*" capture="environment" style="display:none" onchange="setMainProductImage(this)">
+                <input id="main-image-file" type="file" accept="image/*" style="display:none" onchange="setMainProductImage(this)">
+                <input id="main-image-camera" type="file" accept="image/*" capture="environment" style="display:none" onchange="setMainProductImage(this)">
                 <div id="main-image-preview" class="min-h-[90px] flex items-center justify-center"></div>
             </div>
 
@@ -1388,7 +1585,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                     <textarea id="comp-text" rows="3" placeholder="اكتب تفاصيل المشكلة التي واجهتك..." class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs text-neutral-900 outline-none focus:border-amber-600 resize-none"></textarea>
                 </div>
                 <div>
-                    <label class="block text-[11px] text-neutral-600 mb-1 font-medium">إرفاق صور أو فيديوهات (اختياري)</label>
+                    <label class="block text-[11px] text-neutral-600 mb-1 font-medium">إرفاق صور (اختياري)</label>
                     <input id="comp-media-file" type="file" multiple accept="image/*" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-1.5 text-xs text-neutral-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100 transition cursor-pointer">
                     <span class="text-[9px] text-neutral-400 block mt-1">يمكنك اختيار عدة صور أو مقاطع فيديو لإثبات المشكلة.</span>
                 </div>
@@ -2037,7 +2234,7 @@ function openComplaintModal() {
                         <textarea id="complaint-text" name="complaint-text" rows="3" placeholder="اكتب شكواك أو تفاصيل مشكلتك هنا..." class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 outline-none focus:border-amber-600 resize-none"></textarea>
                     </div>
                     <div>
-                        <label class="block text-neutral-600 mb-1 font-medium">إرفاق صور أو فيديوهات (اختياري):</label>
+                        <label class="block text-neutral-600 mb-1 font-medium">إرفاق صور (اختياري):</label>
                         <input type="file" id="complaint-media-input" accept="image/*" multiple onchange="handleComplaintMediaSelection(this)" class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-neutral-900 file:text-white cursor-pointer">
                         <div id="complaint-media-preview" class="flex items-center gap-2 overflow-x-auto py-2 mt-1"></div>
                     </div>
@@ -2158,7 +2355,6 @@ function submitComplaintForm(param) {
     storeComplaints.unshift(newComplaint);
     
     saveComplaintChatData();
-    bklRemoteCreateComplaint(newComplaint);
 
     alert("تم إرسال شكواك بنجاح إلى لوحة التحكم الخاصة بالمتجر وسيتم مراجعتها قريباً.");
 
@@ -2191,7 +2387,7 @@ function escapeChatHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
-function getChatMessageMediaHtml(msg, ownerView) {
+function getChatMessageMediaHtml(msg, ownerView, complaintId, messageIndex) {
     const media = Array.isArray(msg.media) ? msg.media : [];
     if (!media.length) return '';
     return `<div class="mt-2 space-y-2">${media.map((file, index) => {
@@ -2199,14 +2395,33 @@ function getChatMessageMediaHtml(msg, ownerView) {
         const src = String(file.data || file.url || file.src || '');
         const name = escapeChatHtml(file.name || `ملف ${index + 1}`);
         if (!src) return '';
+        const removeBtn = (complaintId != null && messageIndex != null)
+            ? `<button type="button" onclick="deleteComplaintChatMedia('${String(complaintId).replace(/'/g, "\\'")}',${messageIndex},${index})" class="absolute top-1 end-1 z-10 w-7 h-7 rounded-full bg-red-600 text-white text-xs font-bold shadow" title="حذف الوسائط وتحرير مساحة التخزين">✕</button>`
+            : '';
         if (type.startsWith('image/')) {
-            return `<a href="${src}" target="_blank" rel="noopener" class="block"><img src="${src}" alt="${name}" class="max-w-full max-h-64 rounded-xl object-contain bg-black/5 border border-white/20"></a>`;
+            return `<div class="relative inline-block max-w-full">${removeBtn}<a href="${src}" target="_blank" rel="noopener" class="block"><img src="${src}" alt="${name}" class="max-w-full max-h-64 rounded-xl object-contain bg-black/5 border border-white/20"></a></div>`;
         }
         if (type.startsWith('video/')) {
-            return `<video controls preload="metadata" class="max-w-full max-h-64 rounded-xl bg-black" src="${src}"></video>`;
+            return `<div class="relative inline-block max-w-full">${removeBtn}<video controls preload="metadata" class="max-w-full max-h-64 rounded-xl bg-black" src="${src}"></video></div>`;
         }
-        return `<a href="${src}" target="_blank" rel="noopener" class="underline font-bold text-xs">📎 ${name}</a>`;
+        return `<div class="relative inline-flex items-center gap-2"><a href="${src}" target="_blank" rel="noopener" class="underline font-bold text-xs">📎 ${name}</a>${removeBtn}</div>`;
     }).join('')}</div>`;
+}
+
+function deleteComplaintChatMedia(complaintId, messageIndex, mediaIndex) {
+    if (!confirm('حذف هذه الصورة/الفيديو؟ سيتم تحرير مساحة التخزين المستخدمة داخل المتجر.')) return;
+    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+    const complaint = storeComplaints.find(c => String(c.id) === String(complaintId));
+    if (!complaint || !Array.isArray(complaint.messages) || !complaint.messages[messageIndex]) return;
+    const msg = complaint.messages[messageIndex];
+    if (!Array.isArray(msg.media) || !msg.media[mediaIndex]) return;
+    msg.media.splice(mediaIndex, 1);
+    if (!msg.media.length) delete msg.media;
+    saveComplaintChatData();
+    if (typeof activeComplaintChatId !== 'undefined' && String(activeComplaintChatId) === String(complaintId) && typeof renderComplaintChatMessages === 'function') renderComplaintChatMessages(complaint);
+    if (typeof window.activeCustomerComplaintChatId !== 'undefined' && String(window.activeCustomerComplaintChatId) === String(complaintId) && typeof renderCustomerComplaintChatMessages === 'function') renderCustomerComplaintChatMessages(complaint);
+    if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+    if (typeof renderCustomerComplaintChats === 'function') renderCustomerComplaintChats();
 }
 
 function chatReadFileAsDataURL(file) {
@@ -2225,14 +2440,19 @@ function chatReadFileAsDataURL(file) {
 
 async function collectChatAttachments(inputId) {
     const input = document.getElementById(inputId);
-    if (!input || !input.files || !input.files.length) return [];
-    const files = Array.from(input.files);
-    const maxSize = 12 * 1024 * 1024;
+    if (!input) return [];
+    // ملفات الكاميرا تحفظ مؤقتاً خارج FileList لأن بعض هواتف Safari لا تسمح
+    // بإنشاء/تعديل DataTransfer للـ input المخفي.
+    const cameraFiles = Array.isArray(input._cameraFiles) ? input._cameraFiles : [];
+    const files = [...Array.from(input.files || []), ...cameraFiles];
+    if (!files.length) return [];
+    // لا يوجد حد اصطناعي لحجم الصور أو الفيديوهات هنا.
+    // نتحقق فقط من نوع الملف، ثم نرسله للطرف الآخر.
     const allowed = files.filter(file =>
-        file.type.startsWith('image/') && file.size <= maxSize
+        file.type.startsWith('image/') || file.type.startsWith('video/')
     );
     if (allowed.length !== files.length) {
-        alert('يسمح فقط بالصور، وبالحجم الذي تسمح به الاستضافة.');
+        alert('يسمح فقط بإرسال الصور والفيديوهات.');
     }
     const media = [];
     for (const file of allowed) {
@@ -2241,28 +2461,171 @@ async function collectChatAttachments(inputId) {
     return media;
 }
 
+function removeChatSelectedFile(inputId, index, previewId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const normalFiles = Array.from(input.files || []);
+    const cameraFiles = Array.isArray(input._cameraFiles) ? input._cameraFiles : [];
+    if (index < normalFiles.length) {
+        try {
+            if (typeof DataTransfer !== 'undefined') {
+                const dt = new DataTransfer();
+                normalFiles.forEach((file, i) => { if (i !== index) dt.items.add(file); });
+                input.files = dt.files;
+            } else {
+                // إذا لم يدعم الهاتف DataTransfer، لا نحذف من FileList بل نتركه كما هو.
+                // ملفات الكاميرا (المضافة داخلياً) تبقى قابلة للحذف أدناه.
+            }
+        } catch (_) {}
+    } else {
+        const cameraIndex = index - normalFiles.length;
+        cameraFiles.splice(cameraIndex, 1);
+        input._cameraFiles = cameraFiles;
+    }
+    renderChatAttachmentPreview(inputId, previewId);
+}
+
+function clearChatSelectedFiles(inputId, previewId) {
+    const input = document.getElementById(inputId);
+    if (input) { input.value = ''; input._cameraFiles = []; }
+    const preview = document.getElementById(previewId);
+    if (preview) preview.innerHTML = '';
+}
+
 function renderChatAttachmentPreview(inputId, previewId) {
     const input = document.getElementById(inputId);
     const preview = document.getElementById(previewId);
     if (!input || !preview) return;
-    const files = Array.from(input.files || []);
-    preview.innerHTML = files.length
-        ? files.map(file => `<span class="inline-flex items-center gap-1 bg-neutral-100 border border-neutral-200 rounded-lg px-2 py-1 text-[9px]">${file.type.startsWith('video/') ? '🎬' : '🖼️'} ${escapeChatHtml(file.name)}</span>`).join('')
-        : '';
+    const files = [...Array.from(input.files || []), ...(Array.isArray(input._cameraFiles) ? input._cameraFiles : [])];
+    preview.innerHTML = files.length ? `
+        <div class="flex items-center justify-between gap-2 mb-1 px-1">
+            <span class="text-[9px] font-bold text-neutral-500">المرفقات المحددة (${files.length})</span>
+            <button type="button" onclick="clearChatSelectedFiles('${inputId}','${previewId}')" class="text-[9px] font-bold text-red-600 hover:text-red-700">مسح الكل ✕</button>
+        </div>
+        <div class="flex flex-wrap gap-1">${files.map((file,index) => `<span class="inline-flex items-center gap-1 bg-neutral-100 border border-neutral-200 rounded-lg px-2 py-1 text-[9px] max-w-full">
+            <span>${file.type.startsWith('video/') ? '🎬' : '🖼️'}</span><span class="truncate max-w-[150px]">${escapeChatHtml(file.name)}</span>
+            <button type="button" onclick="removeChatSelectedFile('${inputId}',${index},'${previewId}')" class="text-red-600 font-black" title="إزالة">✕</button>
+        </span>`).join('')}</div>` : '';
 }
 
 function buildChatComposer(prefix, sendFunction) {
     return `
-        <div class="pt-3 border-t border-neutral-100 mt-2">
-            <div id="${prefix}-attachment-preview" class="flex flex-wrap gap-1 mb-2"></div>
-            <div class="flex gap-2 items-center">
-                <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold px-3 py-2.5 rounded-xl text-xs cursor-pointer" title="إرسال صورة أو فيديو">📎</label>
-                <input id="${prefix}-file-input" type="file" accept="image/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
-                <input id="${prefix}-text-input" type="text" placeholder="اكتب رسالتك..." class="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-indigo-500" onkeypress="if(event.key === 'Enter') ${sendFunction}()">
-                <button type="button" onclick="${sendFunction}()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer">إرسال</button>
+        <div class="pt-3 border-t border-neutral-100 mt-2 chat-composer">
+            <div id="${prefix}-attachment-preview" class="flex flex-wrap gap-1 mb-2 max-h-16 overflow-y-auto"></div>
+            <div class="w-full">
+                <input id="${prefix}-text-input" type="text" placeholder="اكتب رسالتك..." class="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-xs outline-none focus:border-indigo-500" onkeypress="if(event.key === 'Enter') ${sendFunction}()">
             </div>
-            <div class="text-[9px] text-neutral-400 mt-1">يمكن إرسال نصوص وصور.</div>
+            <div class="mt-2 flex gap-2 items-center overflow-x-auto pb-1 whitespace-nowrap" style="-webkit-overflow-scrolling:touch;scrollbar-width:thin;">
+                <button type="button" onclick="openComplaintCamera('${prefix}')" class="shrink-0 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold min-w-11 h-10 px-3 rounded-xl text-sm cursor-pointer flex items-center justify-center gap-1" title="التقاط صورة" aria-label="الكاميرا">📷 <span class="text-[10px]">كاميرا</span></button>
+                <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold min-w-11 h-10 px-3 rounded-xl text-sm cursor-pointer flex items-center justify-center gap-1" title="اختيار صورة من الملفات" aria-label="اختيار من الملفات">📎 <span class="text-[10px]">ملفات</span></label>
+                <input id="${prefix}-file-input" type="file" accept="image/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
+                <button type="button" onclick="${sendFunction}()" class="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-bold min-w-20 h-10 px-4 rounded-xl text-xs cursor-pointer flex items-center justify-center gap-1">إرسال <span>➤</span></button>
+            </div>
+            <div class="text-[9px] text-neutral-400 mt-1">يمكن تمرير الأزرار يميناً ويساراً على الهاتف. 📷 للتصوير، و📎 لاختيار الصور من الملفات.</div>
         </div>`;
+}
+
+/* =========================================================
+   كاميرا محادثة الشكاوى - كاميرا الهاتف + مسجل فيديو داخل الصفحة عند الإمكان
+   ========================================================= */
+let bklComplaintCameraPrefix = null;
+let bklComplaintCameraMode = 'photo';
+let bklComplaintVideoStream = null;
+let bklComplaintVideoRecorder = null;
+let bklComplaintVideoChunks = [];
+let bklComplaintVideoReadyPromise = null;
+let bklComplaintVideoReady = false;
+
+function ensureComplaintCameraModal() {
+    let modal = document.getElementById('bkl-complaint-camera-modal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'bkl-complaint-camera-modal';
+    modal.className = 'fixed inset-0 bg-black/70 hidden items-center justify-center z-[400000] p-3';
+    modal.innerHTML = `
+        <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between gap-2 p-3 border-b border-neutral-100">
+                <div>
+                    <h3 class="text-sm font-extrabold text-neutral-900">استخدام كاميرا الهاتف</h3>
+                    <p class="text-[9px] text-neutral-400">التقاط صورة مباشرة وإرفاقها بالمحادثة.</p>
+                </div>
+                <button type="button" onclick="closeComplaintCamera()" class="w-9 h-9 rounded-full bg-neutral-100 text-neutral-600 font-bold">✕</button>
+            </div>
+            <div class="p-4">
+                <button type="button" onclick="openNativeComplaintCamera('photo')" class="w-full bg-indigo-600 text-white font-bold py-5 rounded-2xl text-sm flex flex-col items-center gap-2">
+                    <span class="text-3xl">📸</span>
+                    <span>التقاط صورة</span>
+                </button>
+            </div>
+            <div class="px-4 pb-4 text-[9px] text-neutral-400 text-center">سيتم فتح كاميرا الهاتف مباشرة لالتقاط صورة.</div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    const photoInput = document.createElement('input');
+    photoInput.type = 'file';
+    photoInput.id = 'bkl-native-complaint-photo';
+    photoInput.accept = 'image/*';
+    photoInput.setAttribute('capture', 'environment');
+    photoInput.className = 'hidden';
+    photoInput.onchange = () => handleNativeComplaintCameraFile(photoInput);
+    document.body.appendChild(photoInput);
+
+    return modal;
+}
+
+function openComplaintCamera(prefix) {
+    const modal = ensureComplaintCameraModal();
+    bklComplaintCameraPrefix = prefix;
+    bklComplaintCameraMode = 'photo';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function openNativeComplaintCamera(mode) {
+    ensureComplaintCameraModal();
+    bklComplaintCameraMode = 'photo';
+    const input = document.getElementById('bkl-native-complaint-photo');
+    if (!input) {
+        alert('تعذر تجهيز كاميرا الهاتف.');
+        return;
+    }
+    input.value = '';
+    input.click();
+}
+
+function handleNativeComplaintCameraFile(input) {
+    const file = input && input.files && input.files[0];
+    if (!file || !bklComplaintCameraPrefix) return;
+    const type = String(file.type || '');
+    if (!(type.startsWith('image/') || type.startsWith('video/'))) {
+        alert('يرجى اختيار صورة أو فيديو من الكاميرا.');
+        input.value='';
+        return;
+    }
+    attachComplaintCameraFile(file);
+    input.value='';
+}
+
+function attachComplaintCameraFile(file) {
+    const targetInput = document.getElementById(`${bklComplaintCameraPrefix}-file-input`);
+    const preview = document.getElementById(`${bklComplaintCameraPrefix}-attachment-preview`);
+    if (!targetInput || !preview || !file) return;
+    try {
+        if (!Array.isArray(targetInput._cameraFiles)) targetInput._cameraFiles = [];
+        targetInput._cameraFiles.push(file);
+        renderChatAttachmentPreview(targetInput.id, preview.id);
+        closeComplaintCamera();
+    } catch(e) {
+        console.error('Camera attachment error:', e);
+        alert('تعذر إرفاق الصورة. حاول مرة أخرى أو استخدم زر الملفات.');
+    }
+}
+
+function closeComplaintCamera() {
+    const modal = document.getElementById('bkl-complaint-camera-modal');
+    if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+    bklComplaintCameraPrefix = null;
 }
 
 function ensureComplaintMessages(complaint) {
@@ -2282,173 +2645,6 @@ function ensureComplaintMessages(complaint) {
         if (msg.sender === 'owner' && typeof msg.customerRead !== 'boolean') msg.customerRead = false;
         if (msg.sender === 'customer' && typeof msg.readByOwner !== 'boolean') msg.readByOwner = false;
     });
-}
-
-
-// =====================================================
-// مزامنة الشكاوى عبر الإنترنت - تعمل مع api.php على نفس الدومين
-// وتبقى localStorage كنسخة احتياطية إذا لم تتوفر الواجهة الخلفية.
-// =====================================================
-const BKL_COMPLAINT_API = (() => {
-    try { return new URL('api.php', window.location.href).href; }
-    catch (_) { return 'api.php'; }
-})();
-let bklRemoteSyncBusy = false;
-let bklRemoteSyncAvailable = null;
-
-async function bklRemoteRequest(action, payload = null) {
-    try {
-        const url = `${BKL_COMPLAINT_API}?action=${encodeURIComponent(action)}`;
-        const options = payload === null ? { method: 'GET', cache: 'no-store' } : {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ action, ...payload })
-        };
-        const response = await fetch(url, options);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        if (!data || data.ok !== true) throw new Error(data?.error || 'API error');
-        bklRemoteSyncAvailable = true;
-        return data;
-    } catch (error) {
-        // على GitHub Pages بدون api.php نعود تلقائياً للتخزين المحلي.
-        bklRemoteSyncAvailable = false;
-        return null;
-    }
-}
-
-function bklDataUrlToBlob(dataUrl) {
-    const match = String(dataUrl || '').match(/^data:([^;,]+)?(?:;base64)?,(.*)$/s);
-    if (!match) return null;
-    const mime = match[1] || 'application/octet-stream';
-    const raw = decodeURIComponent(match[2] || '');
-    const bytes = atob(raw);
-    const arr = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-    return new Blob([arr], { type: mime });
-}
-
-async function bklUploadMediaToServer(mediaItem, index = 0) {
-    if (!mediaItem) return null;
-    if (typeof mediaItem === 'object' && mediaItem.url) return mediaItem;
-    const dataUrl = typeof mediaItem === 'string' ? mediaItem : mediaItem.dataUrl;
-    if (!dataUrl || !dataUrl.startsWith('data:')) return mediaItem;
-    try {
-        const blob = bklDataUrlToBlob(dataUrl);
-        if (!blob) return mediaItem;
-        const ext = (blob.type.split('/')[1] || 'bin').replace(/[^a-z0-9]/gi, '');
-        const fd = new FormData();
-        fd.append('action', 'upload_media');
-        fd.append('file', blob, `complaint-${Date.now()}-${index}.${ext}`);
-        const response = await fetch(BKL_COMPLAINT_API, { method: 'POST', body: fd, cache: 'no-store' });
-        if (!response.ok) throw new Error(`Upload HTTP ${response.status}`);
-        const result = await response.json();
-        if (!result?.ok || !result.url) throw new Error(result?.error || 'Upload failed');
-        bklRemoteSyncAvailable = true;
-        return { url: result.url, type: blob.type, name: `complaint-${Date.now()}-${index}.${ext}` };
-    } catch (_) {
-        return mediaItem;
-    }
-}
-
-async function bklPrepareRemoteMedia(media) {
-    const arr = Array.isArray(media) ? media : [];
-    const out = [];
-    for (let i = 0; i < arr.length; i++) {
-        out.push(await bklUploadMediaToServer(arr[i], i));
-    }
-    return out.filter(Boolean);
-}
-
-async function bklRemoteCreateComplaint(complaint) {
-    try {
-        const remote = JSON.parse(JSON.stringify(complaint));
-        remote.media = await bklPrepareRemoteMedia(remote.media);
-        if (Array.isArray(remote.messages)) {
-            for (const msg of remote.messages) msg.media = await bklPrepareRemoteMedia(msg.media);
-        }
-        await bklRemoteRequest('create_complaint', { complaint: remote });
-    } catch (_) {}
-}
-
-async function bklRemoteSendMessage(complaintId, message) {
-    try {
-        const remote = JSON.parse(JSON.stringify(message));
-        remote.media = await bklPrepareRemoteMedia(remote.media);
-        await bklRemoteRequest('send_message', { complaintId: String(complaintId), message: remote });
-    } catch (_) {}
-}
-
-function bklMergeRemoteComplaint(remote) {
-    if (!remote || remote.id == null) return;
-    const localIndex = storeComplaints.findIndex(c => String(c.id) === String(remote.id));
-    if (localIndex < 0) {
-        storeComplaints.push(remote);
-        return;
-    }
-    const local = storeComplaints[localIndex];
-    ensureComplaintMessages(local);
-    ensureComplaintMessages(remote);
-    const merged = { ...local, ...remote };
-    const messages = [];
-    const seen = new Set();
-    [...local.messages, ...remote.messages].forEach(msg => {
-        const key = String(msg.id || `${msg.sender}|${msg.time}|${msg.text || ''}|${JSON.stringify(msg.media || [])}`);
-        if (!seen.has(key)) {
-            seen.add(key);
-            messages.push(msg);
-        }
-    });
-    messages.sort((a,b) => (new Date(a.time || 0).getTime() || 0) - (new Date(b.time || 0).getTime() || 0));
-    merged.messages = messages;
-    storeComplaints[localIndex] = merged;
-}
-
-async function bklPullRemoteComplaints() {
-    if (bklRemoteSyncBusy) return;
-    bklRemoteSyncBusy = true;
-    try {
-        const customerId = (typeof currentLoggedInCustomer !== 'undefined' && currentLoggedInCustomer)
-            ? String(currentLoggedInCustomer.id || '') : '';
-        const url = `${BKL_COMPLAINT_API}?action=pull${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ''}`;
-        const response = await fetch(url, { cache: 'no-store' });
-        if (!response.ok) throw new Error('API unavailable');
-        const data = await response.json();
-        if (!data?.ok || !Array.isArray(data.complaints)) throw new Error('Invalid response');
-        bklRemoteSyncAvailable = true;
-        data.complaints.forEach(bklMergeRemoteComplaint);
-        storeComplaints.sort((a,b) => (new Date(b.date || 0).getTime() || 0) - (new Date(a.date || 0).getTime() || 0));
-        setStoredData('store_complaints', storeComplaints);
-        setStoredData('storeComplaints', storeComplaints);
-        setStoredData('complaints_data', storeComplaints);
-
-        if (typeof renderOwnerDashboardData === 'function' && !customerId) {
-            try { renderOwnerDashboardData(); } catch (_) {}
-        }
-        if (typeof renderCustomerComplaintChats === 'function' && customerId) {
-            try { renderCustomerComplaintChats(); } catch (_) {}
-        }
-        if (activeComplaintChatId) {
-            const c = storeComplaints.find(x => String(x.id) === String(activeComplaintChatId));
-            if (c && typeof renderComplaintChatMessages === 'function') renderComplaintChatMessages(c);
-        }
-        const cid = (typeof window.activeCustomerComplaintChatId !== 'undefined') ? window.activeCustomerComplaintChatId : null;
-        if (cid) {
-            const c = storeComplaints.find(x => String(x.id) === String(cid));
-            if (c && typeof renderCustomerComplaintChatMessages === 'function') renderCustomerComplaintChatMessages(c);
-        }
-    } catch (_) {
-        bklRemoteSyncAvailable = false;
-    } finally {
-        bklRemoteSyncBusy = false;
-    }
-}
-
-function bklStartComplaintRemoteSync() {
-    bklPullRemoteComplaints();
-    if (!window.__bklComplaintSyncTimer) {
-        window.__bklComplaintSyncTimer = setInterval(bklPullRemoteComplaints, 5000);
-    }
 }
 
 function saveComplaintChatData() {
@@ -2542,7 +2738,7 @@ function renderComplaintChatMessages(complaint) {
             <div class="flex flex-col ${isOwner ? 'items-end' : 'items-start'}">
                 <div class="max-w-[82%] rounded-2xl p-2.5 ${isOwner ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-none'} shadow-sm">
                     ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
-                    ${getChatMessageMediaHtml(msg, true)}
+                    ${getChatMessageMediaHtml(msg, true, complaint.id, messages.indexOf(msg))}
                 </div>
                 <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span>
             </div>`;
@@ -2562,19 +2758,16 @@ async function sendComplaintReply() {
     const complaint = storeComplaints.find(c => String(c.id) === String(activeComplaintChatId));
     if (!complaint) return;
     ensureComplaintMessages(complaint);
-    const newOwnerMessage = {
-        id: 'MSG-' + Date.now() + '-' + Math.floor(Math.random() * 1000000),
+    complaint.messages.push({
         sender: 'owner',
         text,
         media,
         time: getCurrentFullDateTime(),
         customerRead: false,
         readByCustomer: false
-    };
-    complaint.messages.push(newOwnerMessage);
+    });
     complaint.status = 'تم الرد';
     saveComplaintChatData();
-    bklRemoteSendMessage(complaint.id, newOwnerMessage);
 
     // إشعار فوري للزبون بوجود رسالة/وسائط جديدة.
     const targetCustomer = findRegisteredCustomerForComplaint(complaint);
@@ -2602,7 +2795,7 @@ async function sendComplaintReply() {
     }
 
     if (input) input.value = '';
-    if (fileInput) fileInput.value = '';
+    if (fileInput) { fileInput.value = ''; fileInput._cameraFiles = []; }
     const preview = document.getElementById('owner-chat-attachment-preview');
     if (preview) preview.innerHTML = '';
     renderComplaintChatMessages(complaint);
@@ -2678,12 +2871,12 @@ function renderCustomerComplaintChatMessages(complaint) {
     if (!container) return;
     ensureComplaintMessages(complaint);
     const messages = complaint.messages;
-    container.innerHTML = messages.length ? messages.map(msg => {
+    container.innerHTML = messages.length ? messages.map((msg, idx) => {
         const fromOwner = msg.sender === 'owner';
         return `<div class="flex flex-col ${fromOwner ? 'items-start' : 'items-end'}">
             <div class="max-w-[82%] rounded-2xl p-2.5 ${fromOwner ? 'bg-indigo-600 text-white rounded-bl-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-br-none'} shadow-sm">
                 ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
-                ${getChatMessageMediaHtml(msg, false)}
+                ${getChatMessageMediaHtml(msg, false, complaint.id, idx)}
             </div>
             <span class="text-[9px] text-neutral-400 mt-1 px-1">${fromOwner ? 'صاحب المتجر' : 'أنت'} • ${escapeChatHtml(msg.time || '')}</span>
         </div>`;
@@ -2703,19 +2896,16 @@ async function sendCustomerComplaintMessage() {
     const complaint = storeComplaints.find(c => String(c.id) === String(id));
     if (!complaint || !getCustomerComplaintsForAccount().some(c => String(c.id) === String(id))) return;
     ensureComplaintMessages(complaint);
-    const newCustomerMessage = {
-        id: 'MSG-' + Date.now() + '-' + Math.floor(Math.random() * 1000000),
+    complaint.messages.push({
         sender: 'customer',
         text,
         media,
         time: getCurrentFullDateTime(),
         readByCustomer: true,
         readByOwner: false
-    };
-    complaint.messages.push(newCustomerMessage);
+    });
     complaint.status = 'رسالة جديدة من الزبون';
     saveComplaintChatData();
-    bklRemoteSendMessage(complaint.id, newCustomerMessage);
 
     // تسجيل أن لدى المتجر رسالة جديدة دون تغيير بيانات بقية لوحة التحكم.
     if (typeof addLogActivity === 'function') {
@@ -2724,7 +2914,7 @@ async function sendCustomerComplaintMessage() {
 
     input.value = '';
     const fileInput = document.getElementById('customer-chat-file-input');
-    if (fileInput) fileInput.value = '';
+    if (fileInput) { fileInput.value = ''; fileInput._cameraFiles = []; }
     const preview = document.getElementById('customer-chat-attachment-preview');
     if (preview) preview.innerHTML = '';
     renderCustomerComplaintChatMessages(complaint);
@@ -2880,12 +3070,20 @@ function loadStoreOrdersFromStorage() {
 
 let storeOrdersList = loadStoreOrdersFromStorage();
 
-function getStoreOrders() {
-    // إعادة القراءة في كل مرة حتى تظهر الطلبات التي تم حفظها أثناء عملية الدفع فوراً.
+let bklOrdersLastLoadedAt = 0;
+let bklOrdersStorageSignature = '';
+function getStoreOrders(forceReload = false) {
+    // لا نعيد JSON.parse لكل مفاتيح التخزين عند كل نقرة؛ هذا كان يجمّد الواجهة
+    // خصوصاً عندما تكبر بيانات المتجر والمرفقات المخزنة في localStorage.
+    const now = Date.now();
+    if (!forceReload && (now - bklOrdersLastLoadedAt) < 800) {
+        return normalizeStoreOrders(storeOrdersList);
+    }
     const storedOrders = loadStoreOrdersFromStorage();
-    if (storedOrders.length > 0 || storeOrdersList.length === 0) {
+    if (storedOrders.length > 0 || storeOrdersList.length === 0 || forceReload) {
         storeOrdersList = storedOrders;
     }
+    bklOrdersLastLoadedAt = now;
     return normalizeStoreOrders(storeOrdersList);
 }
 
@@ -3077,6 +3275,9 @@ function bindOrderManagementEventsV17() {
         if (!id || !action) return;
         event.preventDefault();
         event.stopPropagation();
+        if (button.dataset.bklBusy === '1') return;
+        button.dataset.bklBusy = '1';
+        const release = () => { try { button.dataset.bklBusy = '0'; } catch (_) {} };
         try {
             switch (action) {
                 case 'preview': previewOrder(id); break;
@@ -3089,6 +3290,8 @@ function bindOrderManagementEventsV17() {
         } catch (error) {
             console.error('BKL V17 order action error:', action, id, error);
             alert('تعذر تنفيذ العملية. لم يتم إعادة تحميل المتجر.');
+        } finally {
+            setTimeout(release, 300);
         }
     });
 }
@@ -3099,7 +3302,7 @@ function updateOrderStatus(orderId, newStatus) {
     if (order) {
         order.status = newStatus;
         saveStoreOrders(orders);
-        renderOrdersList();
+        scheduleOrdersRender();
         if (newStatus === 'مؤكد') {
             notifyCustomerForOrder(order, `تم تأكيد طلبك رقم #${order.id} بنجاح.`, 'confirmed');
         } else if (newStatus === 'ملغى') {
@@ -3112,7 +3315,7 @@ function deleteOrder(orderId) {
     if (confirm("هل أنت متأكد من حذف هذا الطلب نهائياً؟")) {
         storeOrdersList = getStoreOrders().filter(o => o.id != orderId);
         saveStoreOrders();
-        renderOrdersList();
+        scheduleOrdersRender();
     }
 }
 
@@ -3358,7 +3561,7 @@ function saveEditedOrder(event) {
 
     storeOrdersList = orders;
     saveStoreOrders(orders);
-    renderOrdersList();
+    scheduleOrdersRender();
     closeOrderEditor();
     alert('تم حفظ جميع تعديلات الطلب والفاتورة بنجاح.');
 }
@@ -3952,11 +4155,36 @@ function printOrderInvoice(orderId, action = 'print') {
                 </div>
             </div>
 
-            <script>
+            <scr${'ipt'}>
                 window.onload = function() { window.print(); };
-            <\/script>
+            <\/scr${'ipt'}>
         
 
+
+
+
+<script id="bkl-order-windows-safe-final">
+(function(){
+  'use strict';
+  const ids=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
+  function hide(id){const m=document.getElementById(id);if(!m)return;m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}
+  function normalize(){
+    ids.forEach(id=>{const m=document.getElementById(id);if(!m)return;m.style.zIndex='2147483000';m.style.pointerEvents=m.classList.contains('hidden')?'none':'auto';});
+  }
+  window.closeAllBKLOrderWindows=function(){ids.forEach(hide);};
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape')return;
+    for(let i=ids.length-1;i>=0;i--){const m=document.getElementById(ids[i]);if(m&&!m.classList.contains('hidden')&&m.style.display!=='none'){hide(ids[i]);e.preventDefault();break;}}
+  });
+  document.addEventListener('click',function(e){
+    const close=e.target.closest?.('[data-close],[data-act="close"],.bkl-om-x,[data-bkl-close-editor]');
+    if(close){const m=close.closest('#order-preview-modal,#order-editor-modal,#bkl-modern-order-modal');if(m){e.preventDefault();e.stopPropagation();hide(m.id);return;}}
+    const back=e.target.closest?.('.bkl-om-backdrop');
+    if(back&&e.target===back){const m=back.closest('#bkl-modern-order-modal');if(m)hide(m.id);}
+  });
+  normalize();
+})();
+<\/script>
 </body>
         </html>
     `;
@@ -3988,12 +4216,16 @@ function saveOrderInvoice(orderId) {
     return printOrderInvoice(orderId, 'save');
 }
 
-// دالة التحديث الفوري المباشر والدوري كل 5 ثوانٍ
-setInterval(function() {
-    if (document.getElementById('owner-dashboard-modal') && !document.getElementById('owner-dashboard-modal').classList.contains('hidden')) {
-        renderOrdersList();
-    }
-}, 5000);
+// تحديث خفيف ومؤجل عند الحاجة فقط بدلاً من إعادة رسم القائمة كل 5 ثوانٍ.
+let bklOrdersRenderTimer = null;
+function scheduleOrdersRender(delay = 80) {
+    if (bklOrdersRenderTimer) clearTimeout(bklOrdersRenderTimer);
+    bklOrdersRenderTimer = setTimeout(() => {
+        bklOrdersRenderTimer = null;
+        const modal = document.getElementById('owner-dashboard-modal');
+        if (modal && !modal.classList.contains('hidden')) renderOrdersList();
+    }, delay);
+}
 
 // ==========================================
 // 4. لوحة تحكم صاحب المتجر
@@ -4761,7 +4993,7 @@ let currentLang = 'ar';
         'تعذر قراءة الصورة المختارة.':'Unable to read the selected image.','تم حفظ صورة ومحتوى الواجهة بنجاح.':'The interface image and content were saved successfully.','تعذر العثور على بيانات الطلب.':'Order data could not be found.',
         'تعذر تنفيذ العملية. لم يتم إعادة تحميل المتجر.':'The operation could not be completed. The store was not reloaded.','تعذر فتح نافذة الفاتورة. يرجى السماح بالنوافذ المنبثقة من المتجر.':'Could not open the invoice window. Please allow pop-ups for the store.',
         'يرجى كتابة تفاصيل الشكوى أولاً!':'Please enter the complaint details first!','تم إرسال شكواك بنجاح إلى لوحة التحكم الخاصة بالمتجر وسيتم مراجعتها قريباً.':'Your complaint was sent successfully to the store dashboard and will be reviewed soon.',
-        'يسمح فقط بالصور، وبالحجم الذي تسمح به الاستضافة.':'Only images and videos are allowed, with a maximum size of 12 MB per file.',
+        'يسمح فقط بإرسال الصور والفيديوهات.':'Only images and videos are allowed.',
         'السلة فارغة. أضف منتجاً واحداً على الأقل قبل الدفع.':'The cart is empty. Add at least one product before checkout.','يجب أن يحتوي الطلب على منتج واحد على الأقل.':'The order must contain at least one product.',
         'تم حفظ جميع تعديلات الطلب والفاتورة بنجاح.':'All order and invoice changes were saved successfully.','يرجى تعبئة الحقول الأساسية (الاسم، اللقب ورقم الهاتف على الأقل).':'Please fill in the required fields (at least first name, last name and phone number).',
         'يرجى إدخال رقم بطاقة صحيح.':'Please enter a valid card number.','الشهر يجب أن يكون رقماً من 1 إلى 12 فقط.':'The month must be a number from 1 to 12.','يرجى إدخال السنة.':'Please enter the year.','يرجى إدخال رمز أمان CVV صحيح.':'Please enter a valid CVV security code.',
@@ -8219,7 +8451,64 @@ footer button{
     max-height:18px!important;
 }
 
-</style></head><body><div class="box"><div class="head"><strong>Maison BKL - متجر السوق الذكي</strong><strong>📒 دفتر الكريدي</strong></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة دفتر الكريدي</button><button class="close" onclick="window.close()">✕ إغلاق</button></div><div class="info"><b>رقم الفاتورة:</b> ${escapeOrderHtml(entry.invoiceId)}<br><b>الزبون:</b> ${escapeOrderHtml(entry.customerName)}<br><b>الهاتف:</b> ${escapeOrderHtml(entry.phone)}<br><b>الولاية:</b> ${escapeOrderHtml(entry.state)}<br><b>البلدية:</b> ${escapeOrderHtml(entry.municipality)}<br><b>العنوان:</b> ${escapeOrderHtml(entry.address)}<br><b>التاريخ:</b> ${escapeOrderHtml(entry.date)}<br><b>الحالة:</b> ${escapeOrderHtml(entry.status)}</div><table><thead><tr><th>المنتج</th><th>الكمية</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table><div class="totals">مجموع المنتجات: ${escapeOrderHtml(formatCreditAmount(entry.subtotal))}<br>سعر التوصيل: ${escapeOrderHtml(formatCreditAmount(entry.deliveryPrice))}<br>إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}<br><span class="paid">إجمالي المدفوع: ${escapeOrderHtml(formatCreditAmount(entry.paidAmount))}</span><br><span class="remaining">إجمالي الفاتورة بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</span><br>طريقة آخر تسديد: ${escapeOrderHtml(entry.lastPaymentMethod || 'لا يوجد')}</div><div class="lock">🔒 هذه النسخة محفوظة كسجل كريدي. لا يمكن تعديل بيانات الفاتورة الأصلية. تسجيل الدفعات يتم من دفتر صاحب المتجر فقط.</div></div></body></html>`);
+</style><style id="bkl-universal-window-system">
+/* ===== BKL Universal Windows: close + drag + touch ===== */
+.bkl-window-panel{
+  position:relative!important;
+  touch-action:auto;
+  will-change:transform;
+  transition:transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .16s ease;
+}
+.bkl-window-panel.bkl-window-dragging{
+  transition:none!important;
+  cursor:grabbing!important;
+  box-shadow:0 24px 70px rgba(0,0,0,.22)!important;
+}
+.bkl-window-drag-handle{
+  cursor:grab!important;
+  user-select:none!important;
+  -webkit-user-select:none!important;
+  touch-action:none!important;
+}
+.bkl-window-drag-handle.bkl-window-dragging{cursor:grabbing!important}
+.bkl-universal-close{
+  position:absolute!important;
+  top:10px!important;
+  inset-inline-end:10px!important;
+  z-index:2147483000!important;
+  width:36px!important;
+  height:36px!important;
+  min-width:36px!important;
+  min-height:36px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:999px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  background:rgba(243,244,246,.96)!important;
+  color:#4b5563!important;
+  font-size:24px!important;
+  line-height:1!important;
+  font-weight:800!important;
+  box-shadow:0 3px 12px rgba(0,0,0,.10)!important;
+  cursor:pointer!important;
+  transition:transform .14s ease,background .14s ease,color .14s ease!important;
+  touch-action:manipulation!important;
+}
+.bkl-universal-close:hover{transform:scale(1.06);background:#e5e7eb!important;color:#111827!important}
+.bkl-universal-close:active{transform:scale(.94)}
+[dir="rtl"] .bkl-universal-close{inset-inline-end:10px!important}
+[dir="ltr"] .bkl-universal-close{inset-inline-end:10px!important}
+/* Give headers enough room so the close button never covers the title. */
+.bkl-window-panel .bkl-modal-head,
+.bkl-window-panel .bkl-om-head,
+.bkl-window-panel .bkl-window-header{padding-inline-end:54px!important}
+@media(max-width:600px){
+  .bkl-universal-close{width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;top:8px!important;inset-inline-end:8px!important;font-size:22px!important}
+}
+</style>
+</head><body><div class="box"><div class="head"><strong>Maison BKL - متجر السوق الذكي</strong><strong>📒 دفتر الكريدي</strong></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة دفتر الكريدي</button><button class="close" onclick="window.close()">✕ إغلاق</button></div><div class="info"><b>رقم الفاتورة:</b> ${escapeOrderHtml(entry.invoiceId)}<br><b>الزبون:</b> ${escapeOrderHtml(entry.customerName)}<br><b>الهاتف:</b> ${escapeOrderHtml(entry.phone)}<br><b>الولاية:</b> ${escapeOrderHtml(entry.state)}<br><b>البلدية:</b> ${escapeOrderHtml(entry.municipality)}<br><b>العنوان:</b> ${escapeOrderHtml(entry.address)}<br><b>التاريخ:</b> ${escapeOrderHtml(entry.date)}<br><b>الحالة:</b> ${escapeOrderHtml(entry.status)}</div><table><thead><tr><th>المنتج</th><th>الكمية</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table><div class="totals">مجموع المنتجات: ${escapeOrderHtml(formatCreditAmount(entry.subtotal))}<br>سعر التوصيل: ${escapeOrderHtml(formatCreditAmount(entry.deliveryPrice))}<br>إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}<br><span class="paid">إجمالي المدفوع: ${escapeOrderHtml(formatCreditAmount(entry.paidAmount))}</span><br><span class="remaining">إجمالي الفاتورة بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</span><br>طريقة آخر تسديد: ${escapeOrderHtml(entry.lastPaymentMethod || 'لا يوجد')}</div><div class="lock">🔒 هذه النسخة محفوظة كسجل كريدي. لا يمكن تعديل بيانات الفاتورة الأصلية. تسجيل الدفعات يتم من دفتر صاحب المتجر فقط.</div></div></body></html>`);
             w.document.close();
         }
 
@@ -8351,8 +8640,9 @@ let activeComplaintChatId = null;
 
         window.addEventListener('storage', function(event) {
             if (event.key === 'store_orders' || event.key === 'storeOrdersList' || event.key === 'store_complaints' || event.key === 'storeComplaints' || event.key === 'store_credit_ledger_admin' || event.key === 'store_credit_ledger_customer') {
-                if (typeof renderOrdersList === 'function') renderOrdersList();
-                if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+                bklOrdersLastLoadedAt = 0;
+                scheduleOrdersRender(120);
+                if (typeof renderOwnerDashboardData === 'function') setTimeout(renderOwnerDashboardData, 120);
             }
         });
 
@@ -8364,7 +8654,6 @@ let activeComplaintChatId = null;
         
 
         document.addEventListener('DOMContentLoaded', () => {
-            bklStartComplaintRemoteSync();
             togglePaymentFields();
             try { updateCheckoutGrandTotalPreview(); } catch (e) {}
             // الجزائر هي الدولة الافتراضية، لذلك تظهر الولايات مباشرة دون تغيير الدولة.
@@ -8887,111 +9176,7 @@ document.addEventListener('DOMContentLoaded', function(){
     pointer-events:auto!important;
 }
 </style>
-<script id="bkl-order-windows-top-layer-fix-script">
-(function(){
-    'use strict';
-    const ORDER_MODAL_IDS=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
-    const TOP_Z='2147483000';
 
-    function get(id){ return document.getElementById(id); }
-
-    function promote(id){
-        const modal=get(id);
-        if(!modal) return;
-
-        /* أهم إصلاح: النافذة يجب أن تكون ابناً مباشراً لـ body.
-           إذا بقيت داخل owner-dashboard-modal أو أي حاوية أخرى،
-           فإن z-index الخاص بها يبقى محصوراً داخل stacking context للحاوية. */
-        if(modal.parentElement!==document.body){
-            document.body.appendChild(modal);
-        }
-
-        modal.style.setProperty('position','fixed','important');
-        modal.style.setProperty('inset','0','important');
-        modal.style.setProperty('z-index',TOP_Z,'important');
-        modal.style.setProperty('isolation','isolate','important');
-
-        if(modal.classList.contains('hidden') || modal.style.display==='none'){
-            modal.style.setProperty('pointer-events','none','important');
-        }else{
-            modal.style.setProperty('display','flex','important');
-            modal.style.setProperty('pointer-events','auto','important');
-        }
-    }
-
-    function promoteAll(){ ORDER_MODAL_IDS.forEach(promote); }
-
-    function hideOtherModals(activeId){
-        ORDER_MODAL_IDS.forEach(id=>{
-            if(id===activeId) return;
-            const m=get(id);
-            if(!m) return;
-            m.classList.add('hidden');
-            m.style.setProperty('display','none','important');
-            m.style.setProperty('pointer-events','none','important');
-        });
-    }
-
-    function repairOpenModal(){
-        let active=null;
-        for(let i=ORDER_MODAL_IDS.length-1;i>=0;i--){
-            const m=get(ORDER_MODAL_IDS[i]);
-            if(m && !m.classList.contains('hidden') && m.style.display!=='none'){
-                active=m;
-                break;
-            }
-        }
-        if(active){
-            hideOtherModals(active.id);
-            promote(active.id);
-        }else{
-            promoteAll();
-        }
-    }
-
-    /* التقاط لحظة إنشاء النافذة قبل أن تبقى تحت لوحة التحكم. */
-    const observer=new MutationObserver(function(records){
-        let relevant=false;
-        for(const record of records){
-            for(const node of record.addedNodes){
-                if(!(node instanceof HTMLElement)) continue;
-                if(ORDER_MODAL_IDS.includes(node.id) || ORDER_MODAL_IDS.some(id=>node.querySelector?.('#'+id))){
-                    relevant=true;
-                }
-            }
-            if(record.type==='attributes' && ORDER_MODAL_IDS.includes(record.target.id)) relevant=true;
-        }
-        if(relevant){
-            ORDER_MODAL_IDS.forEach(promote);
-            repairOpenModal();
-        }
-    });
-
-    function start(){
-        promoteAll();
-        observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
-        setTimeout(promoteAll,50);
-        setTimeout(promoteAll,200);
-    }
-
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
-    else start();
-
-    /* ضمان إضافي عند استدعاء دوال العرض/التعديل من أزرار الطلبات. */
-    ['previewOrder','editOrderPrompt','modernView'].forEach(function(name){
-        const fn=window[name];
-        if(typeof fn!=='function' || fn.__bklTopLayerWrapped) return;
-        const wrapped=function(){
-            const result=fn.apply(this,arguments);
-            setTimeout(repairOpenModal,0);
-            setTimeout(repairOpenModal,30);
-            return result;
-        };
-        wrapped.__bklTopLayerWrapped=true;
-        window[name]=wrapped;
-    });
-})();
-</script>
 
 <!-- BKL SAFE ORDER EDIT FIX V16 -->
 <script id="bkl-safe-order-edit-v16">
@@ -9078,6 +9263,210 @@ document.addEventListener('DOMContentLoaded', function(){
   window.editOrderPrompt=openSafe;
   // ضمان أن استدعاءات الكود القديمة تستخدم النسخة الآمنة أيضاً.
   window.BKL_SAFE_EDIT_ORDER=openSafe;
+})();
+</script>
+<script id="bkl-universal-window-system-js">
+(function(){
+  'use strict';
+  const CLOSE_MAP={
+    'add-modal':'closeAddModal',
+    'category-modal':'closeAddCategoryModal',
+    'home-hero-editor-modal':'closeHomeHeroEditor',
+    'complaint-modal':'closeComplaintModal',
+    'admins-activity-modal':'closeAdminsActivityModal',
+    'branch-activity-modal':'closeBranchActivityModal',
+    'branch-admin-modal':'closeAddBranchAdminModal',
+    'add-branch-modal':'closeAddBranchModal',
+    'add-inventory-modal':'closeAddInventoryModal',
+    'delete-inventory-confirm-modal':'cancelDeleteInventoryItem',
+    'password-modal':'closePasswordModal',
+    'change-password-modal':'closeChangePasswordModal',
+    'owner-dashboard-modal':'closeOwnerDashboard',
+    'complaint-chat-modal':'closeComplaintChat',
+    'customer-complaint-chat-modal':'closeCustomerComplaintChat',
+    'customer-notification-detail-modal':'closeCustomerNotificationDetail',
+    'credit-payment-method-modal':'closeCreditPaymentMethodModal',
+    'admin-activity-log-modal':'closeAdminActivityLogModal',
+    'order-editor-modal':'closeOrderEditor',
+    'order-preview-modal':'closeOrderPreview',
+  };
+  const OVERLAY_SEL='[id][class*="fixed"][class*="inset-0"],#complaint-chat-modal,#customer-complaint-chat-modal,#customer-notification-detail-modal,#credit-payment-method-modal,#admin-activity-log-modal,#bkl-modern-order-modal';
+  const known=new WeakSet();
+
+  function isVisible(el){
+    return !!el && !el.classList.contains('hidden') && getComputedStyle(el).display!=='none';
+  }
+  function getPanel(modal){
+    if(!modal) return null;
+    if(modal.id==='bkl-modern-order-modal') return modal.querySelector('.bkl-om-card')||modal.firstElementChild;
+    return modal.firstElementChild;
+  }
+  function closeModal(modal){
+    if(!modal) return;
+    const fn=CLOSE_MAP[modal.id];
+    try{
+      if(fn && typeof window[fn]==='function') { window[fn](); return; }
+    }catch(e){ console.warn('BKL close handler:',e); }
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden','true');
+    modal.style.removeProperty('display');
+    modal.style.removeProperty('transform');
+    modal.style.removeProperty('left');
+    modal.style.removeProperty('top');
+    modal.style.removeProperty('margin');
+  }
+  function hasClose(panel){
+    return !!panel.querySelector('button[aria-label="إغلاق"],button.bkl-modal-close,.bkl-universal-close,[data-bkl-close-window],button[onclick*=\"close\"],button[onclick*=\"Close\"]') || [...panel.querySelectorAll('button')].some(b=>['×','✕','X','x'].includes((b.textContent||'').trim()));
+  }
+  function addClose(modal,panel){
+    if(!panel || hasClose(panel)) return;
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='bkl-universal-close';
+    b.setAttribute('aria-label','إغلاق');
+    b.setAttribute('title','إغلاق');
+    b.setAttribute('data-bkl-close-window','1');
+    b.textContent='×';
+    b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();closeModal(modal);});
+    panel.appendChild(b);
+  }
+  function findHandle(panel){
+    return panel.querySelector('.bkl-modal-head,.bkl-om-head,.bkl-window-header,[data-bkl-window-header]') || panel.firstElementChild;
+  }
+  function enableDrag(modal,panel){
+    if(!panel || panel.dataset.bklDragReady==='1') return;
+    panel.dataset.bklDragReady='1';
+    panel.classList.add('bkl-window-panel');
+    let handle=findHandle(panel);
+    if(!handle) handle=panel;
+    handle.classList.add('bkl-window-drag-handle');
+    let active=false,startX=0,startY=0,baseX=0,baseY=0,pointerId=null;
+    const getBase=()=>({x:parseFloat(panel.dataset.bklX||'0')||0,y:parseFloat(panel.dataset.bklY||'0')||0});
+    const apply=(x,y)=>{panel.dataset.bklX=String(x);panel.dataset.bklY=String(y);panel.style.transform=`translate3d(${x}px,${y}px,0)`;};
+    handle.addEventListener('pointerdown',function(e){
+      if(e.button!==undefined && e.button!==0) return;
+      if(e.target.closest('button,input,select,textarea,a,label,[contenteditable="true"]')) return;
+      active=true; pointerId=e.pointerId; const b=getBase(); baseX=b.x;baseY=b.y;startX=e.clientX;startY=e.clientY;
+      handle.classList.add('bkl-window-dragging');panel.classList.add('bkl-window-dragging');
+      try{handle.setPointerCapture(pointerId)}catch(_){ }
+      e.preventDefault();
+    },{passive:false});
+    handle.addEventListener('pointermove',function(e){
+      if(!active || (pointerId!==null && e.pointerId!==pointerId)) return;
+      const x=baseX+(e.clientX-startX), y=baseY+(e.clientY-startY);
+      apply(x,y); e.preventDefault();
+    },{passive:false});
+    const end=function(e){
+      if(!active) return;
+      active=false; pointerId=null;handle.classList.remove('bkl-window-dragging');panel.classList.remove('bkl-window-dragging');
+      try{handle.releasePointerCapture(e.pointerId)}catch(_){ }
+    };
+    handle.addEventListener('pointerup',end);handle.addEventListener('pointercancel',end);handle.addEventListener('lostpointercapture',function(){active=false;handle.classList.remove('bkl-window-dragging');panel.classList.remove('bkl-window-dragging');});
+  }
+  function prepare(modal){
+    if(!modal || modal.nodeType!==1) return;
+    if(known.has(modal) && modal.querySelector('.bkl-window-panel')) return;
+    const panel=getPanel(modal); if(!panel) return;
+    known.add(modal);
+    addClose(modal,panel);
+    enableDrag(modal,panel);
+    modal.setAttribute('aria-modal','true');
+    if(!modal.hasAttribute('aria-hidden')) modal.setAttribute('aria-hidden',modal.classList.contains('hidden')?'true':'false');
+  }
+  function scan(root=document){
+    if(root.nodeType===1 && (root.matches?.(OVERLAY_SEL))) prepare(root);
+    root.querySelectorAll?.(OVERLAY_SEL).forEach(prepare);
+  }
+  document.addEventListener('click',function(e){
+    const close=e.target.closest?.('[data-bkl-close-window]');
+    if(close){const modal=close.closest(OVERLAY_SEL);if(modal){e.preventDefault();e.stopPropagation();closeModal(modal);}}
+  },true);
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape') return;
+    const open=[...document.querySelectorAll(OVERLAY_SEL)].filter(isVisible);
+    const top=open[open.length-1]; if(top){e.preventDefault();closeModal(top);}
+  },true);
+  document.addEventListener('click',function(e){
+    const modal=e.target.closest?.(OVERLAY_SEL); if(!modal || e.target!==modal) return;
+    if(modal.dataset.bklNoBackdropClose==='1') return;
+    closeModal(modal);
+  },true);
+  scan();
+  const mo=new MutationObserver(function(records){
+    for(const r of records){
+      r.addedNodes.forEach(n=>{if(n.nodeType===1) scan(n);});
+      if(r.type==='attributes' && r.attributeName==='class'){
+        const el=r.target;
+        if(el.matches?.(OVERLAY_SEL)) prepare(el);
+      }
+    }
+  });
+  mo.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+})();
+</script>
+
+<script id="bkl-customer-profile-edit">
+(function(){
+  let editedAvatar = null;
+  let removeAvatar = false;
+  const modal = () => document.getElementById('customer-profile-edit-modal');
+  function setError(msg){ const e=document.getElementById('edit-profile-error'); if(!e)return; e.textContent=msg||''; e.classList.toggle('hidden',!msg); }
+  function setVal(id,v){ const e=document.getElementById(id); if(e)e.value=v==null?'':String(v); }
+  function getVal(id){ const e=document.getElementById(id); return e?String(e.value||'').trim():''; }
+
+  window.openCustomerProfileEdit = function(){
+    if(!currentLoggedInCustomer){ goToPage('page-account-login'); return; }
+    const c=currentLoggedInCustomer;
+    setError(''); editedAvatar=c.avatar||null; removeAvatar=false;
+    setVal('edit-profile-firstname',c.firstname); setVal('edit-profile-lastname',c.lastname);
+    setVal('edit-profile-username',c.username); setVal('edit-profile-phone',c.phone);
+    setVal('edit-profile-email',c.email); setVal('edit-profile-country',c.country||'الجزائر');
+    setVal('edit-profile-state',c.state); setVal('edit-profile-municipality',c.municipality); setVal('edit-profile-address',c.address);
+    setVal('edit-profile-password',''); setVal('edit-profile-confirm-password','');
+    updateAvatarPreview();
+    const m=modal(); if(m){m.classList.remove('hidden');m.classList.add('flex');document.body.classList.add('overflow-hidden');}
+  };
+  window.closeCustomerProfileEdit=function(){ const m=modal(); if(m){m.classList.add('hidden');m.classList.remove('flex');} document.body.classList.remove('overflow-hidden'); setError(''); };
+  function updateAvatarPreview(){
+    const img=document.getElementById('edit-profile-avatar-preview'), ph=document.getElementById('edit-profile-avatar-placeholder');
+    if(!img||!ph)return;
+    if(editedAvatar && !removeAvatar){img.src=editedAvatar;img.classList.remove('hidden');ph.classList.add('hidden');}
+    else{img.removeAttribute('src');img.classList.add('hidden');ph.classList.remove('hidden');}
+  }
+  window.removeEditedProfileAvatar=function(){ editedAvatar=null; removeAvatar=true; updateAvatarPreview(); };
+  window.previewEditedProfileAvatar=function(ev){
+    const file=ev.target.files&&ev.target.files[0]; if(!file)return;
+    if(!file.type.startsWith('image/')){setError('يرجى اختيار صورة فقط.');ev.target.value='';return;}
+    const reader=new FileReader(); reader.onload=function(e){ editedAvatar=e.target.result; removeAvatar=false; updateAvatarPreview(); }; reader.readAsDataURL(file);
+  };
+  window.saveCustomerProfileEdit=function(ev){
+    ev.preventDefault(); setError(''); if(!currentLoggedInCustomer)return;
+    const first=getVal('edit-profile-firstname'), last=getVal('edit-profile-lastname'), user=getVal('edit-profile-username');
+    const phone=getVal('edit-profile-phone'), email=getVal('edit-profile-email'), country=getVal('edit-profile-country');
+    const state=getVal('edit-profile-state'), muni=getVal('edit-profile-municipality'), address=getVal('edit-profile-address');
+    const pass=getVal('edit-profile-password'), confirm=getVal('edit-profile-confirm-password');
+    if(!first||!last||!user||!phone||!email||!state||!muni||!address){setError('يرجى ملء جميع الحقول المطلوبة.');return;}
+    if(pass && pass!==confirm){setError('كلمتا المرور الجديدتان غير متطابقتين.');return;}
+    const id=currentLoggedInCustomer.id;
+    const duplicate=registeredCustomers.find(c=>c.id!==id && (String(c.phone||'').trim()===phone || String(c.email||'').toLowerCase()===email.toLowerCase() || String(c.username||'').toLowerCase()===user.toLowerCase()));
+    if(duplicate){setError('رقم الهاتف أو البريد الإلكتروني أو اسم المستخدم مستخدم من حساب آخر.');return;}
+    const idx=registeredCustomers.findIndex(c=>c.id===id); if(idx<0){setError('تعذر العثور على الحساب.');return;}
+    const updated={...registeredCustomers[idx],firstname:first,lastname:last,username:user,phone,email,country,state,municipality:muni,address};
+    if(pass)updated.password=pass;
+    updated.avatar=removeAvatar?'':(editedAvatar||'');
+    registeredCustomers[idx]=updated;
+    currentLoggedInCustomer=updated;
+    localStorage.setItem('store_customers',JSON.stringify(registeredCustomers));
+    localStorage.setItem('store_active_customer',JSON.stringify(updated));
+    if(typeof renderCustomerProfile==='function')renderCustomerProfile();
+    if(typeof fillCheckoutWithCustomerData==='function')fillCheckoutWithCustomerData();
+    if(typeof renderCustomerComplaintChats==='function')renderCustomerComplaintChats();
+    if(typeof addLogActivity==='function')addLogActivity('تحديث حساب الزبون','تعديل بيانات الحساب (' + first + ' ' + last + ')' ,typeof currentBranchId!=='undefined'?currentBranchId:null);
+    closeCustomerProfileEdit();
+    alert('تم حفظ تعديلات حسابك بنجاح.');
+  };
+  document.addEventListener('click',function(e){const m=modal(); if(m && e.target===m)closeCustomerProfileEdit();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){const m=modal();if(m&&!m.classList.contains('hidden'))closeCustomerProfileEdit();}});
 })();
 </script>
 </body>
@@ -9339,77 +9728,5 @@ document.addEventListener('DOMContentLoaded', function(){
   `; document.head.appendChild(style);
 
     // تم حذف معالج النقر العام القديم: كان يلتقط أزرار نوافذ الفواتير أيضاً ويشغل أكثر من دالة في النقرة الواحدة.
-})();
-</script>
-
-<script id="bkl-order-window-manager-final">
-(function(){
-  const ids=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
-  function el(id){return document.getElementById(id);}
-  function hide(id){const m=el(id);if(m){m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}}
-  function hideAll(){ids.forEach(hide);}
-  function normalize(){ids.forEach(id=>{const m=el(id);if(m&&!m.classList.contains('hidden')){m.style.display='flex';m.style.pointerEvents='auto';m.style.zIndex='100000';}});}
-  window.closeAllBKLOrderWindows=hideAll;
-
-  // تغليف دوال الطلبات الموجودة أصلاً لضمان عدم تداخل النوافذ.
-  ['previewOrder','editOrderPrompt','updateOrderStatus','deleteOrder','printOrderInvoice'].forEach(name=>{
-    const fn=window[name];
-    if(typeof fn!=='function'||fn.__bklWindowSafe)return;
-    const wrapped=function(){
-      if(name==='previewOrder') ids.filter(x=>x!=='order-preview-modal').forEach(hide);
-      else if(name==='editOrderPrompt') ids.filter(x=>x!=='order-editor-modal').forEach(hide);
-      else hideAll();
-      const result=fn.apply(this,arguments);
-      setTimeout(normalize,0);
-      return result;
-    };
-    wrapped.__bklWindowSafe=true;
-    window[name]=wrapped;
-  });
-
-  // كل نافذة طلب جديدة تصبح النافذة النشطة الوحيدة.
-  const obs=new MutationObserver(function(ms){
-    for(const mu of ms){
-      for(const n of mu.addedNodes){
-        if(!(n instanceof HTMLElement))continue;
-        for(const id of ids){
-          const m=n.id===id?n:n.querySelector?.('#'+id);
-          if(m){
-            ids.filter(x=>x!==id).forEach(hide);
-            m.style.zIndex='100000';m.style.pointerEvents='auto';
-          }
-        }
-      }
-    }
-    normalize();
-  });
-  obs.observe(document.body,{childList:true,subtree:true});
-
-  // إغلاق آمن بالنقر على X أو الخلفية أو Escape.
-  document.addEventListener('click',function(e){
-    const close=e.target.closest?.('[data-close],[data-act="close"],.bkl-om-x');
-    if(close){
-      const m=close.closest('#order-preview-modal,#order-editor-modal,#bkl-modern-order-modal');
-      if(m){e.preventDefault();e.stopPropagation();hide(m.id);return;}
-    }
-    const back=e.target.closest?.('.bkl-om-backdrop');
-    if(back&&e.target===back){const m=back.closest('#bkl-modern-order-modal');if(m)hide(m.id);}
-  },true);
-  document.addEventListener('keydown',function(e){
-    if(e.key!=='Escape')return;
-    for(let i=ids.length-1;i>=0;i--){const m=el(ids[i]);if(m&&!m.classList.contains('hidden')&&m.style.display!=='none'){hide(ids[i]);e.preventDefault();break;}}
-  },true);
-
-  // إصلاح مباشر لأزرار قائمة الطلبات، مع أولوية للـ data-order-action.
-  document.addEventListener('click',function(e){
-    const btn=e.target.closest?.('[data-order-action]');
-    if(!btn)return;
-    const id=btn.getAttribute('data-order-id');
-    const action=btn.getAttribute('data-order-action');
-    if(!id||!action)return;
-    // إذا كانت نافذة فوق القائمة، أغلقها أولاً بدلاً من تركها حاجباً للنقرات.
-    const active=document.querySelector('#order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal');
-    if(active&&!active.contains(btn))hide(active.id);
-  },true);
 })();
 </script>
