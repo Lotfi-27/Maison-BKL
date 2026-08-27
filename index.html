@@ -4285,15 +4285,31 @@ function printOrderInvoice(orderId, action = 'print') {
     `;
 
     if (action === 'save') {
-        const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `فاتورة-${String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_')}.html`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        // حفظ الفاتورة محلياً مع دعم المتصفحات التي تمنع تنزيل Blob بالطريقة التقليدية.
+        const safeId = String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_');
+        const fileName = `فاتورة-${safeId}.html`;
+        try {
+            const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            link.setAttribute('download', fileName);
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+        } catch (error) {
+            console.error('BKL invoice save error:', error);
+            const fallback = document.createElement('a');
+            fallback.href = 'data:text/html;charset=utf-8,' + encodeURIComponent(invoiceHtml);
+            fallback.download = fileName;
+            fallback.style.display = 'none';
+            document.body.appendChild(fallback);
+            fallback.click();
+            fallback.remove();
+        }
         notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} على جهاز صاحب المتجر.`, 'invoice-saved');
         return;
     }
