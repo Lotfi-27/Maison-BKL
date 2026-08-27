@@ -4285,38 +4285,69 @@ function printOrderInvoice(orderId, action = 'print') {
     `;
 
     if (action === 'save') {
-        // حفظ الفاتورة محلياً مع دعم المتصفحات التي تمنع تنزيل Blob بالطريقة التقليدية.
+        // حفظ الفاتورة كملف فعلي، مع إعطاء الأولوية لنافذة الحفظ الأصلية للمتصفح.
         const safeId = String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_');
         const fileName = `فاتورة-${safeId}.html`;
+        const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
+
         try {
-            const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            link.setAttribute('download', fileName);
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1500);
+            // Chrome / Edge: يفتح نافذة "حفظ باسم" وينشئ الملف فعلياً في مستكشف الملفات.
+            if (typeof window.showSaveFilePicker === 'function') {
+                window.showSaveFilePicker({
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'فاتورة HTML',
+                        accept: { 'text/html': ['.html'] }
+                    }]
+                }).then(async (handle) => {
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بنجاح.`, 'invoice-saved');
+                    alert('تم حفظ الفاتورة بنجاح.');
+                }).catch((error) => {
+                    // الضغط على إلغاء لا يعتبر خطأ ولا يغلق المتجر.
+                    if (error && error.name === 'AbortError') return;
+                    console.error('BKL invoice save picker error:', error);
+                    bklDownloadInvoiceBlob(blob, fileName, order);
+                });
+            } else {
+                bklDownloadInvoiceBlob(blob, fileName, order);
+            }
         } catch (error) {
             console.error('BKL invoice save error:', error);
-            const fallback = document.createElement('a');
-            fallback.href = 'data:text/html;charset=utf-8,' + encodeURIComponent(invoiceHtml);
-            fallback.download = fileName;
-            fallback.style.display = 'none';
-            document.body.appendChild(fallback);
-            fallback.click();
-            fallback.remove();
+            bklDownloadInvoiceBlob(blob, fileName, order);
         }
-        notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} على جهاز صاحب المتجر.`, 'invoice-saved');
         return;
     }
 
     const printWindow = bklOpenEmbeddedWindow('bkl-invoice-print-modal', 'طباعة الفاتورة');
     printWindow.document.write(invoiceHtml);
     printWindow.document.close();
+}
+
+
+function bklDownloadInvoiceBlob(blob, fileName, order) {
+    try {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.rel = 'noopener';
+        link.style.position = 'fixed';
+        link.style.left = '-9999px';
+        document.body.appendChild(link);
+        link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+        setTimeout(() => {
+            try { link.remove(); } catch (_) {}
+            try { URL.revokeObjectURL(url); } catch (_) {}
+        }, 2000);
+        notifyCustomerForOrder(order, `تم إرسال فاتورة طلبك رقم #${order.id} إلى التنزيلات.`, 'invoice-saved');
+        setTimeout(() => alert('تم إرسال الفاتورة إلى مجلد التنزيلات. إذا ظهرت نافذة اختيار مكان الحفظ فاختر المكان المطلوب.'), 50);
+    } catch (error) {
+        console.error('BKL invoice download fallback error:', error);
+        alert('تعذر حفظ الفاتورة. يرجى السماح للتطبيق بتنزيل الملفات ثم المحاولة مرة أخرى.');
+    }
 }
 
 function saveOrderInvoice(orderId) {
