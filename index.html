@@ -3871,10 +3871,7 @@ function printOrderInvoice(orderId, action = 'print') {
             </style>
         </head>
         <body>
-            <div class="invoice-actions" data-no-print>
-                <button type="button" class="save-btn" onclick="saveInvoiceFile()">💾 حفظ الفاتورة</button>
-                <button type="button" class="close-btn" onclick="closeInvoiceWindow()">↩️ رجوع / إغلاق</button>
-            </div>
+            <div class="invoice-actions" data-no-print><button type="button" class="close-btn" onclick="closeInvoiceWindow()" aria-label="إغلاق">×</button></div>
 
             <div class="invoice-box">
                 <div class="header">
@@ -3949,7 +3946,7 @@ function printOrderInvoice(orderId, action = 'print') {
             <script>
                 const invoiceFileName = ${JSON.stringify('فاتورة-' + String(order.id))};
                 const invoiceHtmlForSave = document.documentElement.outerHTML;
-                async async function saveInvoiceFile() {
+                async function saveInvoiceFile() {
                     const filename = ${JSON.stringify('فاتورة-' + String(order.id) + '.html')};
                     try {
                         const blob = new Blob([document.documentElement.outerHTML], {type:'text/html;charset=utf-8'});
@@ -3979,9 +3976,9 @@ function printOrderInvoice(orderId, action = 'print') {
                     try { window.close(); } catch(e) {}
                     setTimeout(function(){
                         if (!window.closed) {
-                            try { window.location.href = 'about:blank'; } catch(e) {}
+                            try { window.history.back(); } catch(e) {}
                         }
-                    }, 150);
+                    }, 100);
                 }
                 window.onload = function() { setTimeout(function(){ window.print(); }, 120); };
             <\/script>
