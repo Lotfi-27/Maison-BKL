@@ -1335,11 +1335,69 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 </div>
 
                 <div class="flex gap-2 pt-2">
-                    <button type="button" onclick="goToPage('page-account-register')" class="flex-1 bg-amber-100 text-amber-700 hover:bg-amber-200 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer">تعديل البيانات</button>
+                    <button type="button" onclick="openCustomerProfileEdit()" class="flex-1 bg-amber-100 text-amber-700 hover:bg-amber-200 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer"><i class="fa-solid fa-pen-to-square ml-1"></i>تعديل الحساب</button>
                     <button type="button" onclick="logoutCustomer()" class="flex-1 bg-red-100 text-red-700 hover:bg-red-200 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer">تسجيل الخروج</button>
                 </div>
             </div>
         </div>
+
+    <!-- ================= CUSTOMER PROFILE EDIT MODAL ================= -->
+    <div id="customer-profile-edit-modal" class="fixed inset-0 z-[10050] hidden items-center justify-center p-3 bg-black/50 backdrop-blur-sm">
+        <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto bg-white rounded-3xl shadow-2xl border border-neutral-200 relative" dir="rtl">
+            <div class="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm font-extrabold text-neutral-900">تعديل الحساب</h3>
+                    <p class="text-[10px] text-neutral-500">عدّل بياناتك وصورة ملفك الشخصي ثم اضغط حفظ.</p>
+                </div>
+                <button type="button" onclick="closeCustomerProfileEdit()" class="w-9 h-9 rounded-full bg-neutral-100 hover:bg-red-50 text-neutral-700 hover:text-red-600 flex items-center justify-center" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="customer-profile-edit-form" onsubmit="saveCustomerProfileEdit(event)" class="p-4 sm:p-5 flex flex-col gap-3">
+                <div class="flex flex-col items-center gap-2">
+                    <div class="relative w-24 h-24 rounded-full overflow-hidden bg-amber-50 border-2 border-amber-500 shadow-md">
+                        <img id="edit-profile-avatar-preview" class="w-full h-full object-cover hidden" alt="صورة الملف الشخصي">
+                        <div id="edit-profile-avatar-placeholder" class="w-full h-full flex items-center justify-center text-amber-700 text-3xl"><i class="fa-solid fa-user"></i></div>
+                        <label for="edit-profile-avatar-input" class="absolute bottom-0 inset-x-0 bg-black/55 text-white text-[10px] font-bold text-center py-1 cursor-pointer">تغيير الصورة</label>
+                        <input id="edit-profile-avatar-input" type="file" accept="image/*" class="hidden" onchange="previewEditedProfileAvatar(event)">
+                    </div>
+                    <button type="button" onclick="removeEditedProfileAvatar()" class="text-[10px] text-red-600 font-bold hover:underline">حذف صورة البروفايل</button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">الاسم<input id="edit-profile-firstname" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                    <label class="text-[11px] font-bold text-neutral-700">اللقب<input id="edit-profile-lastname" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <label class="text-[11px] font-bold text-neutral-700">اسم المستخدم<input id="edit-profile-username" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">رقم الهاتف<input id="edit-profile-phone" type="tel" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                    <label class="text-[11px] font-bold text-neutral-700">البريد الإلكتروني<input id="edit-profile-email" type="email" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">البلد
+                        <select id="edit-profile-country" class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600">
+                            <option value="الجزائر">الجزائر</option><option value="فرنسا">فرنسا</option><option value="المغرب">المغرب</option><option value="تونس">تونس</option>
+                        </select>
+                    </label>
+                    <label class="text-[11px] font-bold text-neutral-700">الولاية<input id="edit-profile-state" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <label class="text-[11px] font-bold text-neutral-700">البلدية<input id="edit-profile-municipality" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                    <label class="text-[11px] font-bold text-neutral-700">العنوان بالتفصيل<input id="edit-profile-address" required class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600"></label>
+                </div>
+                <div class="border-t border-neutral-200 pt-3">
+                    <p class="text-[10px] text-neutral-500 mb-2">تغيير كلمة المرور اختياري. اترك الحقلين فارغين للاحتفاظ بكلمة المرور الحالية.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <label class="text-[11px] font-bold text-neutral-700">كلمة مرور جديدة<input id="edit-profile-password" type="password" class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600" autocomplete="new-password"></label>
+                        <label class="text-[11px] font-bold text-neutral-700">تأكيد كلمة المرور<input id="edit-profile-confirm-password" type="password" class="mt-1 w-full border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-amber-600" autocomplete="new-password"></label>
+                    </div>
+                </div>
+                <div id="edit-profile-error" class="hidden text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl p-2"></div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" onclick="closeCustomerProfileEdit()" class="flex-1 bg-neutral-100 text-neutral-700 font-bold text-xs py-3 rounded-xl">إلغاء</button>
+                    <button type="submit" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs py-3 rounded-xl"><i class="fa-solid fa-check ml-1"></i>حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     </main>
 
@@ -2476,7 +2534,8 @@ function ensureComplaintCameraModal() {
             <div id="bkl-video-capture-panel" class="hidden p-3">
                 <video id="bkl-complaint-video-preview" autoplay muted playsinline class="w-full aspect-video bg-black rounded-xl object-cover"></video>
                 <div class="flex gap-2 mt-3">
-                    <button type="button" onclick="stopComplaintVideoCapture(true)" class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl text-xs">⏹ إيقاف وإرفاق</button>
+                    <button id="bkl-video-start-btn" type="button" onclick="beginComplaintVideoRecording()" class="flex-1 bg-green-600 text-white font-bold py-3 rounded-xl text-xs">▶️ بدء التصوير</button>
+                    <button id="bkl-video-stop-btn" type="button" onclick="stopComplaintVideoCapture(true)" disabled class="flex-1 bg-red-600 text-white font-bold py-3 rounded-xl text-xs opacity-50">⏹ إيقاف وإرفاق</button>
                     <button type="button" onclick="stopComplaintVideoCapture(false)" class="flex-1 bg-neutral-100 text-neutral-700 font-bold py-3 rounded-xl text-xs">إلغاء</button>
                 </div>
             </div>
@@ -2506,8 +2565,12 @@ function openComplaintCamera(prefix) {
     modal.classList.remove('hidden'); modal.classList.add('flex');
     const choice = document.getElementById('bkl-camera-choice-buttons');
     const panel = document.getElementById('bkl-video-capture-panel');
+    const startBtn = document.getElementById('bkl-video-start-btn');
+    const stopBtn = document.getElementById('bkl-video-stop-btn');
     if (choice) choice.classList.remove('hidden');
     if (panel) panel.classList.add('hidden');
+    if (startBtn) { startBtn.disabled=false; startBtn.textContent='▶️ بدء التصوير'; startBtn.classList.remove('opacity-50'); }
+    if (stopBtn) { stopBtn.disabled=true; stopBtn.classList.add('opacity-50'); }
 }
 
 function openNativeComplaintCamera(mode) {
@@ -2529,47 +2592,47 @@ async function startComplaintVideoCapture() {
     const panel = document.getElementById('bkl-video-capture-panel');
     if (choice) choice.classList.add('hidden');
     if (panel) panel.classList.remove('hidden');
+    const startBtn = document.getElementById('bkl-video-start-btn');
+    const stopBtn = document.getElementById('bkl-video-stop-btn');
+    if (startBtn) { startBtn.disabled=false; startBtn.classList.remove('hidden'); startBtn.classList.remove('opacity-50'); }
+    if (stopBtn) { stopBtn.disabled=true; stopBtn.classList.add('opacity-50'); }
     const preview = document.getElementById('bkl-complaint-video-preview');
     try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined') {
-            // Fallback: اطلب من نظام الهاتف اختيار/تسجيل فيديو حقيقي، وليس صورة.
-            const input = document.getElementById('bkl-native-complaint-video');
-            if (!input) throw new Error('video input unavailable');
-            input.value = '';
-            input.click();
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined' || !window.isSecureContext) {
+            alert('تسجيل الفيديو داخل الصفحة يحتاج إلى HTTPS ومتصفح يدعم الكاميرا.');
+            cleanupComplaintVideoCapture();
             return;
         }
-        if (!window.isSecureContext) {
-            const input = document.getElementById('bkl-native-complaint-video');
-            if (!input) throw new Error('video input unavailable');
-            input.value = '';
-            input.click();
-            return;
-        }
-        bklComplaintVideoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
-            audio: true
-        });
+        bklComplaintVideoStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}, audio:true});
         if (preview) {
             preview.srcObject = bklComplaintVideoStream;
+            preview.muted = true;
+            preview.playsInline = true;
             await preview.play().catch(()=>{});
         }
-        const preferred = [
-            'video/mp4',
-            'video/webm;codecs=vp9,opus',
-            'video/webm;codecs=vp8,opus',
-            'video/webm'
-        ];
-        const mime = preferred.find(t => MediaRecorder.isTypeSupported(t)) || '';
-        bklComplaintVideoChunks = [];
-        bklComplaintVideoRecorder = mime ? new MediaRecorder(bklComplaintVideoStream, {mimeType:mime}) : new MediaRecorder(bklComplaintVideoStream);
-        bklComplaintVideoRecorder.ondataavailable = e => { if (e.data && e.data.size) bklComplaintVideoChunks.push(e.data); };
-        bklComplaintVideoRecorder.start(500);
     } catch (err) {
         cleanupComplaintVideoCapture();
-        const input = document.getElementById('bkl-native-complaint-video');
-        if (input) { input.value=''; input.click(); }
+        alert('تعذر فتح الكاميرا. اسمح للمتصفح باستخدام الكاميرا والميكروفون ثم حاول مرة أخرى.');
     }
+}
+
+function beginComplaintVideoRecording() {
+    if (!bklComplaintVideoStream) {
+        alert('الكاميرا غير جاهزة بعد.');
+        return;
+    }
+    try {
+        const preferred = ['video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+        const mime = preferred.find(t => MediaRecorder.isTypeSupported(t)) || '';
+        bklComplaintVideoChunks = [];
+        bklComplaintVideoRecorder = mime ? new MediaRecorder(bklComplaintVideoStream,{mimeType:mime}) : new MediaRecorder(bklComplaintVideoStream);
+        bklComplaintVideoRecorder.ondataavailable = e => { if(e.data && e.data.size) bklComplaintVideoChunks.push(e.data); };
+        bklComplaintVideoRecorder.start(500);
+        const startBtn=document.getElementById('bkl-video-start-btn');
+        const stopBtn=document.getElementById('bkl-video-stop-btn');
+        if(startBtn){startBtn.disabled=true;startBtn.classList.add('opacity-50');startBtn.textContent='🔴 جارٍ التصوير...';}
+        if(stopBtn){stopBtn.disabled=false;stopBtn.classList.remove('opacity-50');}
+    } catch(err){ alert('تعذر بدء تسجيل الفيديو.'); }
 }
 
 function stopComplaintVideoCapture(attach) {
@@ -2596,8 +2659,12 @@ function cleanupComplaintVideoCapture() {
     if (video) video.srcObject = null;
     const choice = document.getElementById('bkl-camera-choice-buttons');
     const panel = document.getElementById('bkl-video-capture-panel');
+    const startBtn = document.getElementById('bkl-video-start-btn');
+    const stopBtn = document.getElementById('bkl-video-stop-btn');
     if (choice) choice.classList.remove('hidden');
     if (panel) panel.classList.add('hidden');
+    if (startBtn) { startBtn.disabled=false; startBtn.textContent='▶️ بدء التصوير'; startBtn.classList.remove('opacity-50'); }
+    if (stopBtn) { stopBtn.disabled=true; stopBtn.classList.add('opacity-50'); }
 }
 
 function handleNativeComplaintCameraFile(input) {
@@ -4152,6 +4219,9 @@ function printOrderInvoice(orderId, action = 'print') {
                 window.onload = function() { window.print(); };
             <\/script>
         
+
+
+
 
 </body>
         </html>
@@ -9469,6 +9539,71 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   });
   mo.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+})();
+</script>
+
+<script id="bkl-customer-profile-edit">
+(function(){
+  let editedAvatar = null;
+  let removeAvatar = false;
+  const modal = () => document.getElementById('customer-profile-edit-modal');
+  function setError(msg){ const e=document.getElementById('edit-profile-error'); if(!e)return; e.textContent=msg||''; e.classList.toggle('hidden',!msg); }
+  function setVal(id,v){ const e=document.getElementById(id); if(e)e.value=v==null?'':String(v); }
+  function getVal(id){ const e=document.getElementById(id); return e?String(e.value||'').trim():''; }
+
+  window.openCustomerProfileEdit = function(){
+    if(!currentLoggedInCustomer){ goToPage('page-account-login'); return; }
+    const c=currentLoggedInCustomer;
+    setError(''); editedAvatar=c.avatar||null; removeAvatar=false;
+    setVal('edit-profile-firstname',c.firstname); setVal('edit-profile-lastname',c.lastname);
+    setVal('edit-profile-username',c.username); setVal('edit-profile-phone',c.phone);
+    setVal('edit-profile-email',c.email); setVal('edit-profile-country',c.country||'الجزائر');
+    setVal('edit-profile-state',c.state); setVal('edit-profile-municipality',c.municipality); setVal('edit-profile-address',c.address);
+    setVal('edit-profile-password',''); setVal('edit-profile-confirm-password','');
+    updateAvatarPreview();
+    const m=modal(); if(m){m.classList.remove('hidden');m.classList.add('flex');document.body.classList.add('overflow-hidden');}
+  };
+  window.closeCustomerProfileEdit=function(){ const m=modal(); if(m){m.classList.add('hidden');m.classList.remove('flex');} document.body.classList.remove('overflow-hidden'); setError(''); };
+  function updateAvatarPreview(){
+    const img=document.getElementById('edit-profile-avatar-preview'), ph=document.getElementById('edit-profile-avatar-placeholder');
+    if(!img||!ph)return;
+    if(editedAvatar && !removeAvatar){img.src=editedAvatar;img.classList.remove('hidden');ph.classList.add('hidden');}
+    else{img.removeAttribute('src');img.classList.add('hidden');ph.classList.remove('hidden');}
+  }
+  window.removeEditedProfileAvatar=function(){ editedAvatar=null; removeAvatar=true; updateAvatarPreview(); };
+  window.previewEditedProfileAvatar=function(ev){
+    const file=ev.target.files&&ev.target.files[0]; if(!file)return;
+    if(!file.type.startsWith('image/')){setError('يرجى اختيار صورة فقط.');ev.target.value='';return;}
+    const reader=new FileReader(); reader.onload=function(e){ editedAvatar=e.target.result; removeAvatar=false; updateAvatarPreview(); }; reader.readAsDataURL(file);
+  };
+  window.saveCustomerProfileEdit=function(ev){
+    ev.preventDefault(); setError(''); if(!currentLoggedInCustomer)return;
+    const first=getVal('edit-profile-firstname'), last=getVal('edit-profile-lastname'), user=getVal('edit-profile-username');
+    const phone=getVal('edit-profile-phone'), email=getVal('edit-profile-email'), country=getVal('edit-profile-country');
+    const state=getVal('edit-profile-state'), muni=getVal('edit-profile-municipality'), address=getVal('edit-profile-address');
+    const pass=getVal('edit-profile-password'), confirm=getVal('edit-profile-confirm-password');
+    if(!first||!last||!user||!phone||!email||!state||!muni||!address){setError('يرجى ملء جميع الحقول المطلوبة.');return;}
+    if(pass && pass!==confirm){setError('كلمتا المرور الجديدتان غير متطابقتين.');return;}
+    const id=currentLoggedInCustomer.id;
+    const duplicate=registeredCustomers.find(c=>c.id!==id && (String(c.phone||'').trim()===phone || String(c.email||'').toLowerCase()===email.toLowerCase() || String(c.username||'').toLowerCase()===user.toLowerCase()));
+    if(duplicate){setError('رقم الهاتف أو البريد الإلكتروني أو اسم المستخدم مستخدم من حساب آخر.');return;}
+    const idx=registeredCustomers.findIndex(c=>c.id===id); if(idx<0){setError('تعذر العثور على الحساب.');return;}
+    const updated={...registeredCustomers[idx],firstname:first,lastname:last,username:user,phone,email,country,state,municipality:muni,address};
+    if(pass)updated.password=pass;
+    updated.avatar=removeAvatar?'':(editedAvatar||'');
+    registeredCustomers[idx]=updated;
+    currentLoggedInCustomer=updated;
+    localStorage.setItem('store_customers',JSON.stringify(registeredCustomers));
+    localStorage.setItem('store_active_customer',JSON.stringify(updated));
+    if(typeof renderCustomerProfile==='function')renderCustomerProfile();
+    if(typeof fillCheckoutWithCustomerData==='function')fillCheckoutWithCustomerData();
+    if(typeof renderCustomerComplaintChats==='function')renderCustomerComplaintChats();
+    if(typeof addLogActivity==='function')addLogActivity('تحديث حساب الزبون','تعديل بيانات الحساب (' + first + ' ' + last + ')' ,typeof currentBranchId!=='undefined'?currentBranchId:null);
+    closeCustomerProfileEdit();
+    alert('تم حفظ تعديلات حسابك بنجاح.');
+  };
+  document.addEventListener('click',function(e){const m=modal(); if(m && e.target===m)closeCustomerProfileEdit();});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'){const m=modal();if(m&&!m.classList.contains('hidden'))closeCustomerProfileEdit();}});
 })();
 </script>
 </body>
