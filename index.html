@@ -4035,6 +4035,9 @@ function printOrderInvoice(orderId, action = 'print') {
                     line-height: 1.6;
                     background: #fff;
                 }
+                .invoice-close-btn { position:fixed; top:12px; right:12px; z-index:99999; width:38px; height:38px; border:0; border-radius:50%; background:#f3f4f6; color:#4b5563; font-size:24px; font-weight:800; line-height:38px; text-align:center; cursor:pointer; box-shadow:0 3px 12px rgba(0,0,0,.10); }
+                .invoice-close-btn:hover { background:#e5e7eb; color:#111827; }
+                @media print { .invoice-close-btn { display:none; } }
                 .invoice-box {
                     max-width: 850px;
                     margin: auto;
@@ -4155,7 +4158,7 @@ function printOrderInvoice(orderId, action = 'print') {
             </style>
         </head>
         <body>
-            <button type="button" class="invoice-window-close" onclick="window.close()" aria-label="إغلاق" title="إغلاق">✕</button>
+            <button type="button" class="invoice-window-close" onclick="window.open('', '_self'); window.close();" aria-label="إغلاق" title="إغلاق">✕</button>
             <div class="invoice-box">
                 <div class="header">
                     <div class="logo">Maison BKL - متجر السوق الذكي</div>
@@ -8579,7 +8582,7 @@ footer button{
   .bkl-universal-close{width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;top:8px!important;inset-inline-end:8px!important;font-size:22px!important}
 }
 </style>
-</head><body><div class="box"><div class="head"><strong>Maison BKL - متجر السوق الذكي</strong><strong>📒 دفتر الكريدي</strong></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة دفتر الكريدي</button></div><button class="window-close" type="button" onclick="window.close()" aria-label="إغلاق" title="إغلاق">✕</button><div class="info"><b>رقم الفاتورة:</b> ${escapeOrderHtml(entry.invoiceId)}<br><b>الزبون:</b> ${escapeOrderHtml(entry.customerName)}<br><b>الهاتف:</b> ${escapeOrderHtml(entry.phone)}<br><b>الولاية:</b> ${escapeOrderHtml(entry.state)}<br><b>البلدية:</b> ${escapeOrderHtml(entry.municipality)}<br><b>العنوان:</b> ${escapeOrderHtml(entry.address)}<br><b>التاريخ:</b> ${escapeOrderHtml(entry.date)}<br><b>الحالة:</b> ${escapeOrderHtml(entry.status)}</div><table><thead><tr><th>المنتج</th><th>الكمية</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table><div class="totals">مجموع المنتجات: ${escapeOrderHtml(formatCreditAmount(entry.subtotal))}<br>سعر التوصيل: ${escapeOrderHtml(formatCreditAmount(entry.deliveryPrice))}<br>إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}<br><span class="paid">إجمالي المدفوع: ${escapeOrderHtml(formatCreditAmount(entry.paidAmount))}</span><br><span class="remaining">إجمالي الفاتورة بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</span><br>طريقة آخر تسديد: ${escapeOrderHtml(entry.lastPaymentMethod || 'لا يوجد')}</div><div class="lock">🔒 هذه النسخة محفوظة كسجل كريدي. لا يمكن تعديل بيانات الفاتورة الأصلية. تسجيل الدفعات يتم من دفتر صاحب المتجر فقط.</div></div></body></html>`);
+</head><body><div class="box"><div class="head"><strong>Maison BKL - متجر السوق الذكي</strong><strong>📒 دفتر الكريدي</strong></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة دفتر الكريدي</button></div><button class="window-close" type="button" onclick="window.open('', '_self'); window.close();" aria-label="إغلاق" title="إغلاق">✕</button><div class="info"><b>رقم الفاتورة:</b> ${escapeOrderHtml(entry.invoiceId)}<br><b>الزبون:</b> ${escapeOrderHtml(entry.customerName)}<br><b>الهاتف:</b> ${escapeOrderHtml(entry.phone)}<br><b>الولاية:</b> ${escapeOrderHtml(entry.state)}<br><b>البلدية:</b> ${escapeOrderHtml(entry.municipality)}<br><b>العنوان:</b> ${escapeOrderHtml(entry.address)}<br><b>التاريخ:</b> ${escapeOrderHtml(entry.date)}<br><b>الحالة:</b> ${escapeOrderHtml(entry.status)}</div><table><thead><tr><th>المنتج</th><th>الكمية</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table><div class="totals">مجموع المنتجات: ${escapeOrderHtml(formatCreditAmount(entry.subtotal))}<br>سعر التوصيل: ${escapeOrderHtml(formatCreditAmount(entry.deliveryPrice))}<br>إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}<br><span class="paid">إجمالي المدفوع: ${escapeOrderHtml(formatCreditAmount(entry.paidAmount))}</span><br><span class="remaining">إجمالي الفاتورة بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</span><br>طريقة آخر تسديد: ${escapeOrderHtml(entry.lastPaymentMethod || 'لا يوجد')}</div><div class="lock">🔒 هذه النسخة محفوظة كسجل كريدي. لا يمكن تعديل بيانات الفاتورة الأصلية. تسجيل الدفعات يتم من دفتر صاحب المتجر فقط.</div></div></body></html>`);
             w.document.close();
         }
 
@@ -9802,4 +9805,3 @@ document.addEventListener('DOMContentLoaded', function(){
     // تم حذف معالج النقر العام القديم: كان يلتقط أزرار نوافذ الفواتير أيضاً ويشغل أكثر من دالة في النقرة الواحدة.
 })();
 </script>
-
