@@ -3994,32 +3994,15 @@ function printOrderInvoice(orderId, action = 'print') {
     if (action === 'save') {
         const filename = `فاتورة-${String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_')}.html`;
         const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
-        const saveWithPicker = async () => {
-            if (window.showSaveFilePicker) {
-                const handle = await window.showSaveFilePicker({
-                    suggestedName: filename,
-                    types: [{description:'فاتورة HTML', accept:{'text/html':['.html']}}]
-                });
-                const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                return;
-            }
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url; link.download = filename;
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            setTimeout(() => { link.remove(); URL.revokeObjectURL(url); }, 1000);
-        };
-        saveWithPicker().then(() => {
-            notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} على جهاز صاحب المتجر.`, 'invoice-saved');
-        }).catch(error => {
-            if (error && error.name === 'AbortError') return;
-            console.error('BKL invoice save error:', error);
-            alert('تعذر حفظ الفاتورة. يرجى السماح بتنزيل/حفظ الملفات من المتصفح ثم المحاولة مرة أخرى.');
-        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => { link.remove(); URL.revokeObjectURL(url); }, 1500);
+        try { notifyCustomerForOrder(order, `تم تحميل فاتورة طلبك رقم #${order.id}.`, 'invoice-saved'); } catch(e) {}
         return;
     }
 
@@ -9365,10 +9348,10 @@ document.addEventListener('DOMContentLoaded', function(){
         </div>
         <section class="bkl-om-products"><div class="bkl-om-section-title"><h3>🛍️ تفاصيل المنتجات</h3><span>${Array.isArray(items)?items.length:0} منتج</span></div><div class="bkl-om-table-wrap"><table><thead><tr><th>#</th><th>المنتج</th><th>اللون</th><th>المقاس</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th></tr></thead><tbody>${rows||'<tr><td colspan="7" class="empty">لا توجد منتجات مسجلة في الطلبية.</td></tr>'}</tbody></table></div></section>
         <div class="bkl-om-total"><div><span>مجموع المنتجات</span><b>${subtotal.toLocaleString('ar-DZ')} د.ج</b></div><div><span>التوصيل</span><b>${delivery.toLocaleString('ar-DZ')} د.ج</b></div><div class="grand"><span>الإجمالي النهائي</span><strong>${total.toLocaleString('ar-DZ')} د.ج</strong></div></div>
-        <div class="bkl-om-actions"><button data-act="close" class="secondary">إغلاق</button><button data-act="edit" class="edit">✏️ تعديل الطلبية</button><button data-act="confirm" class="confirm">✓ تأكيد الطلب</button><button data-act="print" class="print">🖨️ طباعة الفاتورة</button><button data-act="save" class="save">💾 حفظ الفاتورة</button></div>
+        <div class="bkl-om-actions"><button data-act="close" class="secondary">↩️ رجوع</button><button data-act="edit" class="edit">✏️ تعديل الطلبية</button><button data-act="confirm" class="confirm">✓ تأكيد الطلب</button><button data-act="print" class="print">🖨️ طباعة الفاتورة</button><button data-act="save" class="save">💾 حفظ الفاتورة</button></div>
       </div></div>`;
     document.body.appendChild(modal);
-    modal.querySelectorAll('[data-close],[data-act="close"]').forEach(b=>b.onclick=()=>modal.remove());
+    modal.querySelectorAll('[data-close],[data-act="close"]').forEach(b=>b.onclick=()=>{ try { window.history.back(); } catch(e) {} });
     modal.querySelector('[data-act="edit"]').onclick=()=>{modal.remove(); if(typeof editOrderPrompt==='function')editOrderPrompt(id); else alert('دالة تعديل الطلب غير متاحة.');};
     modal.querySelector('[data-act="confirm"]').onclick=()=>{if(typeof updateOrderStatus==='function')updateOrderStatus(id,'مؤكد'); modal.remove(); setTimeout(()=>modernView(id),50);};
     modal.querySelector('[data-act="print"]').onclick=()=>{if(typeof printOrderInvoice==='function')printOrderInvoice(id); else window.print();};
