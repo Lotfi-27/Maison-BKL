@@ -4285,40 +4285,38 @@ function printOrderInvoice(orderId, action = 'print') {
     `;
 
     if (action === 'save') {
-        // الحفظ فقط: افتح مستكشف الملفات ثم اكتب الفاتورة في المكان الذي يختاره المستخدم.
+        // حفظ الفاتورة كملف فعلي، مع إعطاء الأولوية لنافذة الحفظ الأصلية للمتصفح.
         const safeId = String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_');
         const fileName = `فاتورة-${safeId}.html`;
         const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
 
         try {
+            // Chrome / Edge: يفتح نافذة "حفظ باسم" وينشئ الملف فعلياً في مستكشف الملفات.
             if (typeof window.showSaveFilePicker === 'function') {
                 window.showSaveFilePicker({
                     suggestedName: fileName,
-                    types: [{ description: 'فاتورة HTML', accept: { 'text/html': ['.html'] } }]
+                    types: [{
+                        description: 'فاتورة HTML',
+                        accept: { 'text/html': ['.html'] }
+                    }]
                 }).then(async (handle) => {
                     const writable = await handle.createWritable();
                     await writable.write(blob);
                     await writable.close();
+                    notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بنجاح.`, 'invoice-saved');
+                    alert('تم حفظ الفاتورة بنجاح.');
                 }).catch((error) => {
+                    // الضغط على إلغاء لا يعتبر خطأ ولا يغلق المتجر.
                     if (error && error.name === 'AbortError') return;
-                    console.error(error);
+                    console.error('BKL invoice save picker error:', error);
+                    bklDownloadInvoiceBlob(blob, fileName, order);
                 });
             } else {
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = fileName;
-                link.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                bklDownloadInvoiceBlob(blob, fileName, order);
             }
         } catch (error) {
-            console.error(error);
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = fileName;
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            console.error('BKL invoice save error:', error);
+            bklDownloadInvoiceBlob(blob, fileName, order);
         }
         return;
     }
@@ -4353,8 +4351,34 @@ function bklDownloadInvoiceBlob(blob, fileName, order) {
 }
 
 function saveOrderInvoice(orderId) {
-    return printOrderInvoice(orderId, 'save');
+    try {
+        return printOrderInvoice(orderId, 'save');
+    } catch (error) {
+        console.error('BKL save invoice button error:', error);
+        alert('تعذر حفظ الفاتورة. يرجى المحاولة مرة أخرى.');
+    }
 }
+
+// BKL: ضمان مباشر لزر حفظ الفاتورة حتى لو أُعيد إنشاء قائمة الطلبات.
+(function(){
+    if (window.__bklSaveInvoiceDirectBound) return;
+    window.__bklSaveInvoiceDirectBound = true;
+    document.addEventListener('click', function(event){
+        const button = event.target && event.target.closest ? event.target.closest('[data-order-action="save-invoice"]') : null;
+        if (!button) return;
+        const id = button.getAttribute('data-order-id');
+        if (!id) return;
+        if (button.__bklSaveDirectBusy) return;
+        button.__bklSaveDirectBusy = true;
+        try {
+            event.preventDefault();
+            event.stopPropagation();
+            saveOrderInvoice(id);
+        } finally {
+            setTimeout(function(){ button.__bklSaveDirectBusy = false; }, 500);
+        }
+    }, true);
+})();
 
 // تحديث خفيف ومؤجل عند الحاجة فقط بدلاً من إعادة رسم القائمة كل 5 ثوانٍ.
 let bklOrdersRenderTimer = null;
