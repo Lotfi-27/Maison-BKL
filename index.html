@@ -2531,7 +2531,7 @@ function ensureComplaintCameraModal() {
             </div>
             <div class="p-4 grid grid-cols-2 gap-3" id="bkl-camera-choice-buttons">
                 <button type="button" onclick="openNativeComplaintCamera('photo')" class="bg-indigo-600 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2"><span class="text-2xl">📸</span><span>التقاط صورة</span></button>
-                <button type="button" onclick="startComplaintVideoCapture()" class="bg-neutral-900 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2"><span class="text-2xl">🎥</span><span>تسجيل فيديو</span></button>
+                <button type="button" onclick="openNativeComplaintCamera('video')" class="bg-neutral-900 text-white font-bold py-4 rounded-2xl text-xs flex flex-col items-center gap-2"><span class="text-2xl">🎥</span><span>تسجيل فيديو</span></button>
             </div>
             <div id="bkl-video-capture-panel" class="hidden p-3">
                 <video id="bkl-complaint-video-preview" autoplay muted playsinline class="w-full aspect-video bg-black rounded-xl object-cover"></video>
