@@ -2514,6 +2514,8 @@ let bklComplaintCameraMode = 'photo';
 let bklComplaintVideoStream = null;
 let bklComplaintVideoRecorder = null;
 let bklComplaintVideoChunks = [];
+let bklComplaintVideoReadyPromise = null;
+let bklComplaintVideoReady = false;
 
 function ensureComplaintCameraModal() {
     let modal = document.getElementById('bkl-complaint-camera-modal');
@@ -2590,49 +2592,95 @@ async function startComplaintVideoCapture() {
     bklComplaintCameraMode = 'video';
     const choice = document.getElementById('bkl-camera-choice-buttons');
     const panel = document.getElementById('bkl-video-capture-panel');
-    if (choice) choice.classList.add('hidden');
-    if (panel) panel.classList.remove('hidden');
     const startBtn = document.getElementById('bkl-video-start-btn');
     const stopBtn = document.getElementById('bkl-video-stop-btn');
-    if (startBtn) { startBtn.disabled=false; startBtn.classList.remove('hidden'); startBtn.classList.remove('opacity-50'); }
-    if (stopBtn) { stopBtn.disabled=true; stopBtn.classList.add('opacity-50'); }
     const preview = document.getElementById('bkl-complaint-video-preview');
+    if (choice) choice.classList.add('hidden');
+    if (panel) panel.classList.remove('hidden');
+    if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.classList.add('opacity-50');
+        startBtn.textContent = '⏳ تجهيز الكاميرا...';
+    }
+    if (stopBtn) { stopBtn.disabled = true; stopBtn.classList.add('opacity-50'); }
+    bklComplaintVideoReady = false;
     try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === 'undefined' || !window.isSecureContext) {
-            alert('تسجيل الفيديو داخل الصفحة يحتاج إلى HTTPS ومتصفح يدعم الكاميرا.');
-            cleanupComplaintVideoCapture();
-            return;
+            throw new Error('SECURE_CONTEXT_REQUIRED');
         }
-        bklComplaintVideoStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}, audio:true});
+        // Keep the promise so a fast tap on "بدء التصوير" waits for the camera instead of reporting "not ready".
+        bklComplaintVideoReadyPromise = navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' } },
+            audio: true
+        });
+        bklComplaintVideoStream = await bklComplaintVideoReadyPromise;
+        if (!bklComplaintVideoStream) throw new Error('NO_STREAM');
+        bklComplaintVideoReady = true;
         if (preview) {
             preview.srcObject = bklComplaintVideoStream;
             preview.muted = true;
+            preview.autoplay = true;
             preview.playsInline = true;
             await preview.play().catch(()=>{});
         }
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50');
+            startBtn.textContent = '▶️ بدء التصوير';
+        }
     } catch (err) {
+        bklComplaintVideoReady = false;
+        bklComplaintVideoReadyPromise = null;
         cleanupComplaintVideoCapture();
-        alert('تعذر فتح الكاميرا. اسمح للمتصفح باستخدام الكاميرا والميكروفون ثم حاول مرة أخرى.');
+        const msg = err && err.message === 'SECURE_CONTEXT_REQUIRED'
+            ? 'تسجيل الفيديو داخل الصفحة يحتاج إلى HTTPS ومتصفح يسمح بالكاميرا والميكروفون.'
+            : 'تعذر فتح الكاميرا. اسمح للمتصفح باستخدام الكاميرا والميكروفون ثم حاول مرة أخرى.';
+        alert(msg);
     }
 }
 
-function beginComplaintVideoRecording() {
-    if (!bklComplaintVideoStream) {
-        alert('الكاميرا غير جاهزة بعد.');
-        return;
-    }
+async function beginComplaintVideoRecording() {
     try {
-        const preferred = ['video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+        // If the user taps immediately, wait for getUserMedia to finish.
+        if (!bklComplaintVideoStream && bklComplaintVideoReadyPromise) {
+            bklComplaintVideoStream = await bklComplaintVideoReadyPromise;
+        }
+        if (!bklComplaintVideoStream) {
+            alert('الكاميرا لم تكتمل جاهزيتها بعد. انتظر ظهور معاينة الكاميرا ثم اضغط بدء التصوير.');
+            return;
+        }
+        if (!bklComplaintVideoReady) bklComplaintVideoReady = true;
+        const preferred = [
+            'video/mp4;codecs=h264,aac',
+            'video/mp4',
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/webm'
+        ];
         const mime = preferred.find(t => MediaRecorder.isTypeSupported(t)) || '';
         bklComplaintVideoChunks = [];
-        bklComplaintVideoRecorder = mime ? new MediaRecorder(bklComplaintVideoStream,{mimeType:mime}) : new MediaRecorder(bklComplaintVideoStream);
-        bklComplaintVideoRecorder.ondataavailable = e => { if(e.data && e.data.size) bklComplaintVideoChunks.push(e.data); };
+        bklComplaintVideoRecorder = mime
+            ? new MediaRecorder(bklComplaintVideoStream, { mimeType: mime })
+            : new MediaRecorder(bklComplaintVideoStream);
+        bklComplaintVideoRecorder.ondataavailable = e => {
+            if (e.data && e.data.size) bklComplaintVideoChunks.push(e.data);
+        };
         bklComplaintVideoRecorder.start(500);
-        const startBtn=document.getElementById('bkl-video-start-btn');
-        const stopBtn=document.getElementById('bkl-video-stop-btn');
-        if(startBtn){startBtn.disabled=true;startBtn.classList.add('opacity-50');startBtn.textContent='🔴 جارٍ التصوير...';}
-        if(stopBtn){stopBtn.disabled=false;stopBtn.classList.remove('opacity-50');}
-    } catch(err){ alert('تعذر بدء تسجيل الفيديو.'); }
+        const startBtn = document.getElementById('bkl-video-start-btn');
+        const stopBtn = document.getElementById('bkl-video-stop-btn');
+        if (startBtn) {
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50');
+            startBtn.textContent = '🔴 جارٍ التصوير...';
+        }
+        if (stopBtn) {
+            stopBtn.disabled = false;
+            stopBtn.classList.remove('opacity-50');
+        }
+    } catch (err) {
+        console.error('Complaint video recording error:', err);
+        alert('تعذر بدء تسجيل الفيديو. تأكد من السماح بالكاميرا والميكروفون ثم حاول مرة أخرى.');
+    }
 }
 
 function stopComplaintVideoCapture(attach) {
@@ -2654,7 +2702,7 @@ function stopComplaintVideoCapture(attach) {
 
 function cleanupComplaintVideoCapture() {
     if (bklComplaintVideoStream) bklComplaintVideoStream.getTracks().forEach(t=>t.stop());
-    bklComplaintVideoStream = null; bklComplaintVideoRecorder = null; bklComplaintVideoChunks = [];
+    bklComplaintVideoStream = null; bklComplaintVideoRecorder = null; bklComplaintVideoChunks = []; bklComplaintVideoReadyPromise = null; bklComplaintVideoReady = false;
     const video = document.getElementById('bkl-complaint-video-preview');
     if (video) video.srcObject = null;
     const choice = document.getElementById('bkl-camera-choice-buttons');
