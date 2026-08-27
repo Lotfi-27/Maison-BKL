@@ -3989,19 +3989,12 @@ function printOrderInvoice(orderId, action = 'print') {
                 }
                 function closeInvoiceWindow() {
                     try {
-                        if (window.opener && !window.opener.closed) {
-                            window.opener.focus();
-                            window.close();
+                        if (window.parent && window.parent !== window && typeof window.parent.closeInvoiceWindow === 'function') {
+                            window.parent.closeInvoiceWindow();
                             return;
                         }
                     } catch(e) {}
-                    try {
-                        if (window.history.length > 1) {
-                            window.history.go(-1);
-                            return;
-                        }
-                    } catch(e) {}
-                    // لا نغلق التطبيق الرئيسي إذا كانت الفاتورة هي نفس نافذة المتجر.
+                    try { window.close(); } catch(e) {}
                 }
                 window.onload = function() { setTimeout(function(){ window.print(); }, 120); };
             <\/script>
@@ -4026,13 +4019,35 @@ function printOrderInvoice(orderId, action = 'print') {
         return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=800,height=900');
-    if (!printWindow) {
-        alert('تعذر فتح نافذة الفاتورة. يرجى السماح بالنوافذ المنبثقة من المتجر.');
-        return;
+    // نافذة الفاتورة تُعرض كنافذة داخل المتجر مثل نافذة تعديل الطلب،
+    // حتى يكون زر الإغلاق مسؤولاً عن إغلاق نافذة الفاتورة فقط.
+    let invoiceModal = document.getElementById('invoice-print-modal');
+    if (!invoiceModal) {
+        invoiceModal = document.createElement('div');
+        invoiceModal.id = 'invoice-print-modal';
+        invoiceModal.className = 'fixed inset-0 z-[999999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4';
+        invoiceModal.innerHTML = `
+            <div class="bg-white w-full max-w-5xl h-[94vh] rounded-2xl shadow-2xl relative overflow-hidden" dir="rtl">
+                <button type="button" onclick="closeInvoiceWindow()" aria-label="إغلاق" title="إغلاق" class="absolute top-3 left-3 z-20 w-9 h-9 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-700 hover:text-rose-600 text-lg font-bold flex items-center justify-center">✕</button>
+                <iframe id="invoice-print-frame" title="فاتورة الشراء" class="w-full h-full border-0"></iframe>
+            </div>`;
+        document.body.appendChild(invoiceModal);
     }
-    printWindow.document.write(invoiceHtml);
-    printWindow.document.close();
+    invoiceModal.classList.remove('hidden');
+    invoiceModal.style.display = 'flex';
+    invoiceModal.style.pointerEvents = 'auto';
+    const frame = document.getElementById('invoice-print-frame');
+    if (frame) frame.srcdoc = invoiceHtml;
+}
+
+function closeInvoiceWindow() {
+    const modal = document.getElementById('invoice-print-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+    modal.style.pointerEvents = 'none';
+    const frame = document.getElementById('invoice-print-frame');
+    if (frame) frame.srcdoc = '';
 }
 
 function saveOrderInvoice(orderId) {
