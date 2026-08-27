@@ -2440,8 +2440,12 @@ function chatReadFileAsDataURL(file) {
 
 async function collectChatAttachments(inputId) {
     const input = document.getElementById(inputId);
-    if (!input || !input.files || !input.files.length) return [];
-    const files = Array.from(input.files);
+    if (!input) return [];
+    // ملفات الكاميرا تحفظ مؤقتاً خارج FileList لأن بعض هواتف Safari لا تسمح
+    // بإنشاء/تعديل DataTransfer للـ input المخفي.
+    const cameraFiles = Array.isArray(input._cameraFiles) ? input._cameraFiles : [];
+    const files = [...Array.from(input.files || []), ...cameraFiles];
+    if (!files.length) return [];
     // لا يوجد حد اصطناعي لحجم الصور أو الفيديوهات هنا.
     // نتحقق فقط من نوع الملف، ثم نرسله للطرف الآخر.
     const allowed = files.filter(file =>
@@ -2459,16 +2463,31 @@ async function collectChatAttachments(inputId) {
 
 function removeChatSelectedFile(inputId, index, previewId) {
     const input = document.getElementById(inputId);
-    if (!input || !input.files) return;
-    const dt = new DataTransfer();
-    Array.from(input.files).forEach((file, i) => { if (i !== index) dt.items.add(file); });
-    input.files = dt.files;
+    if (!input) return;
+    const normalFiles = Array.from(input.files || []);
+    const cameraFiles = Array.isArray(input._cameraFiles) ? input._cameraFiles : [];
+    if (index < normalFiles.length) {
+        try {
+            if (typeof DataTransfer !== 'undefined') {
+                const dt = new DataTransfer();
+                normalFiles.forEach((file, i) => { if (i !== index) dt.items.add(file); });
+                input.files = dt.files;
+            } else {
+                // إذا لم يدعم الهاتف DataTransfer، لا نحذف من FileList بل نتركه كما هو.
+                // ملفات الكاميرا (المضافة داخلياً) تبقى قابلة للحذف أدناه.
+            }
+        } catch (_) {}
+    } else {
+        const cameraIndex = index - normalFiles.length;
+        cameraFiles.splice(cameraIndex, 1);
+        input._cameraFiles = cameraFiles;
+    }
     renderChatAttachmentPreview(inputId, previewId);
 }
 
 function clearChatSelectedFiles(inputId, previewId) {
     const input = document.getElementById(inputId);
-    if (input) input.value = '';
+    if (input) { input.value = ''; input._cameraFiles = []; }
     const preview = document.getElementById(previewId);
     if (preview) preview.innerHTML = '';
 }
@@ -2477,7 +2496,7 @@ function renderChatAttachmentPreview(inputId, previewId) {
     const input = document.getElementById(inputId);
     const preview = document.getElementById(previewId);
     if (!input || !preview) return;
-    const files = Array.from(input.files || []);
+    const files = [...Array.from(input.files || []), ...(Array.isArray(input._cameraFiles) ? input._cameraFiles : [])];
     preview.innerHTML = files.length ? `
         <div class="flex items-center justify-between gap-2 mb-1 px-1">
             <span class="text-[9px] font-bold text-neutral-500">المرفقات المحددة (${files.length})</span>
@@ -2591,15 +2610,16 @@ function handleNativeComplaintCameraFile(input) {
 function attachComplaintCameraFile(file) {
     const targetInput = document.getElementById(`${bklComplaintCameraPrefix}-file-input`);
     const preview = document.getElementById(`${bklComplaintCameraPrefix}-attachment-preview`);
-    if (!targetInput || !preview) return;
+    if (!targetInput || !preview || !file) return;
     try {
-        const dt = new DataTransfer();
-        Array.from(targetInput.files || []).forEach(f => dt.items.add(f));
-        dt.items.add(file);
-        targetInput.files = dt.files;
+        if (!Array.isArray(targetInput._cameraFiles)) targetInput._cameraFiles = [];
+        targetInput._cameraFiles.push(file);
         renderChatAttachmentPreview(targetInput.id, preview.id);
         closeComplaintCamera();
-    } catch(e) { alert('تعذر إرفاق الصورة أو الفيديو. استخدم زر الملفات إذا لزم الأمر.'); }
+    } catch(e) {
+        console.error('Camera attachment error:', e);
+        alert('تعذر إرفاق الصورة. حاول مرة أخرى أو استخدم زر الملفات.');
+    }
 }
 
 function closeComplaintCamera() {
@@ -2776,7 +2796,7 @@ async function sendComplaintReply() {
     }
 
     if (input) input.value = '';
-    if (fileInput) fileInput.value = '';
+    if (fileInput) { fileInput.value = ''; fileInput._cameraFiles = []; }
     const preview = document.getElementById('owner-chat-attachment-preview');
     if (preview) preview.innerHTML = '';
     renderComplaintChatMessages(complaint);
@@ -2895,7 +2915,7 @@ async function sendCustomerComplaintMessage() {
 
     input.value = '';
     const fileInput = document.getElementById('customer-chat-file-input');
-    if (fileInput) fileInput.value = '';
+    if (fileInput) { fileInput.value = ''; fileInput._cameraFiles = []; }
     const preview = document.getElementById('customer-chat-attachment-preview');
     if (preview) preview.innerHTML = '';
     renderCustomerComplaintChatMessages(complaint);
@@ -4144,6 +4164,28 @@ function printOrderInvoice(orderId, action = 'print') {
 
 
 
+<script id="bkl-order-windows-safe-final">
+(function(){
+  'use strict';
+  const ids=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
+  function hide(id){const m=document.getElementById(id);if(!m)return;m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}
+  function normalize(){
+    ids.forEach(id=>{const m=document.getElementById(id);if(!m)return;m.style.zIndex='2147483000';m.style.pointerEvents=m.classList.contains('hidden')?'none':'auto';});
+  }
+  window.closeAllBKLOrderWindows=function(){ids.forEach(hide);};
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape')return;
+    for(let i=ids.length-1;i>=0;i--){const m=document.getElementById(ids[i]);if(m&&!m.classList.contains('hidden')&&m.style.display!=='none'){hide(ids[i]);e.preventDefault();break;}}
+  });
+  document.addEventListener('click',function(e){
+    const close=e.target.closest?.('[data-close],[data-act="close"],.bkl-om-x,[data-bkl-close-editor]');
+    if(close){const m=close.closest('#order-preview-modal,#order-editor-modal,#bkl-modern-order-modal');if(m){e.preventDefault();e.stopPropagation();hide(m.id);return;}}
+    const back=e.target.closest?.('.bkl-om-backdrop');
+    if(back&&e.target===back){const m=back.closest('#bkl-modern-order-modal');if(m)hide(m.id);}
+  });
+  normalize();
+})();
+<\/script>
 </body>
         </html>
     `;
@@ -9135,111 +9177,7 @@ document.addEventListener('DOMContentLoaded', function(){
     pointer-events:auto!important;
 }
 </style>
-<script id="bkl-order-windows-top-layer-fix-script">
-(function(){
-    'use strict';
-    const ORDER_MODAL_IDS=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
-    const TOP_Z='2147483000';
 
-    function get(id){ return document.getElementById(id); }
-
-    function promote(id){
-        const modal=get(id);
-        if(!modal) return;
-
-        /* أهم إصلاح: النافذة يجب أن تكون ابناً مباشراً لـ body.
-           إذا بقيت داخل owner-dashboard-modal أو أي حاوية أخرى،
-           فإن z-index الخاص بها يبقى محصوراً داخل stacking context للحاوية. */
-        if(modal.parentElement!==document.body){
-            document.body.appendChild(modal);
-        }
-
-        modal.style.setProperty('position','fixed','important');
-        modal.style.setProperty('inset','0','important');
-        modal.style.setProperty('z-index',TOP_Z,'important');
-        modal.style.setProperty('isolation','isolate','important');
-
-        if(modal.classList.contains('hidden') || modal.style.display==='none'){
-            modal.style.setProperty('pointer-events','none','important');
-        }else{
-            modal.style.setProperty('display','flex','important');
-            modal.style.setProperty('pointer-events','auto','important');
-        }
-    }
-
-    function promoteAll(){ ORDER_MODAL_IDS.forEach(promote); }
-
-    function hideOtherModals(activeId){
-        ORDER_MODAL_IDS.forEach(id=>{
-            if(id===activeId) return;
-            const m=get(id);
-            if(!m) return;
-            m.classList.add('hidden');
-            m.style.setProperty('display','none','important');
-            m.style.setProperty('pointer-events','none','important');
-        });
-    }
-
-    function repairOpenModal(){
-        let active=null;
-        for(let i=ORDER_MODAL_IDS.length-1;i>=0;i--){
-            const m=get(ORDER_MODAL_IDS[i]);
-            if(m && !m.classList.contains('hidden') && m.style.display!=='none'){
-                active=m;
-                break;
-            }
-        }
-        if(active){
-            hideOtherModals(active.id);
-            promote(active.id);
-        }else{
-            promoteAll();
-        }
-    }
-
-    /* التقاط لحظة إنشاء النافذة قبل أن تبقى تحت لوحة التحكم. */
-    const observer=new MutationObserver(function(records){
-        let relevant=false;
-        for(const record of records){
-            for(const node of record.addedNodes){
-                if(!(node instanceof HTMLElement)) continue;
-                if(ORDER_MODAL_IDS.includes(node.id) || ORDER_MODAL_IDS.some(id=>node.querySelector?.('#'+id))){
-                    relevant=true;
-                }
-            }
-            if(record.type==='attributes' && ORDER_MODAL_IDS.includes(record.target.id)) relevant=true;
-        }
-        if(relevant){
-            ORDER_MODAL_IDS.forEach(promote);
-            repairOpenModal();
-        }
-    });
-
-    function start(){
-        promoteAll();
-        observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
-        setTimeout(promoteAll,50);
-        setTimeout(promoteAll,200);
-    }
-
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
-    else start();
-
-    /* ضمان إضافي عند استدعاء دوال العرض/التعديل من أزرار الطلبات. */
-    ['previewOrder','editOrderPrompt','modernView'].forEach(function(name){
-        const fn=window[name];
-        if(typeof fn!=='function' || fn.__bklTopLayerWrapped) return;
-        const wrapped=function(){
-            const result=fn.apply(this,arguments);
-            setTimeout(repairOpenModal,0);
-            setTimeout(repairOpenModal,30);
-            return result;
-        };
-        wrapped.__bklTopLayerWrapped=true;
-        window[name]=wrapped;
-    });
-})();
-</script>
 
 <!-- BKL SAFE ORDER EDIT FIX V16 -->
 <script id="bkl-safe-order-edit-v16">
@@ -9791,77 +9729,5 @@ document.addEventListener('DOMContentLoaded', function(){
   `; document.head.appendChild(style);
 
     // تم حذف معالج النقر العام القديم: كان يلتقط أزرار نوافذ الفواتير أيضاً ويشغل أكثر من دالة في النقرة الواحدة.
-})();
-</script>
-
-<script id="bkl-order-window-manager-final">
-(function(){
-  const ids=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
-  function el(id){return document.getElementById(id);}
-  function hide(id){const m=el(id);if(m){m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}}
-  function hideAll(){ids.forEach(hide);}
-  function normalize(){ids.forEach(id=>{const m=el(id);if(m&&!m.classList.contains('hidden')){m.style.display='flex';m.style.pointerEvents='auto';m.style.zIndex='100000';}});}
-  window.closeAllBKLOrderWindows=hideAll;
-
-  // تغليف دوال الطلبات الموجودة أصلاً لضمان عدم تداخل النوافذ.
-  ['previewOrder','editOrderPrompt','updateOrderStatus','deleteOrder','printOrderInvoice'].forEach(name=>{
-    const fn=window[name];
-    if(typeof fn!=='function'||fn.__bklWindowSafe)return;
-    const wrapped=function(){
-      if(name==='previewOrder') ids.filter(x=>x!=='order-preview-modal').forEach(hide);
-      else if(name==='editOrderPrompt') ids.filter(x=>x!=='order-editor-modal').forEach(hide);
-      else hideAll();
-      const result=fn.apply(this,arguments);
-      setTimeout(normalize,0);
-      return result;
-    };
-    wrapped.__bklWindowSafe=true;
-    window[name]=wrapped;
-  });
-
-  // كل نافذة طلب جديدة تصبح النافذة النشطة الوحيدة.
-  const obs=new MutationObserver(function(ms){
-    for(const mu of ms){
-      for(const n of mu.addedNodes){
-        if(!(n instanceof HTMLElement))continue;
-        for(const id of ids){
-          const m=n.id===id?n:n.querySelector?.('#'+id);
-          if(m){
-            ids.filter(x=>x!==id).forEach(hide);
-            m.style.zIndex='100000';m.style.pointerEvents='auto';
-          }
-        }
-      }
-    }
-    normalize();
-  });
-  obs.observe(document.body,{childList:true,subtree:true});
-
-  // إغلاق آمن بالنقر على X أو الخلفية أو Escape.
-  document.addEventListener('click',function(e){
-    const close=e.target.closest?.('[data-close],[data-act="close"],.bkl-om-x');
-    if(close){
-      const m=close.closest('#order-preview-modal,#order-editor-modal,#bkl-modern-order-modal');
-      if(m){e.preventDefault();e.stopPropagation();hide(m.id);return;}
-    }
-    const back=e.target.closest?.('.bkl-om-backdrop');
-    if(back&&e.target===back){const m=back.closest('#bkl-modern-order-modal');if(m)hide(m.id);}
-  },true);
-  document.addEventListener('keydown',function(e){
-    if(e.key!=='Escape')return;
-    for(let i=ids.length-1;i>=0;i--){const m=el(ids[i]);if(m&&!m.classList.contains('hidden')&&m.style.display!=='none'){hide(ids[i]);e.preventDefault();break;}}
-  },true);
-
-  // إصلاح مباشر لأزرار قائمة الطلبات، مع أولوية للـ data-order-action.
-  document.addEventListener('click',function(e){
-    const btn=e.target.closest?.('[data-order-action]');
-    if(!btn)return;
-    const id=btn.getAttribute('data-order-id');
-    const action=btn.getAttribute('data-order-action');
-    if(!id||!action)return;
-    // إذا كانت نافذة فوق القائمة، أغلقها أولاً بدلاً من تركها حاجباً للنقرات.
-    const active=document.querySelector('#order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal');
-    if(active&&!active.contains(btn))hide(active.id);
-  },true);
 })();
 </script>
