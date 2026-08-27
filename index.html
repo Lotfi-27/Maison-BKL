@@ -2255,16 +2255,19 @@ function openComplaintModal() {
 function handleComplaintMediaSelection(input) {
     if (!input.files || input.files.length === 0) return;
     Array.from(input.files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            currentComplaintMediaFiles.push({
-                type: file.type.startsWith('video') ? 'video' : 'image',
-                url: e.target.result,
-                name: file.name
-            });
-            renderComplaintMediaPreview();
-        };
-        reader.readAsDataURL(file);
+        if (file.type && file.type.startsWith('image/')) {
+            chatReadFileAsDataURL(file).then(media => {
+                currentComplaintMediaFiles.push({type:'image',url:media.data,name:media.name,size:media.size,originalSize:media.originalSize,compressed:true});
+                renderComplaintMediaPreview();
+            }).catch(err => console.error('تعذر ضغط الصورة:', err));
+        } else {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentComplaintMediaFiles.push({type:file.type.startsWith('video')?'video':'image',url:e.target.result,name:file.name});
+                renderComplaintMediaPreview();
+            };
+            reader.readAsDataURL(file);
+        }
     });
     input.value = '';
 }
@@ -2430,13 +2433,38 @@ function deleteComplaintChatMedia(complaintId, messageIndex, mediaIndex) {
 
 function chatReadFileAsDataURL(file) {
     return new Promise((resolve, reject) => {
+        if (file.type && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const MAX_SIZE = 1280;
+                    let w = img.naturalWidth || img.width;
+                    let h = img.naturalHeight || img.height;
+                    const scale = Math.min(1, MAX_SIZE / Math.max(w, h));
+                    w = Math.max(1, Math.round(w * scale));
+                    h = Math.max(1, Math.round(h * scale));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    ctx.drawImage(img, 0, 0, w, h);
+                    let type = 'image/webp';
+                    let data = canvas.toDataURL(type, 0.70);
+                    if (!data.startsWith('data:image/webp')) {
+                        type = 'image/jpeg';
+                        data = canvas.toDataURL(type, 0.70);
+                    }
+                    resolve({name:file.name,type,size:Math.round(data.length*3/4),originalSize:file.size,compressed:true,data});
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+            return;
+        }
         const reader = new FileReader();
-        reader.onload = () => resolve({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            data: reader.result
-        });
+        reader.onload = () => resolve({name:file.name,type:file.type,size:file.size,data:reader.result});
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
