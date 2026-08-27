@@ -3871,7 +3871,10 @@ function printOrderInvoice(orderId, action = 'print') {
             </style>
         </head>
         <body>
-            <div class="invoice-actions" data-no-print><button type="button" class="close-btn" onclick="closeInvoiceWindow()" aria-label="إغلاق">×</button></div>
+            <div class="invoice-actions" data-no-print>
+                <button type="button" class="save-btn" onclick="saveInvoiceFile()">💾 حفظ الفاتورة</button>
+                <button type="button" class="close-btn" onclick="closeInvoiceWindow()">↩️ رجوع / إغلاق</button>
+            </div>
 
             <div class="invoice-box">
                 <div class="header">
@@ -3974,11 +3977,6 @@ function printOrderInvoice(orderId, action = 'print') {
                 }
                 function closeInvoiceWindow() {
                     try { window.close(); } catch(e) {}
-                    setTimeout(function(){
-                        if (!window.closed) {
-                            try { window.history.back(); } catch(e) {}
-                        }
-                    }, 100);
                 }
                 window.onload = function() { setTimeout(function(){ window.print(); }, 120); };
             <\/script>
