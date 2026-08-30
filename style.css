@@ -39,38 +39,35 @@
     transform: scale(0.95);
 }
 
-/* النوافذ المنبثقة Modal Styles المتوافقة مع الهواتف */
+/* النوافذ المنبثقة Modal Styles العائمة والمتوافقة مع الهاتف */
 .modal {
   display: none; 
-  position: fixed; 
-  z-index: 9999; 
+  position: fixed !important; 
+  z-index: 99999 !important; 
   left: 0;
   top: 0;
   width: 100%; 
   height: 100%; 
-  /* استخدام dvh ليتكيف ارتفاع الشاشة فور ظهور لوحة المفاتيح */
   height: 100dvh; 
-  overflow-y: auto; 
+  overflow-y: auto !important; 
   background-color: rgba(0,0,0,0.6); 
   direction: rtl;
-  /* تمركز النافذة من الأعلى لمنع حجبها بلوحة المفاتيح */
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 30px;
-  padding-bottom: 30px;
+  /* ضمان التموضع في الأعلى لتفادي لوحة المفاتيح */
+  padding-top: 20px;
+  padding-bottom: 20px;
 }
 
 .modal-content {
   background-color: #fff;
-  margin: 0 auto; 
-  padding: 25px;
+  position: relative;
+  margin: 10px auto !important; /* تجنب تمركزها في المنتصف المطلق لكي لا تحجبها اللوحة */
+  padding: 20px;
   border-radius: 12px;
-  width: 90%;
-  max-width: 550px;
-  max-height: calc(100dvh - 60px);
-  overflow-y: auto; /* السماح بالتمرير الداخلي بسلاسة */
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  width: 92%;
+  max-width: 500px;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto !important; /* السماح بالتمرير الداخلي عند ظهور لوحة المفاتيح */
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
 }
 
 .close-btn {
