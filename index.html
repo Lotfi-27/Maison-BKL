@@ -3293,7 +3293,6 @@ function renderOrdersList() {
                     <button data-order-action="confirm" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✅ تأكيد الطلب</button>
                     <button type="button" data-order-action="edit" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✏️ تعديل الطلب</button>
                     <button data-order-action="invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-neutral-800 hover:bg-neutral-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">🖨️ طباعة الفاتورة</button>
-                    <button data-order-action="save-invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">💾 حفظ الفاتورة</button>
                     <button data-order-action="delete" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">🗑️ حذف</button>
                 </div>
             </div>
@@ -3334,7 +3333,6 @@ function bindOrderManagementEventsV17() {
                 case 'confirm': updateOrderStatus(id, 'مؤكد'); break;
                 case 'edit': editOrderPrompt(id); break;
                 case 'invoice': printOrderInvoice(id); break;
-                case 'save-invoice': saveOrderInvoice(id); break;
                 case 'delete': deleteOrder(id); break;
             }
         } catch (error) {
@@ -4350,35 +4348,6 @@ function bklDownloadInvoiceBlob(blob, fileName, order) {
     }
 }
 
-function saveOrderInvoice(orderId) {
-    try {
-        return printOrderInvoice(orderId, 'save');
-    } catch (error) {
-        console.error('BKL save invoice button error:', error);
-        alert('تعذر حفظ الفاتورة. يرجى المحاولة مرة أخرى.');
-    }
-}
-
-// BKL: ضمان مباشر لزر حفظ الفاتورة حتى لو أُعيد إنشاء قائمة الطلبات.
-(function(){
-    if (window.__bklSaveInvoiceDirectBound) return;
-    window.__bklSaveInvoiceDirectBound = true;
-    document.addEventListener('click', function(event){
-        const button = event.target && event.target.closest ? event.target.closest('[data-order-action="save-invoice"]') : null;
-        if (!button) return;
-        const id = button.getAttribute('data-order-id');
-        if (!id) return;
-        if (button.__bklSaveDirectBusy) return;
-        button.__bklSaveDirectBusy = true;
-        try {
-            event.preventDefault();
-            event.stopPropagation();
-            saveOrderInvoice(id);
-        } finally {
-            setTimeout(function(){ button.__bklSaveDirectBusy = false; }, 500);
-        }
-    }, true);
-})();
 
 // تحديث خفيف ومؤجل عند الحاجة فقط بدلاً من إعادة رسم القائمة كل 5 ثوانٍ.
 let bklOrdersRenderTimer = null;
@@ -4447,9 +4416,9 @@ function openOwnerDashboard() {
                     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                         <h4 class="text-xs font-bold text-orange-800">👥 سجل أصحاب الكريدي المستحقين <span id="credit-debtors-count" class="text-neutral-500 font-normal">(0)</span></h4>
                         <div class="flex gap-2">
-                            <button type="button" onclick="openCreditDebtorsRegistryViewer()" class="bg-orange-500 hover:bg-orange-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer">👁️ عرض السجل</button>
-                            <button type="button" onclick="printCreditDebtorsRegistry()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer">🖨️ طباعة / PDF</button>
-                            <button type="button" onclick="renderCreditDebtorsRegistry()" class="bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-[10px] font-bold px-3 py-1.5 rounded-lg cursor-pointer">🔄 تحديث</button>
+                            
+                            
+                            
                         </div>
                     </div>
                     <p class="text-[9px] text-orange-700 mb-2">يظهر هنا فقط من لديه مبلغ متبقٍ. عند تصفير الحساب يُحذف تلقائياً من هذا السجل.</p>
@@ -8383,7 +8352,7 @@ function buildCreditDebtorsRegistryRows(debtors) {
                 </tr>`).join('');
             w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>سجل أصحاب الكريدي المستحقين - Maison BKL</title><style>
                 *{box-sizing:border-box}body{font-family:Arial,"Corps CS",sans-serif;background:#f5f5f5;color:#111;margin:0;padding:25px}.sheet{max-width:1250px;margin:auto;background:#fff;padding:28px;border-radius:16px}.head{display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:3px solid #f59e0b;padding-bottom:14px}.head h1{font-size:22px;margin:0}.head p{font-size:12px;color:#666;margin:5px 0 0}.actions{display:flex;gap:8px;margin:18px 0}.actions button{border:0;border-radius:9px;padding:10px 16px;font-weight:bold;cursor:pointer}.print{background:#f59e0b;color:#fff}.close{background:#e5e7eb;color:#111}.summary{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.card{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 15px;min-width:180px}.card b{display:block;font-size:11px;color:#9a3412;margin-bottom:4px}.card span{font-size:16px;font-weight:800}table{width:100%;border-collapse:collapse;margin-top:18px;font-size:10px}th,td{border:1px solid #e5e7eb;padding:8px;text-align:right;vertical-align:top}th{background:#111;color:#fff;font-weight:800}.debt-box{background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:5px;margin-bottom:5px;line-height:1.7}.debt{color:#b91c1c;font-weight:900}.paid{color:#047857;font-weight:900}.note{margin-top:18px;padding:10px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#92400e}@media print{body{background:#fff;padding:0}.sheet{max-width:none;border-radius:0;padding:8px}.actions{display:none}.head{border-bottom:2px solid #111}table{font-size:8px}.debt-box{break-inside:avoid}}
-            </style></head><body><div class="sheet"><div class="head"><div><h1>Maison BKL - متجر السوق الذكي</h1><p>سجل أصحاب الكريدي المستحقين</p></div><div><strong>التاريخ: ${escapeOrderHtml(getCurrentFullDateTime())}</strong></div></div><div class="actions"><button class="print" onclick="window.print()">🖨️ طباعة / حفظ PDF</button><button class="window-close" type="button" style="background:#dc2626!important;color:#fff!important;" onclick="window.parent.postMessage({type:'BKL_CLOSE_CREDIT_REGISTRY_PRINT_WINDOW'},'*'); return false;" aria-label="إغلاق نافذة طباعة سجل أصحاب الكريدي" title="إغلاق">✕</button></div><div class="summary"><div class="card"><b>عدد أصحاب الكريدي</b><span>${debtors.length}</span></div><div class="card"><b>إجمالي الدين المتبقي</b><span>${escapeOrderHtml(formatCreditAmount(totalDebt))}</span></div></div>${debtors.length ? `<table><thead><tr><th>#</th><th>الاسم واللقب</th><th>رقم الهاتف</th><th>العنوان</th><th>قسم الديون</th><th>الإجمالي</th><th>المسدد</th><th>المتبقي</th></tr></thead><tbody>${rows}</tbody></table>` : '<div style="padding:30px;text-align:center;color:#777">لا يوجد أصحاب كريدي مستحقون حالياً.</div>'}<div class="note">ملاحظة: هذا السجل يعرض فقط الحسابات التي لم تتم تصفيتها بالكامل. عند وصول المبلغ المتبقي إلى صفر يتم حذف الحساب من سجل أصحاب الكريدي المستحقين تلقائياً.</div></div></body></html>`);
+            </style></head><body><div class="sheet"><div class="head"><div><h1>Maison BKL - متجر السوق الذكي</h1><p>سجل أصحاب الكريدي المستحقين</p></div><div><strong>التاريخ: ${escapeOrderHtml(getCurrentFullDateTime())}</strong></div></div><div class="actions"><button class="window-close" type="button" style="background:#dc2626!important;color:#fff!important;" onclick="window.parent.postMessage({type:'BKL_CLOSE_CREDIT_REGISTRY_PRINT_WINDOW'},'*'); return false;" aria-label="إغلاق نافذة طباعة سجل أصحاب الكريدي" title="إغلاق">✕</button></div><div class="summary"><div class="card"><b>عدد أصحاب الكريدي</b><span>${debtors.length}</span></div><div class="card"><b>إجمالي الدين المتبقي</b><span>${escapeOrderHtml(formatCreditAmount(totalDebt))}</span></div></div>${debtors.length ? `<table><thead><tr><th>#</th><th>الاسم واللقب</th><th>رقم الهاتف</th><th>العنوان</th><th>قسم الديون</th><th>الإجمالي</th><th>المسدد</th><th>المتبقي</th></tr></thead><tbody>${rows}</tbody></table>` : '<div style="padding:30px;text-align:center;color:#777">لا يوجد أصحاب كريدي مستحقون حالياً.</div>'}<div class="note">ملاحظة: هذا السجل يعرض فقط الحسابات التي لم تتم تصفيتها بالكامل. عند وصول المبلغ المتبقي إلى صفر يتم حذف الحساب من سجل أصحاب الكريدي المستحقين تلقائياً.</div></div></body></html>`);
             w.document.close();
             setTimeout(() => { try { w.focus(); } catch(e) {} }, 150);
         }
