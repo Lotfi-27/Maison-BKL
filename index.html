@@ -1479,7 +1479,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
     <!-- ================= ADD CATEGORY MODAL ================= -->
     <div id="category-modal" class="hidden fixed inset-0 z-[999999] bg-neutral-900/50 backdrop-blur-sm">
-        <div id="category-modal-window" class="bg-white rounded-3xl w-[calc(100vw-32px)] max-w-sm p-5 flex flex-col gap-4 shadow-2xl" style="position:fixed!important; left:50%; top:50%; transform:translate(-50%,-50%); max-height:calc(100vh - 24px); overflow-y:auto; transition:transform 0.18s ease-out;">
+        <div id="category-modal-window" class="bg-white rounded-3xl w-[calc(100vw-32px)] max-w-sm p-5 flex flex-col gap-4 shadow-2xl" style="position:fixed!important; left:50%; top:50%; transform:translate(-50%,-50%); max-height:calc(100vh - 24px); overflow-y:auto; overflow-x:hidden; transition:top 0.12s ease-out, transform 0.12s ease-out; -webkit-overflow-scrolling:touch; box-sizing:border-box;">
             <h3 id="category-modal-title" class="text-sm font-bold text-neutral-900">إضافة تصنيف جديد</h3>
 
             <div class="flex flex-col gap-1">
@@ -1501,8 +1501,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
     <script>
     (function () {
-        // نافذة التصنيف مهيأة للهاتف: تبقى في المركز، وعند ظهور الكلافي
-        // يتم نقل مركزها تلقائياً إلى منتصف المساحة المرئية فقط.
+        // نافذة التصنيف: عند ظهور لوحة المفاتيح تصبح نافذة عائمة داخل
+        // المساحة المرئية فعلياً، بحيث لا تدخل لوحة المفاتيح فوقها.
         const modalWindow = () => document.getElementById('category-modal-window');
 
         function positionCategoryModal() {
@@ -1512,15 +1512,18 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
             const vv = window.visualViewport;
             if (!vv) {
+                win.style.left = '50%';
                 win.style.top = '50%';
                 win.style.maxHeight = 'calc(100vh - 24px)';
                 win.style.transform = 'translate(-50%, -50%)';
                 return;
             }
 
-            // ننتظر حتى يعيد الهاتف حساب أبعاد النافذة بعد فتح/إغلاق الكلافي.
             requestAnimationFrame(function () {
                 const keyboardOpen = (window.innerHeight - vv.height) > 80 || vv.height < window.innerHeight * 0.82;
+
+                win.style.left = '50%';
+
                 if (!keyboardOpen) {
                     win.style.top = '50%';
                     win.style.maxHeight = 'calc(100vh - 24px)';
@@ -1528,32 +1531,38 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                     return;
                 }
 
-                const safe = 12;
-                const availableHeight = Math.max(120, vv.height - safe * 2);
+                // عند فتح الكلافي لا نضع النافذة في منتصف الصفحة الأصلية؛
+                // نثبتها داخل الـ Visual Viewport فقط، أي فوق الكلافي مباشرة.
+                const safe = 8;
+                const visibleTop = Math.max(0, vv.offsetTop);
+                const availableHeight = Math.max(120, vv.height - (safe * 2));
+
+                win.style.top = (visibleTop + safe) + 'px';
                 win.style.maxHeight = availableHeight + 'px';
+                win.style.transform = 'translateX(-50%)';
 
-                // المركز الجديد هو مركز الجزء الظاهر من الشاشة، وليس مركز الصفحة خلف الكلافي.
-                const visibleCenter = vv.offsetTop + (vv.height / 2);
-                const rect = win.getBoundingClientRect();
-                const halfHeight = rect.height / 2;
-                const minCenter = vv.offsetTop + safe + halfHeight;
-                const maxCenter = vv.offsetTop + vv.height - safe - halfHeight;
-                const targetCenter = Math.min(maxCenter, Math.max(minCenter, visibleCenter));
-
-                win.style.top = targetCenter + 'px';
-                win.style.transform = 'translate(-50%, -50%)';
+                // إذا كان المؤشر داخل أحد حقول النافذة، نضمن بقاء الحقل داخل
+                // المساحة المرئية بعد أن تعيد لوحة المفاتيح حساب أبعادها.
+                const active = document.activeElement;
+                if (active && win.contains(active)) {
+                    setTimeout(function () {
+                        try { active.scrollIntoView({block:'nearest', inline:'nearest'}); } catch (e) {}
+                    }, 30);
+                }
             });
         }
 
         function resetCategoryModalPosition() {
             const win = modalWindow();
             if (!win) return;
+            win.style.left = '50%';
             win.style.top = '50%';
             win.style.maxHeight = 'calc(100vh - 24px)';
             win.style.transform = 'translate(-50%, -50%)';
         }
 
         window.addEventListener('resize', positionCategoryModal, { passive: true });
+        window.addEventListener('orientationchange', function () { setTimeout(positionCategoryModal, 120); }, { passive: true });
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', positionCategoryModal, { passive: true });
             window.visualViewport.addEventListener('scroll', positionCategoryModal, { passive: true });
@@ -1564,6 +1573,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 setTimeout(positionCategoryModal, 50);
                 setTimeout(positionCategoryModal, 180);
                 setTimeout(positionCategoryModal, 350);
+                setTimeout(positionCategoryModal, 600);
             }
         });
 
@@ -1574,6 +1584,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 const result = oldOpenCategory.apply(this, arguments);
                 resetCategoryModalPosition();
                 setTimeout(positionCategoryModal, 50);
+                setTimeout(positionCategoryModal, 180);
                 return result;
             };
         }
