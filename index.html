@@ -4285,42 +4285,76 @@ function printOrderInvoice(orderId, action = 'print') {
     `;
 
     if (action === 'save') {
-        // حفظ الفاتورة كـ PDF حقيقي. نفتح نافذة اختيار المكان أولاً (إن كانت مدعومة)
-        // ثم ننشئ الـ PDF ونكتبه في الملف الذي اختاره المستخدم.
+        // إنشاء PDF حقيقي بدون أي مكتبة خارجية: نرسم الفاتورة على Canvas ثم نغلف صورة JPEG داخل ملف PDF.
         const safeId = String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_');
         const fileName = `فاتورة-${safeId}.pdf`;
 
-        (async function () {
-            let fileHandle = null;
-            try {
-                // يجب استدعاء picker مباشرة من نقرة المستخدم قبل أي await.
-                if (typeof window.showSaveFilePicker === 'function') {
-                    fileHandle = await window.showSaveFilePicker({
-                        suggestedName: fileName,
-                        types: [{
-                            description: 'ملف PDF',
-                            accept: { 'application/pdf': ['.pdf'] }
-                        }]
-                    });
-                }
+        const makePdfFromJpeg = (jpegDataUrl, width, height) => {
+            const b64 = jpegDataUrl.split(',')[1];
+            const bin = atob(b64);
+            const img = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) img[i] = bin.charCodeAt(i);
+            const enc = new TextEncoder();
+            const objects = [];
+            const add = bytes => { objects.push(bytes); return objects.length; };
+            const txt = str => enc.encode(str);
+            const pageW = 595, pageH = 842;
+            const imgW = pageW - 40, imgH = imgW * height / width;
+            const content = `q\n${imgW.toFixed(2)} 0 0 ${imgH.toFixed(2)} 20 ${(pageH-imgH-20).toFixed(2)} cm\n/Im0 Do\nQ\n`;
+            const imageObj = add(null);
+            const contentObj = add(txt(`<< /Length ${enc.encode(content).length} >>\nstream\n${content}endstream`));
+            const pageObj = add(null);
+            const pagesObj = add(null);
+            const catalogObj = add(null);
+            objects[imageObj-1] = (() => {
+                const head = txt(`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`);
+                const tail = txt('\nendstream');
+                const out = new Uint8Array(head.length + img.length + tail.length);
+                out.set(head,0); out.set(img,head.length); out.set(tail,head.length+img.length); return out;
+            })();
+            objects[pageObj-1] = txt(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Im0 ${imageObj} 0 R >> >> /Contents ${contentObj} 0 R >>`);
+            objects[pagesObj-1] = txt(`<< /Type /Pages /Kids [${pageObj} 0 R] /Count 1 >>`);
+            objects[catalogObj-1] = txt(`<< /Type /Catalog /Pages ${pagesObj} 0 R >>`);
+            const chunks = [txt('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n')];
+            const offsets = [0]; let pos = chunks[0].length;
+            objects.forEach((obj,i) => { offsets[i+1]=pos; const h=txt(`${i+1} 0 obj\n`); const f=txt('\nendobj\n'); chunks.push(h,obj,f); pos += h.length+obj.length+f.length; });
+            const xrefPos=pos; const xref=[`xref\n0 ${objects.length+1}\n`,`0000000000 65535 f \n`];
+            for(let i=1;i<offsets.length;i++) xref.push(String(offsets[i]).padStart(10,'0')+' 00000 n \n');
+            xref.push(`trailer\n<< /Size ${objects.length+1} /Root ${catalogObj} 0 R >>\nstartxref\n${xrefPos}\n%%EOF`);
+            chunks.push(txt(xref.join('')));
+            const total=chunks.reduce((n,a)=>n+a.length,0), out=new Uint8Array(total); let at=0;
+            chunks.forEach(a=>{out.set(a,at);at+=a.length;});
+            return new Blob([out],{type:'application/pdf'});
+        };
 
-                const pdfBlob = await bklCreateInvoicePdf(invoiceHtml);
+        const canvas = document.createElement('canvas');
+        const scale = 2;
+        const W = 794, H = Math.max(1123, 420 + invoiceItems.length * 105);
+        canvas.width=W*scale; canvas.height=H*scale;
+        const ctx=canvas.getContext('2d'); ctx.scale(scale,scale);
+        ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle='#111'; ctx.direction='rtl'; ctx.textAlign='right';
+        const right=W-45; let y=55;
+        const line=(text,size=18,bold=false)=>{ctx.font=`${bold?'700':'400'} ${size}px Arial, "Segoe UI"`; ctx.fillStyle='#111'; ctx.fillText(String(text),right,y); y+=size+13;};
+        line(`Maison BKL - متجر السوق الذكي`,24,true);
+        line(`فاتورة شراء رقم #${order.id}`,20,true); y+=8;
+        ctx.strokeStyle='#d97706'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(45,y);ctx.lineTo(W-45,y);ctx.stroke();y+=28;
+        line(`معلومات الزبون`,18,true);
+        line(`الاسم واللقب: ${customerName}`,15); line(`الهاتف: ${customerPhone}`,15); line(`البلد: ${country}`,15); line(`الولاية: ${state}`,15); line(`البلدية: ${municipality}`,15); line(`العنوان: ${address}`,15); y+=8;
+        line(`تفاصيل الفاتورة`,18,true); line(`التاريخ: ${orderDate}`,15); line(`حالة الطلب: ${orderStatus}`,15); line(`طريقة الدفع: ${paymentMethod}`,15); y+=10;
+        ctx.fillStyle='#111'; ctx.fillRect(45,y,W-90,34); ctx.fillStyle='#fff'; ctx.font='700 13px Arial';
+        const cols=[{x:W-55,t:'المنتج'},{x:W-245,t:'سعر الوحدة'},{x:W-380,t:'المواصفات'},{x:W-535,t:'الكمية'},{x:W-690,t:'المجموع'}]; cols.forEach(c=>ctx.fillText(c.t,c.x,y+22)); y+=48;
+        ctx.fillStyle='#111';
+        invoiceItems.forEach(item=>{ const vals=[String(item.name),formatDZD(item.unitPriceDZD),String(item.specifications||''),String(item.quantity),formatDZD(item.subtotalDZD)]; ctx.font='14px Arial'; vals.forEach((v,i)=>ctx.fillText(v,cols[i].x,y)); y+=52; ctx.strokeStyle='#eee';ctx.beginPath();ctx.moveTo(45,y-18);ctx.lineTo(W-45,y-18);ctx.stroke(); });
+        y+=12; line(`مجموع المنتجات: ${formatDZD(productsSubtotalDZD)}`,16,true); line(`سعر التوصيل: ${formatDZD(shippingFeeDZD)}`,16); if(String(order.paymentMethod||'').toLowerCase()==='كريدي'&&order.creditRemainingAmount!==undefined){line(`إجمالي الفاتورة الأصلية: ${formatDZD(originalGrandTotalDZD)}`,16);line(`إجمالي المدفوع: ${formatDZD(Math.max(0,originalGrandTotalDZD-grandTotalDZD))}`,16);} line(`${String(order.paymentMethod||'').toLowerCase()==='كريدي'&&order.creditRemainingAmount!==undefined?'المبلغ المتبقي بعد التسديد':'المبلغ الإجمالي'}: ${formatDZD(grandTotalDZD)}`,20,true);
+        y=H-45; ctx.font='12px Arial';ctx.fillStyle='#777';ctx.fillText('شكراً لتسوقكم معنا!',right,y);
 
-                if (fileHandle) {
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(pdfBlob);
-                    await writable.close();
-                    notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بصيغة PDF بنجاح.`, 'invoice-saved');
-                    alert('تم حفظ الفاتورة بصيغة PDF بنجاح.');
-                } else {
-                    bklDownloadInvoiceBlob(pdfBlob, fileName, order);
-                }
-            } catch (error) {
-                if (error && error.name === 'AbortError') return;
-                console.error('BKL PDF invoice save error:', error);
-                alert('تعذر إنشاء ملف PDF. يرجى المحاولة مرة أخرى.');
-            }
-        })();
+        try {
+            const blob = makePdfFromJpeg(canvas.toDataURL('image/jpeg',0.92), canvas.width, canvas.height);
+            if (typeof window.showSaveFilePicker === 'function') {
+                window.showSaveFilePicker({suggestedName:fileName,types:[{description:'ملف PDF',accept:{'application/pdf':['.pdf']}}]}).then(async handle=>{const writable=await handle.createWritable();await writable.write(blob);await writable.close();alert('تم حفظ الفاتورة بصيغة PDF بنجاح.');}).catch(error=>{if(error&&error.name==='AbortError')return;bklDownloadInvoiceBlob(blob,fileName,order);});
+            } else bklDownloadInvoiceBlob(blob,fileName,order);
+        } catch(error) { console.error('BKL PDF creation error:',error); alert('تعذر إنشاء ملف PDF. يرجى المحاولة مرة أخرى.'); }
         return;
     }
 
@@ -4329,167 +4363,6 @@ function printOrderInvoice(orderId, action = 'print') {
     printWindow.document.close();
 }
 
-
-/* BKL: إنشاء PDF فعلي من شكل الفاتورة بدون أي مكتبة خارجية. */
-async function bklCreateInvoicePdf(invoiceHtml) {
-    const host = document.createElement('iframe');
-    host.style.cssText = 'position:fixed;left:-100000px;top:0;width:1200px;height:1000px;border:0;visibility:hidden;';
-    document.body.appendChild(host);
-
-    try {
-        const doc = host.contentDocument;
-        doc.open();
-        doc.write(invoiceHtml);
-        doc.close();
-
-        await new Promise(resolve => setTimeout(resolve, 250));
-        if (doc.fonts && doc.fonts.ready) {
-            try { await doc.fonts.ready; } catch (_) {}
-        }
-        const images = Array.from(doc.images || []);
-        await Promise.all(images.map(img => img.complete ? Promise.resolve() : new Promise(resolve => {
-            img.onload = img.onerror = resolve;
-        })));
-
-        const body = doc.body;
-        const width = 1200;
-        const height = Math.max(1, Math.ceil(Math.max(body.scrollHeight, body.offsetHeight, doc.documentElement.scrollHeight)));
-
-        const sourceHtml = `<!doctype html><html dir="rtl"><head><meta charset="utf-8"></head><body style="margin:0;width:${width}px;min-height:${height}px;">${body.innerHTML}</body></html>`;
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${width}" height="${height}"><foreignObject x="0" y="0" width="${width}" height="${height}">${sourceHtml.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</foreignObject></svg>`;
-
-        // SVG foreignObject يحتاج إلى HTML غير مُشفّر داخله، لذلك نعيد بناءه بشكل آمن.
-        const svgOpen = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${width}" height="${height}"><foreignObject x="0" y="0" width="${width}" height="${height}">`;
-        const svgClose = `</foreignObject></svg>`;
-        const svgHtml = `<div xmlns="http://www.w3.org/1999/xhtml" dir="rtl" style="width:${width}px;min-height:${height}px;"><style>${doc.head.innerHTML.replace(/<\/style>/gi,'')}</style>${body.innerHTML}</div>`;
-        const svgText = svgOpen + svgHtml + svgClose;
-        const svgBlob = new Blob([svgText], {type:'image/svg+xml;charset=utf-8'});
-        const svgUrl = URL.createObjectURL(svgBlob);
-
-        try {
-            const img = new Image();
-            await new Promise((resolve, reject) => {
-                img.onload = resolve;
-                img.onerror = () => reject(new Error('تعذر تحويل الفاتورة إلى صورة'));
-                img.src = svgUrl;
-            });
-
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error('Canvas غير متاح');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(img, 0, 0, width, height);
-
-            const pageW = 595;
-            const pageH = 842;
-            const pixelsPerPage = Math.floor(width * pageH / pageW);
-            const pageCount = Math.max(1, Math.ceil(height / pixelsPerPage));
-            const jpegPages = [];
-
-            for (let page = 0; page < pageCount; page++) {
-                const sy = page * pixelsPerPage;
-                const sh = Math.min(pixelsPerPage, height - sy);
-                const slice = document.createElement('canvas');
-                slice.width = width;
-                slice.height = sh;
-                const sctx = slice.getContext('2d');
-                sctx.fillStyle = '#ffffff';
-                sctx.fillRect(0, 0, width, sh);
-                sctx.drawImage(canvas, 0, sy, width, sh, 0, 0, width, sh);
-                const dataUrl = slice.toDataURL('image/jpeg', 0.92);
-                const base64 = dataUrl.split(',')[1];
-                const binary = atob(base64);
-                const bytes = new Uint8Array(binary.length);
-                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                jpegPages.push({bytes, height: sh});
-            }
-
-            return bklBuildImagePdf(jpegPages, width, pageW, pageH);
-        } finally {
-            URL.revokeObjectURL(svgUrl);
-        }
-    } finally {
-        try { host.remove(); } catch (_) {}
-    }
-}
-
-function bklBuildImagePdf(pages, pixelWidth, pageW, pageH) {
-    const enc = new TextEncoder();
-    const objects = [];
-    const addObject = body => { objects.push(body); return objects.length; };
-
-    const catalogId = addObject('');
-    const pagesId = addObject('');
-    const pageIds = [];
-
-    for (const page of pages) {
-        const imageId = addObject(null);
-        const contentId = addObject(null);
-        const pageId = addObject(null);
-        pageIds.push(pageId);
-        page._imageId = imageId;
-        page._contentId = contentId;
-    }
-
-    const imageObjs = [];
-    for (const page of pages) {
-        const imgHeader = `<< /Type /XObject /Subtype /Image /Width ${pixelWidth} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.bytes.length} >>\nstream\n`;
-        imageObjs.push({header: imgHeader, bytes: page.bytes});
-    }
-
-    const pageContent = [];
-    for (let i=0;i<pages.length;i++) {
-        const h = page.height * pageW / pixelWidth;
-        const content = `q\n${pageW.toFixed(2)} 0 0 ${h.toFixed(2)} 0 ${(pageH-h).toFixed(2)} cm\n/Im${i+1} Do\nQ\n`;
-        pageContent.push(enc.encode(content));
-    }
-
-    // Fill object bodies with binary-safe structures.
-    const objData = new Array(objects.length + 1);
-    objData[catalogId] = enc.encode(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
-    objData[pagesId] = enc.encode(`<< /Type /Pages /Kids [${pageIds.map(id=>id+' 0 R').join(' ')}] /Count ${pageIds.length} >>`);
-
-    for (let i=0;i<pages.length;i++) {
-        const page = pages[i];
-        const imageId = page._imageId;
-        const contentId = page._contentId;
-        const pageId = pageIds[i];
-        const imgHeader = `<< /Type /XObject /Subtype /Image /Width ${pixelWidth} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.bytes.length} >>\nstream\n`;
-        objData[imageId] = {prefix: enc.encode(imgHeader), bytes: page.bytes, suffix: enc.encode('\nendstream')};
-        objData[contentId] = {prefix: enc.encode(`<< /Length ${pageContent[i].length} >>\nstream\n`), bytes: pageContent[i], suffix: enc.encode('endstream')};
-        objData[pageId] = enc.encode(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Im${i+1} ${imageId} 0 R >> >> /Contents ${contentId} 0 R >>`);
-    }
-
-    const chunks = [];
-    const offsets = new Array(objData.length).fill(0);
-    let pos = 0;
-    const push = bytes => { chunks.push(bytes); pos += bytes.length; };
-    const header = enc.encode('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
-    push(header);
-
-    for (let id=1; id<objData.length; id++) {
-        offsets[id] = pos;
-        push(enc.encode(`${id} 0 obj\n`));
-        const data = objData[id];
-        if (data && data.prefix) {
-            push(data.prefix); push(data.bytes); push(data.suffix); push(enc.encode('\n'));
-        } else {
-            push(data); push(enc.encode('\n'));
-        }
-        push(enc.encode('endobj\n'));
-    }
-
-    const xrefPos = pos;
-    push(enc.encode(`xref\n0 ${objData.length}\n`));
-    push(enc.encode('0000000000 65535 f \n'));
-    for (let id=1; id<objData.length; id++) push(enc.encode(String(offsets[id]).padStart(10,'0') + ' 00000 n \n'));
-    push(enc.encode(`trailer\n<< /Size ${objData.length} /Root ${catalogId} 0 R >>\nstartxref\n${xrefPos}\n%%EOF`));
-
-    return new Blob(chunks, {type:'application/pdf'});
-}
 
 function bklDownloadInvoiceBlob(blob, fileName, order) {
     try {
