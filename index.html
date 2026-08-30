@@ -3293,7 +3293,6 @@ function renderOrdersList() {
                     <button data-order-action="confirm" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✅ تأكيد الطلب</button>
                     <button type="button" data-order-action="edit" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✏️ تعديل الطلب</button>
                     <button data-order-action="invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-neutral-800 hover:bg-neutral-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">🖨️ طباعة الفاتورة</button>
-                    <button data-order-action="save-invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">💾 حفظ الفاتورة</button>
                     <button data-order-action="delete" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">🗑️ حذف</button>
                 </div>
             </div>
@@ -3334,7 +3333,6 @@ function bindOrderManagementEventsV17() {
                 case 'confirm': updateOrderStatus(id, 'مؤكد'); break;
                 case 'edit': editOrderPrompt(id); break;
                 case 'invoice': printOrderInvoice(id); break;
-                case 'save-invoice': saveOrderInvoice(id); break;
                 case 'delete': deleteOrder(id); break;
             }
         } catch (error) {
@@ -4285,76 +4283,39 @@ function printOrderInvoice(orderId, action = 'print') {
     `;
 
     if (action === 'save') {
-        // إنشاء PDF حقيقي بدون أي مكتبة خارجية: نرسم الفاتورة على Canvas ثم نغلف صورة JPEG داخل ملف PDF.
+        // حفظ الفاتورة كملف فعلي، مع إعطاء الأولوية لنافذة الحفظ الأصلية للمتصفح.
         const safeId = String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_');
-        const fileName = `فاتورة-${safeId}.pdf`;
-
-        const makePdfFromJpeg = (jpegDataUrl, width, height) => {
-            const b64 = jpegDataUrl.split(',')[1];
-            const bin = atob(b64);
-            const img = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) img[i] = bin.charCodeAt(i);
-            const enc = new TextEncoder();
-            const objects = [];
-            const add = bytes => { objects.push(bytes); return objects.length; };
-            const txt = str => enc.encode(str);
-            const pageW = 595, pageH = 842;
-            const imgW = pageW - 40, imgH = imgW * height / width;
-            const content = `q\n${imgW.toFixed(2)} 0 0 ${imgH.toFixed(2)} 20 ${(pageH-imgH-20).toFixed(2)} cm\n/Im0 Do\nQ\n`;
-            const imageObj = add(null);
-            const contentObj = add(txt(`<< /Length ${enc.encode(content).length} >>\nstream\n${content}endstream`));
-            const pageObj = add(null);
-            const pagesObj = add(null);
-            const catalogObj = add(null);
-            objects[imageObj-1] = (() => {
-                const head = txt(`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.length} >>\nstream\n`);
-                const tail = txt('\nendstream');
-                const out = new Uint8Array(head.length + img.length + tail.length);
-                out.set(head,0); out.set(img,head.length); out.set(tail,head.length+img.length); return out;
-            })();
-            objects[pageObj-1] = txt(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Resources << /XObject << /Im0 ${imageObj} 0 R >> >> /Contents ${contentObj} 0 R >>`);
-            objects[pagesObj-1] = txt(`<< /Type /Pages /Kids [${pageObj} 0 R] /Count 1 >>`);
-            objects[catalogObj-1] = txt(`<< /Type /Catalog /Pages ${pagesObj} 0 R >>`);
-            const chunks = [txt('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n')];
-            const offsets = [0]; let pos = chunks[0].length;
-            objects.forEach((obj,i) => { offsets[i+1]=pos; const h=txt(`${i+1} 0 obj\n`); const f=txt('\nendobj\n'); chunks.push(h,obj,f); pos += h.length+obj.length+f.length; });
-            const xrefPos=pos; const xref=[`xref\n0 ${objects.length+1}\n`,`0000000000 65535 f \n`];
-            for(let i=1;i<offsets.length;i++) xref.push(String(offsets[i]).padStart(10,'0')+' 00000 n \n');
-            xref.push(`trailer\n<< /Size ${objects.length+1} /Root ${catalogObj} 0 R >>\nstartxref\n${xrefPos}\n%%EOF`);
-            chunks.push(txt(xref.join('')));
-            const total=chunks.reduce((n,a)=>n+a.length,0), out=new Uint8Array(total); let at=0;
-            chunks.forEach(a=>{out.set(a,at);at+=a.length;});
-            return new Blob([out],{type:'application/pdf'});
-        };
-
-        const canvas = document.createElement('canvas');
-        const scale = 2;
-        const W = 794, H = Math.max(1123, 420 + invoiceItems.length * 105);
-        canvas.width=W*scale; canvas.height=H*scale;
-        const ctx=canvas.getContext('2d'); ctx.scale(scale,scale);
-        ctx.fillStyle='#fff'; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle='#111'; ctx.direction='rtl'; ctx.textAlign='right';
-        const right=W-45; let y=55;
-        const line=(text,size=18,bold=false)=>{ctx.font=`${bold?'700':'400'} ${size}px Arial, "Segoe UI"`; ctx.fillStyle='#111'; ctx.fillText(String(text),right,y); y+=size+13;};
-        line(`Maison BKL - متجر السوق الذكي`,24,true);
-        line(`فاتورة شراء رقم #${order.id}`,20,true); y+=8;
-        ctx.strokeStyle='#d97706'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(45,y);ctx.lineTo(W-45,y);ctx.stroke();y+=28;
-        line(`معلومات الزبون`,18,true);
-        line(`الاسم واللقب: ${customerName}`,15); line(`الهاتف: ${customerPhone}`,15); line(`البلد: ${country}`,15); line(`الولاية: ${state}`,15); line(`البلدية: ${municipality}`,15); line(`العنوان: ${address}`,15); y+=8;
-        line(`تفاصيل الفاتورة`,18,true); line(`التاريخ: ${orderDate}`,15); line(`حالة الطلب: ${orderStatus}`,15); line(`طريقة الدفع: ${paymentMethod}`,15); y+=10;
-        ctx.fillStyle='#111'; ctx.fillRect(45,y,W-90,34); ctx.fillStyle='#fff'; ctx.font='700 13px Arial';
-        const cols=[{x:W-55,t:'المنتج'},{x:W-245,t:'سعر الوحدة'},{x:W-380,t:'المواصفات'},{x:W-535,t:'الكمية'},{x:W-690,t:'المجموع'}]; cols.forEach(c=>ctx.fillText(c.t,c.x,y+22)); y+=48;
-        ctx.fillStyle='#111';
-        invoiceItems.forEach(item=>{ const vals=[String(item.name),formatDZD(item.unitPriceDZD),String(item.specifications||''),String(item.quantity),formatDZD(item.subtotalDZD)]; ctx.font='14px Arial'; vals.forEach((v,i)=>ctx.fillText(v,cols[i].x,y)); y+=52; ctx.strokeStyle='#eee';ctx.beginPath();ctx.moveTo(45,y-18);ctx.lineTo(W-45,y-18);ctx.stroke(); });
-        y+=12; line(`مجموع المنتجات: ${formatDZD(productsSubtotalDZD)}`,16,true); line(`سعر التوصيل: ${formatDZD(shippingFeeDZD)}`,16); if(String(order.paymentMethod||'').toLowerCase()==='كريدي'&&order.creditRemainingAmount!==undefined){line(`إجمالي الفاتورة الأصلية: ${formatDZD(originalGrandTotalDZD)}`,16);line(`إجمالي المدفوع: ${formatDZD(Math.max(0,originalGrandTotalDZD-grandTotalDZD))}`,16);} line(`${String(order.paymentMethod||'').toLowerCase()==='كريدي'&&order.creditRemainingAmount!==undefined?'المبلغ المتبقي بعد التسديد':'المبلغ الإجمالي'}: ${formatDZD(grandTotalDZD)}`,20,true);
-        y=H-45; ctx.font='12px Arial';ctx.fillStyle='#777';ctx.fillText('شكراً لتسوقكم معنا!',right,y);
+        const fileName = `فاتورة-${safeId}.html`;
+        const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
 
         try {
-            const blob = makePdfFromJpeg(canvas.toDataURL('image/jpeg',0.92), canvas.width, canvas.height);
+            // Chrome / Edge: يفتح نافذة "حفظ باسم" وينشئ الملف فعلياً في مستكشف الملفات.
             if (typeof window.showSaveFilePicker === 'function') {
-                window.showSaveFilePicker({suggestedName:fileName,types:[{description:'ملف PDF',accept:{'application/pdf':['.pdf']}}]}).then(async handle=>{const writable=await handle.createWritable();await writable.write(blob);await writable.close();alert('تم حفظ الفاتورة بصيغة PDF بنجاح.');}).catch(error=>{if(error&&error.name==='AbortError')return;bklDownloadInvoiceBlob(blob,fileName,order);});
-            } else bklDownloadInvoiceBlob(blob,fileName,order);
-        } catch(error) { console.error('BKL PDF creation error:',error); alert('تعذر إنشاء ملف PDF. يرجى المحاولة مرة أخرى.'); }
+                window.showSaveFilePicker({
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'فاتورة HTML',
+                        accept: { 'text/html': ['.html'] }
+                    }]
+                }).then(async (handle) => {
+                    const writable = await handle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بنجاح.`, 'invoice-saved');
+                    alert('تم حفظ الفاتورة بنجاح.');
+                }).catch((error) => {
+                    // الضغط على إلغاء لا يعتبر خطأ ولا يغلق المتجر.
+                    if (error && error.name === 'AbortError') return;
+                    console.error('BKL invoice save picker error:', error);
+                    bklDownloadInvoiceBlob(blob, fileName, order);
+                });
+            } else {
+                bklDownloadInvoiceBlob(blob, fileName, order);
+            }
+        } catch (error) {
+            console.error('BKL invoice save error:', error);
+            bklDownloadInvoiceBlob(blob, fileName, order);
+        }
         return;
     }
 
@@ -4396,26 +4357,6 @@ function saveOrderInvoice(orderId) {
     }
 }
 
-// BKL: ضمان مباشر لزر حفظ الفاتورة حتى لو أُعيد إنشاء قائمة الطلبات.
-(function(){
-    if (window.__bklSaveInvoiceDirectBound) return;
-    window.__bklSaveInvoiceDirectBound = true;
-    document.addEventListener('click', function(event){
-        const button = event.target && event.target.closest ? event.target.closest('[data-order-action="save-invoice"]') : null;
-        if (!button) return;
-        const id = button.getAttribute('data-order-id');
-        if (!id) return;
-        if (button.__bklSaveDirectBusy) return;
-        button.__bklSaveDirectBusy = true;
-        try {
-            event.preventDefault();
-            event.stopPropagation();
-            saveOrderInvoice(id);
-        } finally {
-            setTimeout(function(){ button.__bklSaveDirectBusy = false; }, 500);
-        }
-    }, true);
-})();
 
 // تحديث خفيف ومؤجل عند الحاجة فقط بدلاً من إعادة رسم القائمة كل 5 ثوانٍ.
 let bklOrdersRenderTimer = null;
@@ -9917,7 +9858,7 @@ document.addEventListener('DOMContentLoaded', function(){
         </div>
         <section class="bkl-om-products"><div class="bkl-om-section-title"><h3>🛍️ تفاصيل المنتجات</h3><span>${Array.isArray(items)?items.length:0} منتج</span></div><div class="bkl-om-table-wrap"><table><thead><tr><th>#</th><th>المنتج</th><th>اللون</th><th>المقاس</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th></tr></thead><tbody>${rows||'<tr><td colspan="7" class="empty">لا توجد منتجات مسجلة في الطلبية.</td></tr>'}</tbody></table></div></section>
         <div class="bkl-om-total"><div><span>مجموع المنتجات</span><b>${subtotal.toLocaleString('ar-DZ')} د.ج</b></div><div><span>التوصيل</span><b>${delivery.toLocaleString('ar-DZ')} د.ج</b></div><div class="grand"><span>الإجمالي النهائي</span><strong>${total.toLocaleString('ar-DZ')} د.ج</strong></div></div>
-        <div class="bkl-om-actions"><button data-act="close" class="secondary">إغلاق</button><button data-act="edit" class="edit">✏️ تعديل الطلبية</button><button data-act="confirm" class="confirm">✓ تأكيد الطلب</button><button data-act="print" class="print">🖨️ طباعة الفاتورة</button><button data-act="save" class="save">💾 حفظ الفاتورة</button></div>
+        <div class="bkl-om-actions"><button data-act="close" class="secondary">إغلاق</button><button data-act="edit" class="edit">✏️ تعديل الطلبية</button><button data-act="confirm" class="confirm">✓ تأكيد الطلب</button><button data-act="print" class="print">🖨️ طباعة الفاتورة</button></div>
       </div></div>`;
     document.body.appendChild(modal);
     modal.querySelectorAll('[data-close],[data-act="close"]').forEach(b=>b.onclick=()=>modal.remove());
