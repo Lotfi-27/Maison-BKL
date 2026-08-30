@@ -1478,8 +1478,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
     </div>
 
     <!-- ================= ADD CATEGORY MODAL ================= -->
-    <div id="category-modal" class="hidden fixed inset-0 z-[999999] bg-neutral-900/50 backdrop-blur-sm flex items-start justify-center p-3 overflow-hidden" style="padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom));">
-        <div id="category-modal-window" class="bg-white rounded-3xl max-w-sm w-full p-5 flex flex-col gap-4 shadow-xl" style="position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); max-height: calc(100dvh - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch; transition: transform 0.12s ease-out;">
+    <div id="category-modal" class="hidden fixed inset-0 z-[999999] bg-neutral-900/50 backdrop-blur-sm">
+        <div id="category-modal-window" class="bg-white rounded-3xl w-[calc(100vw-32px)] max-w-sm p-5 flex flex-col gap-4 shadow-2xl" style="position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); max-height:calc(100vh - 16px); overflow-y:auto; transition:top 0.12s ease-out;">
             <h3 id="category-modal-title" class="text-sm font-bold text-neutral-900">إضافة تصنيف جديد</h3>
 
             <div class="flex flex-col gap-1">
@@ -1507,33 +1507,35 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             if (!modal || !win || modal.classList.contains('hidden')) return;
 
             const vv = window.visualViewport;
-            if (!vv) return;
+            const viewportTop = vv ? vv.offsetTop : 0;
+            const viewportHeight = vv ? vv.height : window.innerHeight;
+            const gap = 8;
 
-            const keyboardTop = vv.offsetTop + vv.height;
-            const rect = win.getBoundingClientRect();
-            const safe = 10;
-            let y = 0;
+            win.style.maxHeight = Math.max(120, viewportHeight - gap * 2) + 'px';
+            const height = win.getBoundingClientRect().height;
+            let top = viewportTop + (viewportHeight - height) / 2;
+            top = Math.max(viewportTop + gap, top);
+            top = Math.min(top, viewportTop + viewportHeight - height - gap);
 
-            if (rect.bottom > keyboardTop - safe) {
-                y = keyboardTop - safe - rect.bottom;
-            }
-            if (rect.top + y < vv.offsetTop + safe) {
-                y += (vv.offsetTop + safe) - (rect.top + y);
-            }
-
-            win.style.transform = 'translate(-50%, calc(-50% + ' + y + 'px))';
+            win.style.top = Math.round(top) + 'px';
+            win.style.transform = 'translateX(-50%)';
         }
 
         function resetCategoryModalPosition() {
             const win = document.getElementById('category-modal-window');
-            if (win) win.style.transform = 'translate(-50%, -50%)';
+            if (win) {
+                win.style.top = '50%';
+                win.style.maxHeight = 'calc(100vh - 16px)';
+                win.style.transform = 'translate(-50%,-50%)';
+            }
         }
 
-        window.addEventListener('resize', syncCategoryModalWithKeyboard);
+        window.addEventListener('resize', syncCategoryModalWithKeyboard, {passive:true});
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', syncCategoryModalWithKeyboard);
-            window.visualViewport.addEventListener('scroll', syncCategoryModalWithKeyboard);
+            window.visualViewport.addEventListener('resize', syncCategoryModalWithKeyboard, {passive:true});
+            window.visualViewport.addEventListener('scroll', syncCategoryModalWithKeyboard, {passive:true});
         }
+
         document.addEventListener('focusin', function (e) {
             if (e.target && (e.target.id === 'new-cat-id' || e.target.id === 'new-cat-name')) {
                 setTimeout(syncCategoryModalWithKeyboard, 50);
@@ -1545,20 +1547,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
         if (typeof oldOpen === 'function') {
             window.openAddCategoryModal = function () {
                 const result = oldOpen.apply(this, arguments);
-                const modal = document.getElementById('category-modal');
-                const win = document.getElementById('category-modal-window');
-                if (modal) {
-                    modal.classList.remove('hidden');
-                    modal.style.position = 'fixed';
-                    modal.style.inset = '0';
-                }
-                if (win) {
-                    win.style.position = 'fixed';
-                    win.style.left = '50%';
-                    win.style.top = '50%';
-                    win.style.transform = 'translate(-50%, -50%)';
-                }
-                setTimeout(syncCategoryModalWithKeyboard, 30);
+                requestAnimationFrame(function(){ syncCategoryModalWithKeyboard(); });
+                setTimeout(syncCategoryModalWithKeyboard, 80);
                 return result;
             };
         }
@@ -1572,7 +1562,6 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
         }
     })();
     </script>
-
     <!-- ================= USER COMPLAINT MODAL ================= -->
     <!-- ================= OWNER HOME HERO EDITOR ================= -->
     <div id="home-hero-editor-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm items-center justify-center z-[210000] p-4">
