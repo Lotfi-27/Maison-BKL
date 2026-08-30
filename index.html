@@ -831,6 +831,215 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
+
+<style id="bkl-fluid-keyboard-windows">
+/* ===== BKL FLUID WINDOWS / MOBILE KEYBOARD FIX =====
+   يجعل النوافذ الأساسية والثانوية قابلة للتمرير مع لوحة المفاتيح
+   دون الحاجة إلى إخفاء لوحة المفاتيح يدوياً. */
+:root{--bkl-vh:100dvh;}
+html,body{min-height:100%;}
+body{overflow-x:hidden;}
+
+/* كل نافذة ثابتة تصبح قابلة للتكيف مع ارتفاع الشاشة الحقيقي */
+.fixed.inset-0,
+[id$="-modal"].fixed,
+[id*="-modal"].fixed{
+    max-height:100dvh!important;
+    max-height:100svh!important;
+    box-sizing:border-box!important;
+}
+
+/* طبقة النافذة: عند ظهور لوحة المفاتيح لا تبقى النافذة في المنتصف خلفها */
+.fixed.inset-0.flex.items-center,
+.fixed.inset-0.items-center,
+.fixed.inset-0[class*="justify-center"]{
+    align-items:flex-start!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding-top:max(8px,env(safe-area-inset-top))!important;
+    padding-bottom:max(12px,env(safe-area-inset-bottom))!important;
+    -webkit-overflow-scrolling:touch!important;
+    overscroll-behavior:contain!important;
+}
+
+/* جسم كل نافذة: عنوانها يبقى مرئياً ومحتواها يتحرك باللمس */
+.fixed.inset-0 > div,
+[id$="-modal"].fixed > div,
+[id*="-modal"].fixed > div{
+    max-height:calc(100dvh - 20px)!important;
+    max-height:calc(100svh - 20px)!important;
+    box-sizing:border-box!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch!important;
+    overscroll-behavior:contain!important;
+    scroll-padding-top:72px!important;
+    scroll-padding-bottom:35vh!important;
+}
+
+/* لوحة التحكم الكبيرة */
+#owner-dashboard-modal{
+    height:100dvh!important;
+    max-height:none!important;
+    align-items:flex-start!important;
+    padding-top:max(8px,env(safe-area-inset-top))!important;
+    padding-bottom:max(12px,env(safe-area-inset-bottom))!important;
+    -webkit-overflow-scrolling:touch!important;
+}
+#owner-dashboard-modal>div{
+    max-height:calc(100dvh - 20px)!important;
+    max-height:calc(100svh - 20px)!important;
+    -webkit-overflow-scrolling:touch!important;
+    scroll-padding-bottom:35vh!important;
+}
+
+/* نافذة إضافة/تعديل المنتج الجانبية */
+#add-modal{
+    height:100dvh!important;
+    max-height:none!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+}
+#add-modal>.bg-white{
+    max-height:100dvh!important;
+    min-height:0!important;
+    padding-bottom:max(24px,env(safe-area-inset-bottom))!important;
+    -webkit-overflow-scrolling:touch!important;
+    scroll-padding-bottom:35vh!important;
+}
+
+/* جميع الحقول: اترك مساحة أسفلها عندما تظهر لوحة المفاتيح */
+input,textarea,select,[contenteditable="true"]{
+    scroll-margin-top:90px!important;
+    scroll-margin-bottom:40vh!important;
+}
+
+/* لا تجعل لوحة المفاتيح تحجب زر الحفظ/الإرسال */
+button[type="submit"],
+#btn-save,
+.chat-composer button,
+[class*="save"],
+[class*="send"]{
+    scroll-margin-bottom:40vh!important;
+}
+
+@media (max-width:700px){
+    .fixed.inset-0 > div,
+    [id$="-modal"].fixed > div,
+    [id*="-modal"].fixed > div{
+        width:calc(100vw - 16px)!important;
+        max-width:calc(100vw - 16px)!important;
+        max-height:calc(100dvh - 12px)!important;
+        max-height:calc(100svh - 12px)!important;
+        margin:0 auto!important;
+        border-radius:18px!important;
+        padding-bottom:max(18px,env(safe-area-inset-bottom))!important;
+    }
+    #owner-dashboard-modal>div{
+        width:calc(100vw - 12px)!important;
+        max-width:calc(100vw - 12px)!important;
+        max-height:calc(100dvh - 12px)!important;
+        max-height:calc(100svh - 12px)!important;
+    }
+    #add-modal>.bg-white{
+        width:100%!important;
+        max-width:100%!important;
+        max-height:100dvh!important;
+        max-height:100svh!important;
+        margin:0!important;
+        border-radius:0 0 18px 18px!important;
+    }
+}
+
+@media (min-width:701px){
+    /* سطح المكتب يبقى كما هو تقريباً، مع تمرير آمن عند صغر ارتفاع الشاشة */
+    .fixed.inset-0 > div,
+    [id$="-modal"].fixed > div,
+    [id*="-modal"].fixed > div{
+        max-height:calc(100dvh - 32px)!important;
+    }
+}
+</style>
+<script id="bkl-fluid-keyboard-script">
+(function(){
+    'use strict';
+    let lastFocusedField=null;
+    let keyboardTimer=null;
+
+    function isEditable(el){
+        if(!el) return false;
+        const tag=(el.tagName||'').toLowerCase();
+        return tag==='input'||tag==='textarea'||tag==='select'||el.isContentEditable;
+    }
+
+    function findScrollableParent(el){
+        let node=el;
+        while(node && node!==document.body){
+            const cs=getComputedStyle(node);
+            if((cs.overflowY==='auto'||cs.overflowY==='scroll') && node.scrollHeight>node.clientHeight+4) return node;
+            node=node.parentElement;
+        }
+        return document.scrollingElement||document.documentElement;
+    }
+
+    function moveFieldIntoView(el, smooth){
+        if(!isEditable(el)) return;
+        lastFocusedField=el;
+        const parent=findScrollableParent(el);
+        try{
+            el.scrollIntoView({behavior:smooth?'smooth':'auto',block:'center',inline:'nearest'});
+        }catch(e){
+            try{el.scrollIntoView(false);}catch(_){ }
+        }
+        try{
+            if(parent && parent!==document.scrollingElement){
+                const r=el.getBoundingClientRect();
+                const pr=parent.getBoundingClientRect();
+                const keyboardSpace=Math.min(window.innerHeight*0.42,420);
+                if(r.bottom>pr.bottom-keyboardSpace){
+                    parent.scrollTop += r.bottom-(pr.bottom-keyboardSpace);
+                }
+            }
+        }catch(e){}
+    }
+
+    document.addEventListener('focusin',function(e){
+        if(!isEditable(e.target)) return;
+        moveFieldIntoView(e.target,false);
+        clearTimeout(keyboardTimer);
+        keyboardTimer=setTimeout(function(){moveFieldIntoView(e.target,true);},180);
+        setTimeout(function(){moveFieldIntoView(e.target,true);},450);
+    },true);
+
+    document.addEventListener('click',function(e){
+        const field=e.target.closest && e.target.closest('input,textarea,select,[contenteditable="true"]');
+        if(field) setTimeout(function(){moveFieldIntoView(field,true);},120);
+    },true);
+
+    if(window.visualViewport){
+        let oldHeight=window.visualViewport.height;
+        window.visualViewport.addEventListener('resize',function(){
+            const newHeight=window.visualViewport.height;
+            const keyboardOpened=newHeight<oldHeight-80;
+            oldHeight=newHeight;
+            document.documentElement.style.setProperty('--bkl-vh',newHeight+'px');
+            if(keyboardOpened && lastFocusedField){
+                setTimeout(function(){moveFieldIntoView(lastFocusedField,true);},80);
+                setTimeout(function(){moveFieldIntoView(lastFocusedField,true);},300);
+            }
+        });
+        window.visualViewport.addEventListener('scroll',function(){
+            if(lastFocusedField) setTimeout(function(){moveFieldIntoView(lastFocusedField,false);},30);
+        });
+    }
+
+    window.addEventListener('orientationchange',function(){
+        setTimeout(function(){
+            if(lastFocusedField) moveFieldIntoView(lastFocusedField,true);
+        },300);
+    });
+})();
+</script>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
