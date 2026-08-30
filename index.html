@@ -1478,8 +1478,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
     </div>
 
     <!-- ================= ADD CATEGORY MODAL ================= -->
-    <div id="category-modal" class="hidden fixed inset-0 z-50 bg-neutral-900/50 backdrop-blur-sm flex items-start justify-center p-4">
-        <div id="category-modal-window" class="bg-white rounded-3xl max-w-sm w-full p-5 flex flex-col gap-4 shadow-xl" style="transition: transform 0.12s ease-out;">
+    <div id="category-modal" class="hidden fixed inset-0 z-[999999] bg-neutral-900/50 backdrop-blur-sm flex items-start justify-center p-3 overflow-hidden" style="padding-top: max(12px, env(safe-area-inset-top)); padding-bottom: max(12px, env(safe-area-inset-bottom));">
+        <div id="category-modal-window" class="bg-white rounded-3xl max-w-sm w-full p-5 flex flex-col gap-4 shadow-xl" style="position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); max-height: calc(100dvh - 24px); overflow-y: auto; -webkit-overflow-scrolling: touch; transition: transform 0.12s ease-out;">
             <h3 id="category-modal-title" class="text-sm font-bold text-neutral-900">إضافة تصنيف جديد</h3>
 
             <div class="flex flex-col gap-1">
@@ -1509,31 +1509,24 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             const vv = window.visualViewport;
             if (!vv) return;
 
-            // اجعل النافذة العائمة كاملة داخل المساحة المرئية فوق لوحة المفاتيح.
-            // عند صعود لوحة المفاتيح تصعد النافذة كلها معها، دون تحريك محتوياتها منفردة.
-            const viewportTop = vv.offsetTop || 0;
-            const viewportHeight = vv.height;
-            const margin = 8;
-            const height = win.getBoundingClientRect().height;
-            const availableHeight = Math.max(0, viewportHeight - margin * 2);
+            const keyboardTop = vv.offsetTop + vv.height;
+            const rect = win.getBoundingClientRect();
+            const safe = 10;
+            let y = 0;
 
-            win.style.position = 'fixed';
-            win.style.left = '50%';
-            win.style.transform = 'translateX(-50%)';
-            win.style.maxHeight = availableHeight + 'px';
-            win.style.overflowY = 'auto';
-            win.style.top = Math.max(margin, viewportTop + (viewportHeight - Math.min(height, availableHeight)) / 2) + 'px';
+            if (rect.bottom > keyboardTop - safe) {
+                y = keyboardTop - safe - rect.bottom;
+            }
+            if (rect.top + y < vv.offsetTop + safe) {
+                y += (vv.offsetTop + safe) - (rect.top + y);
+            }
+
+            win.style.transform = 'translate(-50%, calc(-50% + ' + y + 'px))';
         }
 
         function resetCategoryModalPosition() {
             const win = document.getElementById('category-modal-window');
-            if (!win) return;
-            win.style.position = '';
-            win.style.left = '';
-            win.style.top = '';
-            win.style.transform = '';
-            win.style.maxHeight = '';
-            win.style.overflowY = '';
+            if (win) win.style.transform = 'translate(-50%, -50%)';
         }
 
         window.addEventListener('resize', syncCategoryModalWithKeyboard);
@@ -1544,9 +1537,31 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
         document.addEventListener('focusin', function (e) {
             if (e.target && (e.target.id === 'new-cat-id' || e.target.id === 'new-cat-name')) {
                 setTimeout(syncCategoryModalWithKeyboard, 50);
-                setTimeout(syncCategoryModalWithKeyboard, 200);
+                setTimeout(syncCategoryModalWithKeyboard, 250);
             }
         });
+
+        const oldOpen = window.openAddCategoryModal;
+        if (typeof oldOpen === 'function') {
+            window.openAddCategoryModal = function () {
+                const result = oldOpen.apply(this, arguments);
+                const modal = document.getElementById('category-modal');
+                const win = document.getElementById('category-modal-window');
+                if (modal) {
+                    modal.classList.remove('hidden');
+                    modal.style.position = 'fixed';
+                    modal.style.inset = '0';
+                }
+                if (win) {
+                    win.style.position = 'fixed';
+                    win.style.left = '50%';
+                    win.style.top = '50%';
+                    win.style.transform = 'translate(-50%, -50%)';
+                }
+                setTimeout(syncCategoryModalWithKeyboard, 30);
+                return result;
+            };
+        }
 
         const oldClose = window.closeAddCategoryModal;
         if (typeof oldClose === 'function') {
