@@ -1501,52 +1501,69 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
     <script>
     (function () {
-        // نافذة التصنيف: تبقى في مركز الشاشة، وتتحرك للأعلى تلقائياً
-        // عند ظهور لوحة مفاتيح الهاتف فقط بالقدر اللازم لإظهار الأزرار.
-        const NORMAL_TRANSFORM = 'translate3d(-50%, -50%, 0)';
+        // نافذة التصنيف مهيأة للهاتف: تبقى في المركز، وعند ظهور الكلافي
+        // يتم نقل مركزها تلقائياً إلى منتصف المساحة المرئية فقط.
+        const modalWindow = () => document.getElementById('category-modal-window');
 
-        function syncCategoryModalWithKeyboard() {
+        function positionCategoryModal() {
             const modal = document.getElementById('category-modal');
-            const win = document.getElementById('category-modal-window');
+            const win = modalWindow();
             if (!modal || !win || modal.classList.contains('hidden')) return;
 
-            win.style.transform = NORMAL_TRANSFORM;
-
             const vv = window.visualViewport;
-            if (!vv) return;
+            if (!vv) {
+                win.style.top = '50%';
+                win.style.maxHeight = 'calc(100vh - 24px)';
+                win.style.transform = 'translate(-50%, -50%)';
+                return;
+            }
 
-            // لا نعتبر أي فرق صغير بين viewport و visualViewport كلافي.
-            const keyboardHeight = Math.max(0, window.innerHeight - vv.height);
-            if (keyboardHeight < 120) return;
-
+            // ننتظر حتى يعيد الهاتف حساب أبعاد النافذة بعد فتح/إغلاق الكلافي.
             requestAnimationFrame(function () {
-                const rect = win.getBoundingClientRect();
-                const visibleBottom = vv.offsetTop + vv.height;
-                const safeGap = 12;
-                const overlap = rect.bottom - (visibleBottom - safeGap);
+                const keyboardOpen = (window.innerHeight - vv.height) > 80 || vv.height < window.innerHeight * 0.82;
+                if (!keyboardOpen) {
+                    win.style.top = '50%';
+                    win.style.maxHeight = 'calc(100vh - 24px)';
+                    win.style.transform = 'translate(-50%, -50%)';
+                    return;
+                }
 
-                // اصعد فقط بالقدر المطلوب، مع حد أقصى بسيط حتى لا تختفي النافذة أعلى الشاشة.
-                const moveUp = Math.min(110, Math.max(0, overlap));
-                win.style.transform = 'translate3d(-50%, calc(-50% - ' + moveUp + 'px), 0)';
+                const safe = 12;
+                const availableHeight = Math.max(120, vv.height - safe * 2);
+                win.style.maxHeight = availableHeight + 'px';
+
+                // المركز الجديد هو مركز الجزء الظاهر من الشاشة، وليس مركز الصفحة خلف الكلافي.
+                const visibleCenter = vv.offsetTop + (vv.height / 2);
+                const rect = win.getBoundingClientRect();
+                const halfHeight = rect.height / 2;
+                const minCenter = vv.offsetTop + safe + halfHeight;
+                const maxCenter = vv.offsetTop + vv.height - safe - halfHeight;
+                const targetCenter = Math.min(maxCenter, Math.max(minCenter, visibleCenter));
+
+                win.style.top = targetCenter + 'px';
+                win.style.transform = 'translate(-50%, -50%)';
             });
         }
 
         function resetCategoryModalPosition() {
-            const win = document.getElementById('category-modal-window');
-            if (win) win.style.transform = NORMAL_TRANSFORM;
+            const win = modalWindow();
+            if (!win) return;
+            win.style.top = '50%';
+            win.style.maxHeight = 'calc(100vh - 24px)';
+            win.style.transform = 'translate(-50%, -50%)';
         }
 
-        window.addEventListener('resize', syncCategoryModalWithKeyboard, {passive:true});
+        window.addEventListener('resize', positionCategoryModal, { passive: true });
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', syncCategoryModalWithKeyboard, {passive:true});
-            window.visualViewport.addEventListener('scroll', syncCategoryModalWithKeyboard, {passive:true});
+            window.visualViewport.addEventListener('resize', positionCategoryModal, { passive: true });
+            window.visualViewport.addEventListener('scroll', positionCategoryModal, { passive: true });
         }
 
         document.addEventListener('focusin', function (e) {
             if (e.target && (e.target.id === 'new-cat-id' || e.target.id === 'new-cat-name')) {
-                setTimeout(syncCategoryModalWithKeyboard, 50);
-                setTimeout(syncCategoryModalWithKeyboard, 200);
-                setTimeout(syncCategoryModalWithKeyboard, 400);
+                setTimeout(positionCategoryModal, 50);
+                setTimeout(positionCategoryModal, 180);
+                setTimeout(positionCategoryModal, 350);
             }
         });
 
@@ -1555,10 +1572,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
         if (typeof oldOpenCategory === 'function') {
             window.openAddCategoryModal = function () {
                 const result = oldOpenCategory.apply(this, arguments);
-                requestAnimationFrame(function () {
-                    resetCategoryModalPosition();
-                    syncCategoryModalWithKeyboard();
-                });
+                resetCategoryModalPosition();
+                setTimeout(positionCategoryModal, 50);
                 return result;
             };
         }
