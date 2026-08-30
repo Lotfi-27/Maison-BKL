@@ -4333,15 +4333,25 @@ function bklDownloadInvoiceBlob(blob, fileName, order) {
         const link = document.createElement('a');
         link.href = url;
         link.download = fileName;
+        link.target = '_self';
         link.rel = 'noopener';
         link.style.position = 'fixed';
-        link.style.left = '-9999px';
+        link.style.left = '0';
+        link.style.top = '0';
+        link.style.width = '1px';
+        link.style.height = '1px';
+        link.style.opacity = '0.01';
         document.body.appendChild(link);
+
+        // تشغيل التنزيل بالطريقة الأصلية للمتصفح من داخل نقرة المستخدم.
         link.click();
+
+        // في حال منع المتصفح التنزيل التلقائي، يبقى الملف متاحاً من نفس الرابط
+        // ولا نغلق الرابط فوراً حتى لا يُلغى التنزيل.
         setTimeout(() => {
             try { link.remove(); } catch (_) {}
             try { URL.revokeObjectURL(url); } catch (_) {}
-        }, 2000);
+        }, 15000);
         notifyCustomerForOrder(order, `تم إرسال فاتورة طلبك رقم #${order.id} إلى التنزيلات.`, 'invoice-saved');
         setTimeout(() => alert('تم إرسال الفاتورة إلى مجلد التنزيلات. إذا ظهرت نافذة اختيار مكان الحفظ فاختر المكان المطلوب.'), 50);
     } catch (error) {
