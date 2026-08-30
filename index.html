@@ -831,6 +831,14 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
+
+<style id="bkl-category-keyboard-only-fix">
+@media (max-width: 768px) {
+  #category-modal { box-sizing:border-box !important; align-items:center !important; justify-content:center !important; overflow:hidden !important; }
+  #category-modal > div { box-sizing:border-box !important; width:100% !important; max-width:24rem !important; max-height:calc(100dvh - 16px) !important; overflow-y:auto !important; overscroll-behavior:contain !important; }
+  #category-modal > div > div:last-child { position:sticky !important; bottom:0 !important; z-index:2 !important; background:#fff !important; padding-bottom:2px !important; }
+}
+</style>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -4283,116 +4291,6 @@ function printOrderInvoice(orderId, action = 'print') {
   normalize();
 })();
 <\/script>
-
-<!-- CATEGORY MODAL MOBILE KEYBOARD FIX: scoped only to "category-modal" -->
-<style>
-@media (max-width: 768px){
-  #category-modal.bkl-cat-keyboard-open{
-    align-items:flex-start !important;
-    justify-content:center !important;
-    padding:8px !important;
-    overflow:hidden !important;
-  }
-  #category-modal.bkl-cat-keyboard-open > .bg-white{
-    width:100% !important;
-    max-width:24rem !important;
-    max-height:none !important;
-    overflow:visible !important;
-    box-sizing:border-box !important;
-    flex-shrink:0 !important;
-  }
-  #category-modal.bkl-cat-keyboard-open > .bg-white > div:last-child{
-    position:sticky !important;
-    bottom:0 !important;
-    background:#fff !important;
-    padding-top:10px !important;
-    padding-bottom:2px !important;
-    z-index:5 !important;
-  }
-}
-</style>
-<script>
-(function(){
-  function setupCategoryKeyboardFix(){
-    const modal=document.getElementById('category-modal');
-    if(!modal || modal.dataset.bklKeyboardFix==='1') return;
-    modal.dataset.bklKeyboardFix='1';
-    const panel=modal.querySelector(':scope > .bg-white');
-    if(!panel) return;
-    const inputs=panel.querySelectorAll('input,textarea,select');
-
-    function reset(){
-      modal.classList.remove('bkl-cat-keyboard-open');
-      modal.style.height='';
-      modal.style.top='';
-      modal.style.bottom='';
-      modal.style.alignItems='';
-      panel.style.maxHeight='';
-      panel.style.transform='';
-    }
-
-    function adjust(){
-      if(modal.classList.contains('hidden')) { reset(); return; }
-      const vv=window.visualViewport;
-      if(!vv){ return; }
-      const keyboardOpen=(window.innerHeight-vv.height)>100;
-      if(!keyboardOpen){ reset(); return; }
-
-      modal.classList.add('bkl-cat-keyboard-open');
-      modal.style.height=vv.height+'px';
-      modal.style.top=vv.offsetTop+'px';
-      modal.style.bottom='auto';
-
-      const available=Math.max(230, vv.height-16);
-      panel.style.maxHeight=available+'px';
-      panel.style.overflowY='auto';
-      panel.style.webkitOverflowScrolling='touch';
-
-      const active=document.activeElement;
-      if(active && panel.contains(active)){
-        setTimeout(function(){
-          active.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'});
-        },50);
-      }
-    }
-
-    inputs.forEach(function(el){
-      el.addEventListener('focus',function(){
-        setTimeout(adjust,80);
-        setTimeout(adjust,250);
-      });
-    });
-    modal.addEventListener('transitionend',adjust);
-    if(window.visualViewport){
-      window.visualViewport.addEventListener('resize',adjust);
-      window.visualViewport.addEventListener('scroll',adjust);
-    }
-    window.addEventListener('resize',adjust);
-
-    const observer=new MutationObserver(function(){
-      if(modal.classList.contains('hidden')) reset();
-      else if(document.activeElement && panel.contains(document.activeElement)) adjust();
-    });
-    observer.observe(modal,{attributes:true,attributeFilter:['class']});
-
-    // Re-apply after the existing open function displays the modal.
-    const originalOpen=window.openAddCategoryModal;
-    if(typeof originalOpen==='function' && !originalOpen.__bklWrapped){
-      const wrapped=function(){
-        const result=originalOpen.apply(this,arguments);
-        setTimeout(adjust,60);
-        return result;
-      };
-      wrapped.__bklWrapped=true;
-      window.openAddCategoryModal=wrapped;
-    }
-  }
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',setupCategoryKeyboardFix);
-  else setupCategoryKeyboardFix();
-})();
-</script>
-
 </body>
         </html>
     `;
@@ -9814,6 +9712,45 @@ document.addEventListener('DOMContentLoaded', function(){
     var m=document.getElementById(id);
     if(m&&typeof m.__bklClose==='function')m.__bklClose();
   });
+})();
+</script>
+
+<script id="bkl-category-keyboard-only-fix-js">
+(function(){
+  function setup(){
+    var modal=document.getElementById('category-modal');
+    if(!modal) return;
+    var panel=modal.firstElementChild;
+    if(!panel) return;
+    function adjust(){
+      if(modal.classList.contains('hidden')) return;
+      var vv=window.visualViewport;
+      var h=vv ? vv.height : window.innerHeight;
+      var top=vv ? vv.offsetTop : 0;
+      modal.style.height=h+'px';
+      modal.style.top=top+'px';
+      modal.style.bottom='auto';
+      panel.style.maxHeight=Math.max(120,h-16)+'px';
+      panel.style.overflowY='auto';
+    }
+    function reset(){
+      modal.style.height=''; modal.style.top=''; modal.style.bottom='';
+      panel.style.maxHeight=''; panel.style.overflowY='';
+    }
+    modal.addEventListener('focusin',function(e){
+      adjust();
+      setTimeout(function(){
+        if(e.target && e.target.scrollIntoView) e.target.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'});
+      },120);
+    });
+    window.addEventListener('resize',adjust,{passive:true});
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',adjust,{passive:true});
+      window.visualViewport.addEventListener('scroll',adjust,{passive:true});
+    }
+    new MutationObserver(function(){ if(modal.classList.contains('hidden')) reset(); else adjust(); }).observe(modal,{attributes:true,attributeFilter:['class']});
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',setup); else setup();
 })();
 </script>
 </body>
