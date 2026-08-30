@@ -38,7 +38,8 @@
 .product-actions button:active {
     transform: scale(0.95);
 }
-/* النوافذ المنبثقة Modal Styles */
+
+/* النوافذ المنبثقة Modal Styles المتوافقة مع الهواتف */
 .modal {
   display: none; 
   position: fixed; 
@@ -47,18 +48,28 @@
   top: 0;
   width: 100%; 
   height: 100%; 
-  overflow: auto; 
+  /* استخدام dvh ليتكيف ارتفاع الشاشة فور ظهور لوحة المفاتيح */
+  height: 100dvh; 
+  overflow-y: auto; 
   background-color: rgba(0,0,0,0.6); 
   direction: rtl;
+  /* تمركز النافذة من الأعلى لمنع حجبها بلوحة المفاتيح */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 30px;
+  padding-bottom: 30px;
 }
 
 .modal-content {
   background-color: #fff;
-  margin: 5% auto; 
+  margin: 0 auto; 
   padding: 25px;
-  border-radius: 8px;
+  border-radius: 12px;
   width: 90%;
   max-width: 550px;
+  max-height: calc(100dvh - 60px);
+  overflow-y: auto; /* السماح بالتمرير الداخلي بسلاسة */
   box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 }
 
@@ -116,13 +127,4 @@
 
 .submit-btn:hover {
   background-color: #218838;
-}
-/* مثال للتطبيق على الهواتف التي تقل عرض شاشتها عن 768 بكسل */
-@media (max-width: 768px) {
-  /* تصغير حجم الأيقونات لتتناسب مع المساحة المتاحة */
-  .icon, nav img, .nav-item {
-    font-size: 14px;
-    padding: 4px;
-    margin: 0 2px;
-  }
 }
