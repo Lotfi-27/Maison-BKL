@@ -1505,10 +1505,31 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             const modal = document.getElementById('category-modal');
             const win = document.getElementById('category-modal-window');
             if (!modal || !win || modal.classList.contains('hidden')) return;
+
             const vv = window.visualViewport;
-            if (!vv) { win.style.transform = ''; return; }
-            const keyboardHeight = Math.max(0, document.documentElement.clientHeight - vv.height);
-            win.style.transform = keyboardHeight > 0 ? 'translateY(-' + keyboardHeight + 'px)' : '';
+            if (!vv) {
+                win.style.transform = '';
+                return;
+            }
+
+            // Move the ENTIRE category window upward so its bottom edge
+            // stays just above the visible top edge of the keyboard.
+            const rect = win.getBoundingClientRect();
+            const visibleBottom = vv.offsetTop + vv.height;
+            const safeGap = 8;
+            let moveY = visibleBottom - safeGap - rect.bottom;
+
+            // When the keyboard is hidden, keep the original centered position.
+            const keyboardLikelyOpen = vv.height < window.innerHeight - 80;
+            if (!keyboardLikelyOpen) moveY = 0;
+
+            // Never move the window so far up that its top disappears.
+            const minTop = 8;
+            if (rect.top + moveY < minTop) {
+                moveY = minTop - rect.top;
+            }
+
+            win.style.transform = 'translate3d(0, ' + moveY + 'px, 0)';
         }
         function resetCategoryModalPosition() {
             const win = document.getElementById('category-modal-window');
