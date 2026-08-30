@@ -1507,26 +1507,23 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             if (!modal || !win || modal.classList.contains('hidden')) return;
 
             const vv = window.visualViewport;
-            const visibleTop = vv ? vv.offsetTop : 0;
-            const visibleBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
-            const gap = 10;
+            const viewportHeight = window.innerHeight;
+            const visibleHeight = vv ? vv.height : viewportHeight;
+            const keyboardHeight = viewportHeight - visibleHeight;
+            const keyboardOpen = keyboardHeight > 100;
 
-            win.style.maxHeight = Math.max(140, visibleBottom - visibleTop - gap * 2) + 'px';
-            win.style.transform = 'translate(-50%, -50%)';
-
-            // Keep the window centered normally. If the keyboard appears,
-            // move it upward only as much as needed to reveal the buttons.
-            const rect = win.getBoundingClientRect();
-            const overlap = rect.bottom - (visibleBottom - gap);
-            const shiftUp = overlap > 0 ? overlap : 0;
-            win.style.transform = 'translate(-50%, calc(-50% - ' + Math.round(shiftUp) + 'px))';
+            // الوضع الطبيعي: النافذة في مركز الشاشة.
+            // عند ظهور الكلافي: تصعد قليلاً فقط، ثم تعود للمركز عند إخفائه.
+            const moveUp = keyboardOpen ? 90 : 0;
+            win.style.maxHeight = 'calc(100vh - 24px)';
+            win.style.transform = 'translate(-50%, calc(-50% - ' + moveUp + 'px))';
         }
 
         function resetCategoryModalPosition() {
             const win = document.getElementById('category-modal-window');
             if (win) {
                 win.style.maxHeight = 'calc(100vh - 24px)';
-                win.style.transform = 'translate(-50%,-50%)';
+                win.style.transform = 'translate(-50%, -50%)';
             }
         }
 
