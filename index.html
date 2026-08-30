@@ -831,66 +831,6 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
-<script id="bkl-keyboard-visibility-fix">
-(function(){
-  'use strict';
-  var last=null, timer=null;
-  function editable(el){
-    if(!el) return false;
-    var t=(el.tagName||'').toLowerCase();
-    return t==='input'||t==='textarea'||t==='select'||el.isContentEditable;
-  }
-  function scrollFocused(el){
-    if(!editable(el)) return;
-    last=el;
-    var vv=window.visualViewport;
-    var bottom=vv ? vv.height : window.innerHeight;
-    var margin=18;
-    try{
-      var r=el.getBoundingClientRect();
-      if(r.bottom>bottom-margin){
-        var delta=r.bottom-(bottom-margin);
-        var parent=el.parentElement;
-        while(parent && parent!==document.body){
-          var cs=getComputedStyle(parent);
-          if((cs.overflowY==='auto'||cs.overflowY==='scroll') && parent.scrollHeight>parent.clientHeight+2){
-            parent.scrollTop += delta;
-            return;
-          }
-          parent=parent.parentElement;
-        }
-        window.scrollBy(0,delta);
-      } else if(r.top<8){
-        var up=8-r.top;
-        var parent2=el.parentElement;
-        while(parent2 && parent2!==document.body){
-          var cs2=getComputedStyle(parent2);
-          if((cs2.overflowY==='auto'||cs2.overflowY==='scroll') && parent2.scrollHeight>parent2.clientHeight+2){
-            parent2.scrollTop -= up;
-            return;
-          }
-          parent2=parent2.parentElement;
-        }
-        window.scrollBy(0,-up);
-      }
-    }catch(e){}
-  }
-  document.addEventListener('focusin',function(e){
-    if(!editable(e.target)) return;
-    clearTimeout(timer);
-    timer=setTimeout(function(){scrollFocused(e.target);},120);
-    setTimeout(function(){scrollFocused(e.target);},350);
-  },true);
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize',function(){
-      if(last) setTimeout(function(){scrollFocused(last);},80);
-    });
-  }
-  window.addEventListener('orientationchange',function(){
-    if(last) setTimeout(function(){scrollFocused(last);},300);
-  });
-})();
-</script>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -9461,6 +9401,26 @@ document.addEventListener('DOMContentLoaded', function(){
     z-index:2147483001!important;
     pointer-events:auto!important;
 }
+
+/* ===== MOBILE KEYBOARD SAFE MODALS: keep fields and bottom actions visible ===== */
+@media (max-width: 900px){
+  body.bkl-keyboard-open .bkl-keyboard-actionbar{
+    position:sticky!important;
+    bottom:0!important;
+    z-index:100!important;
+    background:#fff!important;
+    padding:10px 0 calc(10px + env(safe-area-inset-bottom))!important;
+    margin-top:4px!important;
+    border-top:1px solid #e5e5e5!important;
+    box-shadow:0 -6px 16px rgba(0,0,0,.08)!important;
+  }
+  body.bkl-keyboard-open input:focus,
+  body.bkl-keyboard-open textarea:focus,
+  body.bkl-keyboard-open select:focus{
+    scroll-margin-top:90px!important;
+    scroll-margin-bottom:90px!important;
+  }
+}
 </style>
 
 
@@ -9765,6 +9725,113 @@ document.addEventListener('DOMContentLoaded', function(){
     if(m&&typeof m.__bklClose==='function')m.__bklClose();
   });
 })();
+</script>
+
+
+<script>
+/* ===== Keyboard-safe modal behavior =====
+   The modal itself is resized to the visible viewport when the mobile keyboard opens.
+   The final action row is kept sticky above the keyboard; no buttons are hidden. */
+(function(){
+  const vv = window.visualViewport;
+  const modalSelectors = [
+    '#add-modal','#category-modal','#complaint-modal','#admins-activity-modal',
+    '#branch-activity-modal','#branch-admin-modal','#add-branch-modal','#add-inventory-modal',
+    '#delete-inventory-confirm-modal','#password-modal','#change-password-modal',
+    '#admin-activity-modal','#customer-complaint-chat-modal','#customer-profile-edit-modal',
+    '#owner-dashboard-modal'
+  ];
+
+  function isVisible(el){
+    if(!el) return false;
+    const cs=getComputedStyle(el);
+    return cs.display!=='none' && cs.visibility!=='hidden' && !el.classList.contains('hidden');
+  }
+
+  function getModal(el){
+    return el && el.closest ? el.closest(modalSelectors.join(',')) : null;
+  }
+
+  function markActionBar(modal){
+    if(!modal) return;
+    modal.querySelectorAll('.bkl-keyboard-actionbar').forEach(x=>x.classList.remove('bkl-keyboard-actionbar'));
+    const buttons=[...modal.querySelectorAll('button:not([disabled])')].filter(b=>{
+      const cs=getComputedStyle(b);
+      return cs.display!=='none' && cs.visibility!=='hidden' && b.offsetParent!==null;
+    });
+    if(!buttons.length) return;
+    const last=buttons[buttons.length-1];
+    let parent=last.parentElement;
+    while(parent && parent!==modal){
+      const count=parent.querySelectorAll(':scope > button:not([disabled])').length;
+      if(count>=1 && parent.getBoundingClientRect().height<=180){
+        parent.classList.add('bkl-keyboard-actionbar');
+        return;
+      }
+      parent=parent.parentElement;
+    }
+    last.classList.add('bkl-keyboard-actionbar');
+  }
+
+  function resizeForKeyboard(){
+    const height=vv ? vv.height : window.innerHeight;
+    const top=vv ? Math.max(0,vv.offsetTop||0) : 0;
+    const keyboardOpen=vv ? (window.innerHeight - height > 120) : false;
+    document.body.classList.toggle('bkl-keyboard-open', keyboardOpen);
+
+    modalSelectors.forEach(sel=>document.querySelectorAll(sel).forEach(modal=>{
+      if(!isVisible(modal)) return;
+      markActionBar(modal);
+      const content = modal.querySelector(':scope > .bg-white, :scope > div');
+      if(!content) return;
+      if(keyboardOpen){
+        const gap=10;
+        if(modal.id==='add-modal'){
+          modal.style.height=Math.max(220,height-88-gap)+'px';
+          modal.style.maxHeight=Math.max(220,height-88-gap)+'px';
+        }else{
+          content.style.maxHeight=Math.max(180,height-gap*2)+'px';
+          content.style.height='auto';
+          modal.style.maxHeight=Math.max(180,height)+'px';
+        }
+        content.style.overflowY='auto';
+        content.style.webkitOverflowScrolling='touch';
+      }else{
+        if(modal.id==='add-modal'){
+          modal.style.height=''; modal.style.maxHeight='';
+        }else{
+          content.style.maxHeight=''; content.style.height='';
+          modal.style.maxHeight='';
+        }
+      }
+    }));
+  }
+
+  function focusHandler(e){
+    const el=e.target;
+    if(!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+    const modal=getModal(el);
+    if(!modal) return;
+    markActionBar(modal);
+    setTimeout(()=>{
+      resizeForKeyboard();
+      try{ el.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'}); }catch(_){ el.scrollIntoView(); }
+      setTimeout(()=>{
+        resizeForKeyboard();
+        try{ el.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'}); }catch(_){}
+      },180);
+    },180);
+  }
+
+  document.addEventListener('focusin',focusHandler,true);
+  document.addEventListener('focusout',()=>setTimeout(resizeForKeyboard,120),true);
+  if(vv){ vv.addEventListener('resize',resizeForKeyboard); vv.addEventListener('scroll',resizeForKeyboard); }
+  window.addEventListener('resize',resizeForKeyboard);
+  window.addEventListener('orientationchange',()=>setTimeout(resizeForKeyboard,300));
+  document.addEventListener('click',()=>setTimeout(resizeForKeyboard,50),true);
+  setTimeout(resizeForKeyboard,500);
+})();
+
 </script>
 </body>
 
