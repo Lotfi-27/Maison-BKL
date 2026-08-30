@@ -831,6 +831,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -4285,38 +4286,70 @@ function printOrderInvoice(orderId, action = 'print') {
     `;
 
     if (action === 'save') {
-        // حفظ الفاتورة كملف فعلي، مع إعطاء الأولوية لنافذة الحفظ الأصلية للمتصفح.
+        // حفظ الفاتورة بصيغة PDF مباشرة إلى مستكشف الملفات.
         const safeId = String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_');
-        const fileName = `فاتورة-${safeId}.html`;
-        const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
+        const fileName = `فاتورة-${safeId}.pdf`;
 
         try {
-            // Chrome / Edge: يفتح نافذة "حفظ باسم" وينشئ الملف فعلياً في مستكشف الملفات.
-            if (typeof window.showSaveFilePicker === 'function') {
-                window.showSaveFilePicker({
-                    suggestedName: fileName,
-                    types: [{
-                        description: 'فاتورة HTML',
-                        accept: { 'text/html': ['.html'] }
-                    }]
-                }).then(async (handle) => {
-                    const writable = await handle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                    notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بنجاح.`, 'invoice-saved');
-                    alert('تم حفظ الفاتورة بنجاح.');
-                }).catch((error) => {
-                    // الضغط على إلغاء لا يعتبر خطأ ولا يغلق المتجر.
-                    if (error && error.name === 'AbortError') return;
-                    console.error('BKL invoice save picker error:', error);
-                    bklDownloadInvoiceBlob(blob, fileName, order);
-                });
-            } else {
-                bklDownloadInvoiceBlob(blob, fileName, order);
+            if (typeof html2pdf !== 'function') {
+                alert('تعذر تحميل أداة إنشاء PDF. تأكد من الاتصال بالإنترنت ثم حاول مرة أخرى.');
+                return;
             }
+
+            const temp = document.createElement('div');
+            temp.innerHTML = invoiceHtml;
+            const body = temp.querySelector('body') || temp;
+            const content = body.querySelector('.invoice-box') || body;
+            content.style.width = '190mm';
+            content.style.maxWidth = '190mm';
+            content.style.margin = '0 auto';
+            content.style.background = '#fff';
+            document.body.appendChild(temp);
+
+            const options = {
+                margin: [8, 8, 8, 8],
+                filename: fileName,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(options).from(content).outputPdf('blob').then(async (pdfBlob) => {
+                try {
+                    if (typeof window.showSaveFilePicker === 'function') {
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: fileName,
+                            types: [{ description: 'ملف PDF', accept: { 'application/pdf': ['.pdf'] } }]
+                        });
+                        const writable = await handle.createWritable();
+                        await writable.write(pdfBlob);
+                        await writable.close();
+                    } else {
+                        const url = URL.createObjectURL(pdfBlob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = fileName;
+                        document.body.appendChild(link);
+                        link.click();
+                        setTimeout(() => { try { link.remove(); } catch (_) {} try { URL.revokeObjectURL(url); } catch (_) {} }, 15000);
+                    }
+                    notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بصيغة PDF بنجاح.`, 'invoice-saved');
+                    alert('تم حفظ الفاتورة بصيغة PDF بنجاح.');
+                } catch (error) {
+                    if (error && error.name === 'AbortError') return;
+                    console.error('BKL PDF save error:', error);
+                    alert('تعذر حفظ الفاتورة بصيغة PDF. يرجى المحاولة مرة أخرى.');
+                } finally {
+                    try { temp.remove(); } catch (_) {}
+                }
+            }).catch((error) => {
+                console.error('BKL PDF generation error:', error);
+                try { temp.remove(); } catch (_) {}
+                alert('تعذر إنشاء ملف PDF للفاتورة.');
+            });
         } catch (error) {
-            console.error('BKL invoice save error:', error);
-            bklDownloadInvoiceBlob(blob, fileName, order);
+            console.error('BKL invoice PDF save error:', error);
+            alert('تعذر حفظ الفاتورة بصيغة PDF. يرجى المحاولة مرة أخرى.');
         }
         return;
     }
