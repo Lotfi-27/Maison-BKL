@@ -466,7 +466,7 @@
 
         /* Prevent dynamic modal contents from hiding their headings. */
         #complaint-modal > div, #customer-complaint-chat-modal > div,
-        #category-modal > div, #password-modal > div, #change-password-modal > div,
+        #password-modal > div, #change-password-modal > div,
         #add-branch-modal > div, #add-inventory-modal > div, #delete-inventory-confirm-modal > div{
             position:relative!important;
             max-height:calc(100vh - 32px)!important;
@@ -474,7 +474,7 @@
             overflow-x:hidden!important;
             box-sizing:border-box!important;
         }
-        #complaint-modal h3, #customer-complaint-chat-modal h3, #category-modal h3,
+        #complaint-modal h3, #customer-complaint-chat-modal h3,
         #password-modal h3, #change-password-modal h3, #add-branch-modal h3,
         #add-inventory-modal h3, #delete-inventory-confirm-modal h3{
             display:block!important;
@@ -1479,7 +1479,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
     <!-- ================= ADD CATEGORY MODAL ================= -->
     <div id="category-modal" class="hidden fixed inset-0 z-[999999] bg-neutral-900/50 backdrop-blur-sm">
-        <div id="category-modal-window" class="bg-white rounded-3xl w-[calc(100vw-32px)] max-w-sm p-5 flex flex-col gap-4 shadow-2xl" style="position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); max-height:calc(100vh - 16px); overflow-y:auto; transition:top 0.12s ease-out;">
+        <div id="category-modal-window" class="bg-white rounded-3xl w-[calc(100vw-32px)] max-w-sm p-5 flex flex-col gap-4 shadow-2xl" style="position:fixed!important; left:50%; top:50%; transform:translate(-50%,-50%); max-height:calc(100vh - 24px); overflow-y:auto; transition:transform 0.18s ease-out;">
             <h3 id="category-modal-title" class="text-sm font-bold text-neutral-900">إضافة تصنيف جديد</h3>
 
             <div class="flex flex-col gap-1">
@@ -1507,25 +1507,25 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             if (!modal || !win || modal.classList.contains('hidden')) return;
 
             const vv = window.visualViewport;
-            const viewportTop = vv ? vv.offsetTop : 0;
-            const viewportHeight = vv ? vv.height : window.innerHeight;
-            const gap = 8;
+            const visibleTop = vv ? vv.offsetTop : 0;
+            const visibleBottom = vv ? (vv.offsetTop + vv.height) : window.innerHeight;
+            const gap = 10;
 
-            win.style.maxHeight = Math.max(120, viewportHeight - gap * 2) + 'px';
-            const height = win.getBoundingClientRect().height;
-            let top = viewportTop + (viewportHeight - height) / 2;
-            top = Math.max(viewportTop + gap, top);
-            top = Math.min(top, viewportTop + viewportHeight - height - gap);
+            win.style.maxHeight = Math.max(140, visibleBottom - visibleTop - gap * 2) + 'px';
+            win.style.transform = 'translate(-50%, -50%)';
 
-            win.style.top = Math.round(top) + 'px';
-            win.style.transform = 'translateX(-50%)';
+            // Keep the window centered normally. If the keyboard appears,
+            // move it upward only as much as needed to reveal the buttons.
+            const rect = win.getBoundingClientRect();
+            const overlap = rect.bottom - (visibleBottom - gap);
+            const shiftUp = overlap > 0 ? overlap : 0;
+            win.style.transform = 'translate(-50%, calc(-50% - ' + Math.round(shiftUp) + 'px))';
         }
 
         function resetCategoryModalPosition() {
             const win = document.getElementById('category-modal-window');
             if (win) {
-                win.style.top = '50%';
-                win.style.maxHeight = 'calc(100vh - 16px)';
+                win.style.maxHeight = 'calc(100vh - 24px)';
                 win.style.transform = 'translate(-50%,-50%)';
             }
         }
@@ -1538,26 +1538,27 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
         document.addEventListener('focusin', function (e) {
             if (e.target && (e.target.id === 'new-cat-id' || e.target.id === 'new-cat-name')) {
-                setTimeout(syncCategoryModalWithKeyboard, 50);
+                setTimeout(syncCategoryModalWithKeyboard, 80);
                 setTimeout(syncCategoryModalWithKeyboard, 250);
             }
         });
 
-        const oldOpen = window.openAddCategoryModal;
-        if (typeof oldOpen === 'function') {
+        const oldOpenCategory = window.openAddCategoryModal;
+        const oldCloseCategory = window.closeAddCategoryModal;
+        if (typeof oldOpenCategory === 'function') {
             window.openAddCategoryModal = function () {
-                const result = oldOpen.apply(this, arguments);
-                requestAnimationFrame(function(){ syncCategoryModalWithKeyboard(); });
-                setTimeout(syncCategoryModalWithKeyboard, 80);
+                const result = oldOpenCategory.apply(this, arguments);
+                requestAnimationFrame(function () {
+                    resetCategoryModalPosition();
+                    syncCategoryModalWithKeyboard();
+                });
                 return result;
             };
         }
-
-        const oldClose = window.closeAddCategoryModal;
-        if (typeof oldClose === 'function') {
+        if (typeof oldCloseCategory === 'function') {
             window.closeAddCategoryModal = function () {
                 resetCategoryModalPosition();
-                return oldClose.apply(this, arguments);
+                return oldCloseCategory.apply(this, arguments);
             };
         }
     })();
