@@ -3744,7 +3744,7 @@ function closeOrderPreview() {
   };
 })();
 
-function printOrderInvoice(orderId, action = 'print') {
+async function printOrderInvoice(orderId, action = 'print') {
     const orders = getStoreOrders();
     const order = orders.find(o => o && o.id == orderId);
     if (!order) {
@@ -4283,106 +4283,119 @@ function printOrderInvoice(orderId, action = 'print') {
 <\/script>
 </body>
         </html>
-    `;
-
-    if (action === 'save') {
-        // حفظ الفاتورة كـ PDF. نفتح نافذة اختيار المكان أولاً أثناء نقرة المستخدم
-        // حتى لا يفقد المتصفح صلاحية showSaveFilePicker بعد إنشاء الـ PDF.
+    `;if (action === 'save') {
+        // حفظ الفاتورة PDF بدون أي مكتبة خارجية. هذا يمنع فشل الحفظ عندما لا يتم تحميل html2pdf.
         const safeId = String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_');
         const fileName = `فاتورة-${safeId}.pdf`;
-        let saveHandle = null;
-        let pickerCancelled = false;
+
+        const drawInvoiceCanvas = () => {
+            const canvas = document.createElement('canvas');
+            const W = 1240, H = 1754;
+            canvas.width = W; canvas.height = H;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+            ctx.direction = 'rtl'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+            const margin = 70;
+            let y = 65;
+            const font = (size, bold=false) => `${bold ? '700' : '400'} ${size}px Segoe UI, Tahoma, Arial, sans-serif`;
+            const line = (yy) => { ctx.strokeStyle='#dddddd'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(margin,yy); ctx.lineTo(W-margin,yy); ctx.stroke(); };
+            const text = (value, x, yy, size=24, bold=false) => { ctx.font=font(size,bold); ctx.fillStyle='#111111'; ctx.fillText(String(value ?? ''),x,yy); };
+            const money = value => formatDZD(value);
+
+            text('Maison BKL - متجر السوق الذكي', W-margin, y, 32, true);
+            text(`فاتورة شراء رقم #${order.id}`, margin, y+5, 27, true);
+            y += 58; line(y); y += 28;
+
+            text('معلومات الزبون:', W-margin, y, 25, true);
+            text(`الاسم واللقب: ${customerName}`, W-margin, y+40, 21);
+            text(`الهاتف: ${customerPhone}`, W-margin, y+75, 21);
+            text(`البلد: ${country}`, W-margin, y+110, 21);
+            text(`الولاية: ${state}`, W-margin, y+145, 21);
+            text(`البلدية: ${municipality}`, W-margin, y+180, 21);
+            text(`العنوان: ${address}`, W-margin, y+215, 21);
+
+            text('تفاصيل الفاتورة:', margin+430, y, 25, true);
+            text(`التاريخ: ${orderDate}`, margin+430, y+40, 21);
+            text(`حالة الطلب: ${orderStatus}`, margin+430, y+75, 21);
+            text(`طريقة الدفع: ${paymentMethod}`, margin+430, y+110, 21);
+            text(`عدد الأصناف: ${invoiceItems.length}`, margin+430, y+145, 21);
+            y += 265; line(y); y += 25;
+
+            const cols = [
+                {x:W-margin, w:330, t:'المنتج'},
+                {x:W-margin-330, w:210, t:'سعر الوحدة'},
+                {x:W-margin-540, w:230, t:'المواصفات'},
+                {x:W-margin-770, w:100, t:'الكمية'},
+                {x:W-margin-870, w:300, t:'المجموع'}
+            ];
+            ctx.fillStyle='#111111'; ctx.fillRect(margin,y,W-2*margin,52);
+            cols.forEach(c=>{ctx.fillStyle='#ffffff';ctx.font=font(20,true);ctx.textAlign='right';ctx.fillText(c.t,c.x,y+14);});
+            y += 65;
+            invoiceItems.forEach(item=>{
+                const vals=[item.name,money(item.unitPriceDZD),item.specifications,String(item.quantity),money(item.subtotalDZD)];
+                cols.forEach((c,i)=>text(vals[i],c.x,y,18,false));
+                y += 55; line(y); y += 14;
+            });
+            y += 25;
+            text(`مجموع المنتجات: ${money(productsSubtotalDZD)}`, W-margin, y, 23, true); y+=45;
+            text(`سعر التوصيل: ${money(shippingFeeDZD)}`, W-margin, y, 23); y+=45;
+            if (String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined) {
+                text(`إجمالي الفاتورة الأصلية: ${money(originalGrandTotalDZD)}`, W-margin, y, 23); y+=45;
+                text(`إجمالي المدفوع: ${money(Math.max(0, originalGrandTotalDZD - grandTotalDZD))}`, W-margin, y, 23); y+=45;
+                text(`المبلغ المتبقي بعد التسديد: ${money(grandTotalDZD)}`, W-margin, y, 27, true);
+            } else {
+                text(`المبلغ الإجمالي: ${money(grandTotalDZD)}`, W-margin, y, 27, true);
+            }
+            y += 85; line(y); y += 25;
+            text('شكراً لتسوقكم معنا! لأي استفسار يرجى الاتصال بخدمة الزبائن.', W/2, y, 18);
+            ctx.textAlign='right';
+            return canvas;
+        };
+
+        const canvasToPdfBlob = (canvas) => {
+            const data = canvas.toDataURL('image/jpeg', 0.94).split(',')[1];
+            const bin = atob(data); const jpg = new Uint8Array(bin.length);
+            for (let i=0;i<bin.length;i++) jpg[i]=bin.charCodeAt(i);
+            const enc = new TextEncoder(); const chunks=[]; const offsets=[0]; let pos=0;
+            const push = bytes => { chunks.push(bytes); pos += bytes.length; };
+            const obj = (n, body) => { offsets[n]=pos; push(enc.encode(`${n} 0 obj\n`)); push(body); push(enc.encode('\nendobj\n')); };
+            push(enc.encode('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'));
+            obj(1,enc.encode('<< /Type /Catalog /Pages 2 0 R >>'));
+            obj(2,enc.encode('<< /Type /Pages /Kids [3 0 R] /Count 1 >>'));
+            obj(3,enc.encode('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>'));
+            const imgHeader=enc.encode(`<< /Type /XObject /Subtype /Image /Width ${canvas.width} /Height ${canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`);
+            const imgBody=new Uint8Array(imgHeader.length+jpg.length+10); imgBody.set(imgHeader); imgBody.set(jpg,imgHeader.length); imgBody.set(enc.encode('\nendstream'),imgHeader.length+jpg.length);
+            obj(4,imgBody);
+            const content=enc.encode('q\n595 0 0 842 0 0 cm\n/Im1 Do\nQ\n');
+            obj(5,enc.encode(`<< /Length ${content.length} >>\nstream\n${new TextDecoder().decode(content)}endstream`));
+            const xref=pos; let x=`xref\n0 6\n0000000000 65535 f \n`; for(let i=1;i<=5;i++) x+=String(offsets[i]).padStart(10,'0')+' 00000 n \n'; x+=`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+            push(enc.encode(x)); return new Blob(chunks,{type:'application/pdf'});
+        };
 
         try {
-            if (typeof html2pdf !== 'function') {
-                alert('تعذر تحميل أداة إنشاء PDF. تأكد من الاتصال بالإنترنت ثم حاول مرة أخرى.');
-                return;
-            }
-
-            // مهم: افتح مستكشف الملفات قبل أي Promise/await.
+            // فتح نافذة اختيار المكان أثناء نقرة المستخدم، إن كانت مدعومة.
+            let handle = null;
             if (typeof window.showSaveFilePicker === 'function') {
-                window.showSaveFilePicker({
-                    suggestedName: fileName,
-                    types: [{ description: 'ملف PDF', accept: { 'application/pdf': ['.pdf'] } }],
-                    excludeAcceptAllOption: false
-                }).then(handle => {
-                    saveHandle = handle;
-                    generateAndSaveInvoicePDF();
-                }).catch(error => {
-                    if (error && error.name === 'AbortError') {
-                        pickerCancelled = true;
-                        return;
-                    }
-                    console.error('BKL save picker error:', error);
-                    generateAndSaveInvoicePDF();
-                });
+                try { handle = await window.showSaveFilePicker({suggestedName:fileName,types:[{description:'ملف PDF',accept:{'application/pdf':['.pdf']}}]}); }
+                catch(e) { if(e && e.name==='AbortError') return; }
+            }
+            const pdfBlob = canvasToPdfBlob(drawInvoiceCanvas());
+            if (handle) {
+                const writable = await handle.createWritable();
+                await writable.write(pdfBlob); await writable.close();
             } else {
-                generateAndSaveInvoicePDF();
+                const url=URL.createObjectURL(pdfBlob), link=document.createElement('a');
+                link.href=url; link.download=fileName; document.body.appendChild(link); link.click();
+                setTimeout(()=>{try{link.remove();URL.revokeObjectURL(url);}catch(_){}},10000);
             }
-
-            function generateAndSaveInvoicePDF() {
-                if (pickerCancelled) return;
-
-                const temp = document.createElement('div');
-                temp.innerHTML = invoiceHtml;
-                const body = temp.querySelector('body') || temp;
-                const content = body.querySelector('.invoice-box') || body;
-                content.style.width = '190mm';
-                content.style.maxWidth = '190mm';
-                content.style.margin = '0 auto';
-                content.style.background = '#fff';
-                document.body.appendChild(temp);
-
-                const options = {
-                    margin: [8, 8, 8, 8],
-                    filename: fileName,
-                    image: { type: 'jpeg', quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                };
-
-                html2pdf().set(options).from(content).outputPdf('blob').then(async (pdfBlob) => {
-                    try {
-                        if (saveHandle) {
-                            const writable = await saveHandle.createWritable();
-                            await writable.write(pdfBlob);
-                            await writable.close();
-                        } else {
-                            // المتصفحات التي لا تدعم مستكشف الملفات: تنزيل PDF مباشرة.
-                            const url = URL.createObjectURL(pdfBlob);
-                            const link = document.createElement('a');
-                            link.href = url;
-                            link.download = fileName;
-                            link.style.display = 'none';
-                            document.body.appendChild(link);
-                            link.click();
-                            setTimeout(() => {
-                                try { link.remove(); } catch (_) {}
-                                try { URL.revokeObjectURL(url); } catch (_) {}
-                            }, 15000);
-                        }
-
-                        notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بصيغة PDF بنجاح.`, 'invoice-saved');
-                        alert('تم حفظ الفاتورة بصيغة PDF بنجاح.');
-                    } catch (error) {
-                        console.error('BKL PDF write error:', error);
-                        alert('تعذر حفظ الفاتورة بصيغة PDF. يرجى المحاولة مرة أخرى.');
-                    } finally {
-                        try { temp.remove(); } catch (_) {}
-                    }
-                }).catch((error) => {
-                    console.error('BKL PDF generation error:', error);
-                    try { temp.remove(); } catch (_) {}
-                    alert('تعذر إنشاء ملف PDF للفاتورة.');
-                });
-            }
-        } catch (error) {
-            console.error('BKL invoice PDF save error:', error);
+            notifyCustomerForOrder(order, `تم حفظ فاتورة طلبك رقم #${order.id} بصيغة PDF بنجاح.`, 'invoice-saved');
+            alert('تم حفظ الفاتورة بصيغة PDF بنجاح.');
+        } catch(error) {
+            console.error('BKL invoice PDF save error:',error);
             alert('تعذر حفظ الفاتورة بصيغة PDF. يرجى المحاولة مرة أخرى.');
         }
         return;
     }
-
 
     const printWindow = bklOpenEmbeddedWindow('bkl-invoice-print-modal', 'طباعة الفاتورة');
     printWindow.document.write(invoiceHtml);
