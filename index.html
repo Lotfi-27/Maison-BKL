@@ -831,14 +831,6 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
-
-<style id="bkl-category-keyboard-only-fix">
-@media (max-width: 768px) {
-  #category-modal { box-sizing:border-box !important; align-items:center !important; justify-content:center !important; overflow:hidden !important; }
-  #category-modal > div { box-sizing:border-box !important; width:100% !important; max-width:24rem !important; max-height:calc(100dvh - 16px) !important; overflow-y:auto !important; overscroll-behavior:contain !important; }
-  #category-modal > div > div:last-child { position:sticky !important; bottom:0 !important; z-index:2 !important; background:#fff !important; padding-bottom:2px !important; }
-}
-</style>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -1442,8 +1434,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             </div>
 
             <div class="flex flex-col gap-1">
-                <label id="lbl-prod-price" class="text-[11px] text-neutral-600 font-medium">السعر (د.ج)</label>
-                <input id="new-price" type="number" min="0" step="1" inputmode="decimal" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                <label id="lbl-prod-price" class="text-[11px] text-neutral-600 font-medium">السعر</label>
+                <input id="new-price" type="number" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
             </div>
 
             <div class="flex flex-col gap-1">
@@ -1487,7 +1479,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
     <!-- ================= ADD CATEGORY MODAL ================= -->
     <div id="category-modal" class="hidden fixed inset-0 z-50 bg-neutral-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl max-w-sm w-full p-5 flex flex-col gap-4 shadow-xl">
+        <div id="category-modal-window" class="bg-white rounded-3xl max-w-sm w-full p-5 flex flex-col gap-4 shadow-xl" style="transition: transform 0.12s ease-out;">
             <h3 id="category-modal-title" class="text-sm font-bold text-neutral-900">إضافة تصنيف جديد</h3>
 
             <div class="flex flex-col gap-1">
@@ -1506,6 +1498,38 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             </div>
         </div>
     </div>
+
+    <script>
+    (function () {
+        function syncCategoryModalWithKeyboard() {
+            const modal = document.getElementById('category-modal');
+            const win = document.getElementById('category-modal-window');
+            if (!modal || !win || modal.classList.contains('hidden')) return;
+            const vv = window.visualViewport;
+            if (!vv) { win.style.transform = ''; return; }
+            const keyboardHeight = Math.max(0, document.documentElement.clientHeight - vv.height);
+            win.style.transform = keyboardHeight > 0 ? 'translateY(-' + keyboardHeight + 'px)' : '';
+        }
+        function resetCategoryModalPosition() {
+            const win = document.getElementById('category-modal-window');
+            if (win) win.style.transform = '';
+        }
+        window.addEventListener('resize', syncCategoryModalWithKeyboard);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', syncCategoryModalWithKeyboard);
+            window.visualViewport.addEventListener('scroll', syncCategoryModalWithKeyboard);
+        }
+        document.addEventListener('focusin', function (e) {
+            if (e.target && (e.target.id === 'new-cat-id' || e.target.id === 'new-cat-name')) {
+                setTimeout(syncCategoryModalWithKeyboard, 80);
+            }
+        });
+        const oldClose = window.closeAddCategoryModal;
+        if (typeof oldClose === 'function') {
+            window.closeAddCategoryModal = function () { resetCategoryModalPosition(); return oldClose.apply(this, arguments); };
+        }
+    })();
+    </script>
 
     <!-- ================= USER COMPLAINT MODAL ================= -->
     <!-- ================= OWNER HOME HERO EDITOR ================= -->
@@ -1944,7 +1968,6 @@ const currencyConfig = {
     DZD: { symbol: 'د.ج', rate: 132.96, position: 'after' }
 };
 
-// الدينار الجزائري هو العملة الرئيسية والأساسية للمتجر.
 let currentCurrency = 'DZD';
 let exchangeRatesLastUpdated = null;
 let exchangeRatesSource = 'ExchangeRate-API';
@@ -1955,11 +1978,9 @@ function formatPrice(basePriceUSD, priceDZD = null) {
 
     // Products created in the store have an authoritative DZD price.
     // Never convert that DZD price back through an old/fixed exchange rate when DZD is selected.
-    const hasStoredDZDPrice = priceDZD !== null && priceDZD !== undefined && String(priceDZD).trim() !== '' && Number.isFinite(Number(priceDZD));
-
-    if (hasStoredDZDPrice && currentCurrency === 'DZD') {
+    if (Number.isFinite(Number(priceDZD)) && currentCurrency === 'DZD') {
         converted = Number(priceDZD);
-    } else if (hasStoredDZDPrice && currentCurrency !== 'USD') {
+    } else if (Number.isFinite(Number(priceDZD)) && currentCurrency !== 'USD') {
         // Convert the product's DZD price to the selected currency using the current DZD rate.
         const dzdPerUsd = Number(currencyConfig.DZD.rate) || 1;
         const usdAmount = Number(priceDZD) / dzdPerUsd;
@@ -5884,45 +5905,6 @@ let currentImageMappings = [];
 
 
 
-function loadBKLStoredProducts() {
-    try {
-        const raw = localStorage.getItem('store_products');
-        if (!raw) return;
-        const stored = JSON.parse(raw);
-        if (!Array.isArray(stored)) return;
-
-        products = stored.map(p => {
-            const item = (p && typeof p === 'object') ? { ...p } : p;
-            if (!item || typeof item !== 'object') return item;
-
-            // توحيد اسم السعر المحفوظ مع الحفاظ على السعر الأصلي.
-            if (item.priceDZD === null || item.priceDZD === undefined || String(item.priceDZD).trim() === '') {
-                const legacyPrice = item.price ?? item.unitPriceDZD ?? item.priceBaseDZD;
-                if (legacyPrice !== null && legacyPrice !== undefined && String(legacyPrice).trim() !== '' && Number.isFinite(Number(legacyPrice))) {
-                    item.priceDZD = Number(legacyPrice);
-                }
-            }
-
-            if (!Array.isArray(item.images)) item.images = [];
-            if (!item.mainImage && item.images.length) item.mainImage = item.images[0];
-            return item;
-        }).filter(Boolean);
-    } catch (e) {
-        console.warn('تعذر تحميل المنتجات المحفوظة:', e);
-    }
-}
-
-function loadSavedBKLProducts() {
-    try {
-        const saved = JSON.parse(localStorage.getItem('store_products') || 'null');
-        if (Array.isArray(saved)) {
-            products = saved;
-        }
-    } catch (e) {
-        console.warn('تعذر تحميل المنتجات المحفوظة', e);
-    }
-}
-
 function migrateBKLProductMainImages() {
     if (!Array.isArray(products)) return;
     products.forEach(p => {
@@ -5962,24 +5944,7 @@ function updateBKLTopCartBadge() {
     badge.style.display = count > 0 ? 'flex' : 'none';
 }
 
-function normalizeBKLProductPrices() {
-    if (!Array.isArray(products)) return;
-    products.forEach(p => {
-        if (!Number.isFinite(Number(p.priceDZD))) {
-            const legacyBase = Number(p.basePrice);
-            if (Number.isFinite(legacyBase)) {
-                p.priceDZD = Math.round(legacyBase * Number(currencyConfig?.DZD?.rate || 132.96));
-            }
-        }
-        if (Number.isFinite(Number(p.priceDZD))) {
-            p.priceDZD = Number(p.priceDZD);
-            p.basePrice = p.priceDZD / Number(currencyConfig?.DZD?.rate || 132.96);
-        }
-    });
-}
-
 function renderProducts() {
-    normalizeBKLProductPrices();
     const grid = document.getElementById('products-grid');
     if (!grid) return;
     grid.innerHTML = "";
@@ -6051,7 +6016,7 @@ function openEditModal() {
     const newName = document.getElementById('new-name');
     if (newName) newName.value = selectedProduct.name;
     const newPrice = document.getElementById('new-price');
-    if (newPrice) newPrice.value = Number.isFinite(Number(selectedProduct.priceDZD)) ? selectedProduct.priceDZD : Math.round(Number(selectedProduct.basePrice || 0) * Number(currencyConfig?.DZD?.rate || 132.96));
+    if (newPrice) newPrice.value = selectedProduct.basePrice;
     const mainFile = document.getElementById('main-image-file');
     if (mainFile) mainFile.value = "";
     mainProductImage = selectedProduct.mainImage || ((selectedProduct.images || [])[0] || "");
@@ -6396,8 +6361,8 @@ function processSave(editId, name, basePrice, imagesArray, desc, colorsArray, si
         let prod = products.find(p => p.id == editId);
         if (prod) {
             prod.name = name;
-            prod.priceDZD = Number(basePrice);
-            prod.basePrice = Number(basePrice) / Number(currencyConfig?.DZD?.rate || 132.96);
+            prod.basePrice = basePrice / Number(currencyConfig?.DZD?.rate || 132.96);
+            prod.priceDZD = basePrice;
             prod.images = imagesArray;
             prod.mainImage = mainProductImage || (imagesArray[0] || "");
             prod.description = finalDesc;
@@ -6412,8 +6377,8 @@ function processSave(editId, name, basePrice, imagesArray, desc, colorsArray, si
             id: Date.now(),
             name: name,
             category: currentCategory === 'all' ? 'fashion' : currentCategory,
-            priceDZD: Number(basePrice),
-            basePrice: Number(basePrice) / Number(currencyConfig?.DZD?.rate || 132.96),
+            basePrice: basePrice / Number(currencyConfig?.DZD?.rate || 132.96),
+            priceDZD: basePrice,
             images: imagesArray,
             mainImage: mainProductImage || (imagesArray[0] || ""),
             description: finalDesc,
@@ -6425,7 +6390,6 @@ function processSave(editId, name, basePrice, imagesArray, desc, colorsArray, si
         products.unshift(newProduct);
     }
 
-    try { localStorage.setItem('store_products', JSON.stringify(products)); } catch (e) { console.warn('تعذر حفظ المنتجات محلياً', e); }
     renderProducts();
     closeAddModal();
     if (editId !== "" && selectedProduct) selectProduct(selectedProduct.id);
@@ -9293,11 +9257,7 @@ let activeComplaintChatId = null;
 <script>
 document.addEventListener('DOMContentLoaded', function(){
     try { bindOrderManagementEvents(); } catch(e) {}
-    try { loadBKLStoredProducts(); } catch(e) {}
-    try { loadSavedBKLProducts(); } catch(e) {}
     try { migrateBKLProductMainImages(); } catch(e) {}
-    try { renderCategoriesTabs(); } catch(e) {}
-    try { filterCategory('all', document.getElementById('tab-all')); } catch(e) { try { renderProducts(); } catch(_) {} }
     try { updateBKLTopCartBadge(); } catch(e) {}
 });
 
@@ -9712,45 +9672,6 @@ document.addEventListener('DOMContentLoaded', function(){
     var m=document.getElementById(id);
     if(m&&typeof m.__bklClose==='function')m.__bklClose();
   });
-})();
-</script>
-
-<script id="bkl-category-keyboard-only-fix-js">
-(function(){
-  function setup(){
-    var modal=document.getElementById('category-modal');
-    if(!modal) return;
-    var panel=modal.firstElementChild;
-    if(!panel) return;
-    function adjust(){
-      if(modal.classList.contains('hidden')) return;
-      var vv=window.visualViewport;
-      var h=vv ? vv.height : window.innerHeight;
-      var top=vv ? vv.offsetTop : 0;
-      modal.style.height=h+'px';
-      modal.style.top=top+'px';
-      modal.style.bottom='auto';
-      panel.style.maxHeight=Math.max(120,h-16)+'px';
-      panel.style.overflowY='auto';
-    }
-    function reset(){
-      modal.style.height=''; modal.style.top=''; modal.style.bottom='';
-      panel.style.maxHeight=''; panel.style.overflowY='';
-    }
-    modal.addEventListener('focusin',function(e){
-      adjust();
-      setTimeout(function(){
-        if(e.target && e.target.scrollIntoView) e.target.scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'});
-      },120);
-    });
-    window.addEventListener('resize',adjust,{passive:true});
-    if(window.visualViewport){
-      window.visualViewport.addEventListener('resize',adjust,{passive:true});
-      window.visualViewport.addEventListener('scroll',adjust,{passive:true});
-    }
-    new MutationObserver(function(){ if(modal.classList.contains('hidden')) reset(); else adjust(); }).observe(modal,{attributes:true,attributeFilter:['class']});
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',setup); else setup();
 })();
 </script>
 </body>
