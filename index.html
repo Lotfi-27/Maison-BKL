@@ -4283,6 +4283,116 @@ function printOrderInvoice(orderId, action = 'print') {
   normalize();
 })();
 <\/script>
+
+<!-- CATEGORY MODAL MOBILE KEYBOARD FIX: scoped only to "category-modal" -->
+<style>
+@media (max-width: 768px){
+  #category-modal.bkl-cat-keyboard-open{
+    align-items:flex-start !important;
+    justify-content:center !important;
+    padding:8px !important;
+    overflow:hidden !important;
+  }
+  #category-modal.bkl-cat-keyboard-open > .bg-white{
+    width:100% !important;
+    max-width:24rem !important;
+    max-height:none !important;
+    overflow:visible !important;
+    box-sizing:border-box !important;
+    flex-shrink:0 !important;
+  }
+  #category-modal.bkl-cat-keyboard-open > .bg-white > div:last-child{
+    position:sticky !important;
+    bottom:0 !important;
+    background:#fff !important;
+    padding-top:10px !important;
+    padding-bottom:2px !important;
+    z-index:5 !important;
+  }
+}
+</style>
+<script>
+(function(){
+  function setupCategoryKeyboardFix(){
+    const modal=document.getElementById('category-modal');
+    if(!modal || modal.dataset.bklKeyboardFix==='1') return;
+    modal.dataset.bklKeyboardFix='1';
+    const panel=modal.querySelector(':scope > .bg-white');
+    if(!panel) return;
+    const inputs=panel.querySelectorAll('input,textarea,select');
+
+    function reset(){
+      modal.classList.remove('bkl-cat-keyboard-open');
+      modal.style.height='';
+      modal.style.top='';
+      modal.style.bottom='';
+      modal.style.alignItems='';
+      panel.style.maxHeight='';
+      panel.style.transform='';
+    }
+
+    function adjust(){
+      if(modal.classList.contains('hidden')) { reset(); return; }
+      const vv=window.visualViewport;
+      if(!vv){ return; }
+      const keyboardOpen=(window.innerHeight-vv.height)>100;
+      if(!keyboardOpen){ reset(); return; }
+
+      modal.classList.add('bkl-cat-keyboard-open');
+      modal.style.height=vv.height+'px';
+      modal.style.top=vv.offsetTop+'px';
+      modal.style.bottom='auto';
+
+      const available=Math.max(230, vv.height-16);
+      panel.style.maxHeight=available+'px';
+      panel.style.overflowY='auto';
+      panel.style.webkitOverflowScrolling='touch';
+
+      const active=document.activeElement;
+      if(active && panel.contains(active)){
+        setTimeout(function(){
+          active.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'});
+        },50);
+      }
+    }
+
+    inputs.forEach(function(el){
+      el.addEventListener('focus',function(){
+        setTimeout(adjust,80);
+        setTimeout(adjust,250);
+      });
+    });
+    modal.addEventListener('transitionend',adjust);
+    if(window.visualViewport){
+      window.visualViewport.addEventListener('resize',adjust);
+      window.visualViewport.addEventListener('scroll',adjust);
+    }
+    window.addEventListener('resize',adjust);
+
+    const observer=new MutationObserver(function(){
+      if(modal.classList.contains('hidden')) reset();
+      else if(document.activeElement && panel.contains(document.activeElement)) adjust();
+    });
+    observer.observe(modal,{attributes:true,attributeFilter:['class']});
+
+    // Re-apply after the existing open function displays the modal.
+    const originalOpen=window.openAddCategoryModal;
+    if(typeof originalOpen==='function' && !originalOpen.__bklWrapped){
+      const wrapped=function(){
+        const result=originalOpen.apply(this,arguments);
+        setTimeout(adjust,60);
+        return result;
+      };
+      wrapped.__bklWrapped=true;
+      window.openAddCategoryModal=wrapped;
+    }
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',setupCategoryKeyboardFix);
+  else setupCategoryKeyboardFix();
+})();
+</script>
+
 </body>
         </html>
     `;
@@ -9401,26 +9511,6 @@ document.addEventListener('DOMContentLoaded', function(){
     z-index:2147483001!important;
     pointer-events:auto!important;
 }
-
-/* ===== MOBILE KEYBOARD SAFE MODALS: keep fields and bottom actions visible ===== */
-@media (max-width: 900px){
-  body.bkl-keyboard-open .bkl-keyboard-actionbar{
-    position:sticky!important;
-    bottom:0!important;
-    z-index:100!important;
-    background:#fff!important;
-    padding:10px 0 calc(10px + env(safe-area-inset-bottom))!important;
-    margin-top:4px!important;
-    border-top:1px solid #e5e5e5!important;
-    box-shadow:0 -6px 16px rgba(0,0,0,.08)!important;
-  }
-  body.bkl-keyboard-open input:focus,
-  body.bkl-keyboard-open textarea:focus,
-  body.bkl-keyboard-open select:focus{
-    scroll-margin-top:90px!important;
-    scroll-margin-bottom:90px!important;
-  }
-}
 </style>
 
 
@@ -9725,113 +9815,6 @@ document.addEventListener('DOMContentLoaded', function(){
     if(m&&typeof m.__bklClose==='function')m.__bklClose();
   });
 })();
-</script>
-
-
-<script>
-/* ===== Keyboard-safe modal behavior =====
-   The modal itself is resized to the visible viewport when the mobile keyboard opens.
-   The final action row is kept sticky above the keyboard; no buttons are hidden. */
-(function(){
-  const vv = window.visualViewport;
-  const modalSelectors = [
-    '#add-modal','#category-modal','#complaint-modal','#admins-activity-modal',
-    '#branch-activity-modal','#branch-admin-modal','#add-branch-modal','#add-inventory-modal',
-    '#delete-inventory-confirm-modal','#password-modal','#change-password-modal',
-    '#admin-activity-modal','#customer-complaint-chat-modal','#customer-profile-edit-modal',
-    '#owner-dashboard-modal'
-  ];
-
-  function isVisible(el){
-    if(!el) return false;
-    const cs=getComputedStyle(el);
-    return cs.display!=='none' && cs.visibility!=='hidden' && !el.classList.contains('hidden');
-  }
-
-  function getModal(el){
-    return el && el.closest ? el.closest(modalSelectors.join(',')) : null;
-  }
-
-  function markActionBar(modal){
-    if(!modal) return;
-    modal.querySelectorAll('.bkl-keyboard-actionbar').forEach(x=>x.classList.remove('bkl-keyboard-actionbar'));
-    const buttons=[...modal.querySelectorAll('button:not([disabled])')].filter(b=>{
-      const cs=getComputedStyle(b);
-      return cs.display!=='none' && cs.visibility!=='hidden' && b.offsetParent!==null;
-    });
-    if(!buttons.length) return;
-    const last=buttons[buttons.length-1];
-    let parent=last.parentElement;
-    while(parent && parent!==modal){
-      const count=parent.querySelectorAll(':scope > button:not([disabled])').length;
-      if(count>=1 && parent.getBoundingClientRect().height<=180){
-        parent.classList.add('bkl-keyboard-actionbar');
-        return;
-      }
-      parent=parent.parentElement;
-    }
-    last.classList.add('bkl-keyboard-actionbar');
-  }
-
-  function resizeForKeyboard(){
-    const height=vv ? vv.height : window.innerHeight;
-    const top=vv ? Math.max(0,vv.offsetTop||0) : 0;
-    const keyboardOpen=vv ? (window.innerHeight - height > 120) : false;
-    document.body.classList.toggle('bkl-keyboard-open', keyboardOpen);
-
-    modalSelectors.forEach(sel=>document.querySelectorAll(sel).forEach(modal=>{
-      if(!isVisible(modal)) return;
-      markActionBar(modal);
-      const content = modal.querySelector(':scope > .bg-white, :scope > div');
-      if(!content) return;
-      if(keyboardOpen){
-        const gap=10;
-        if(modal.id==='add-modal'){
-          modal.style.height=Math.max(220,height-88-gap)+'px';
-          modal.style.maxHeight=Math.max(220,height-88-gap)+'px';
-        }else{
-          content.style.maxHeight=Math.max(180,height-gap*2)+'px';
-          content.style.height='auto';
-          modal.style.maxHeight=Math.max(180,height)+'px';
-        }
-        content.style.overflowY='auto';
-        content.style.webkitOverflowScrolling='touch';
-      }else{
-        if(modal.id==='add-modal'){
-          modal.style.height=''; modal.style.maxHeight='';
-        }else{
-          content.style.maxHeight=''; content.style.height='';
-          modal.style.maxHeight='';
-        }
-      }
-    }));
-  }
-
-  function focusHandler(e){
-    const el=e.target;
-    if(!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
-    const modal=getModal(el);
-    if(!modal) return;
-    markActionBar(modal);
-    setTimeout(()=>{
-      resizeForKeyboard();
-      try{ el.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'}); }catch(_){ el.scrollIntoView(); }
-      setTimeout(()=>{
-        resizeForKeyboard();
-        try{ el.scrollIntoView({behavior:'smooth',block:'center',inline:'nearest'}); }catch(_){}
-      },180);
-    },180);
-  }
-
-  document.addEventListener('focusin',focusHandler,true);
-  document.addEventListener('focusout',()=>setTimeout(resizeForKeyboard,120),true);
-  if(vv){ vv.addEventListener('resize',resizeForKeyboard); vv.addEventListener('scroll',resizeForKeyboard); }
-  window.addEventListener('resize',resizeForKeyboard);
-  window.addEventListener('orientationchange',()=>setTimeout(resizeForKeyboard,300));
-  document.addEventListener('click',()=>setTimeout(resizeForKeyboard,50),true);
-  setTimeout(resizeForKeyboard,500);
-})();
-
 </script>
 </body>
 
