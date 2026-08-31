@@ -678,6 +678,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 #bkl-branch-customers-panel .bkl-color-settings label{display:flex;align-items:center;gap:4px;color:#374151}
 #bkl-branch-customers-panel .bkl-color-settings input[type=color]{width:26px;height:22px;padding:1px;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;background:#fff}
 .bkl-customer-colored{transition:background .15s,border-color .15s,color .15s}
+.bkl-customer-discount{min-width:92px;padding:5px 7px;border:1px solid #d1d5db;border-radius:9px;background:#fff;font-size:11px;font-weight:800;cursor:pointer;outline:none}
 
 #bkl-branch-customers-panel .bkl-btn-vip{background:#fef3c7;color:#92400e}
 #bkl-branch-customers-panel .bkl-btn-private{background:#ede9fe;color:#5b21b6}
@@ -3723,7 +3724,7 @@ function printOrderInvoice(orderId, action = 'print') {
         0
     )));
 
-    const originalGrandTotalDZD = productsSubtotalDZD + shippingFeeDZD;
+    const originalGrandTotalDZD = Number(order.grossGrandTotal ?? (productsSubtotalDZD + shippingFeeDZD)) || 0;
     const creditRemainingDZD = (String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined) ? Math.max(0, toNumber(order.creditRemainingAmount)) : originalGrandTotalDZD;
     const grandTotalDZD = creditRemainingDZD;
 
@@ -4176,7 +4177,7 @@ function openOwnerDashboard() {
   </div>
   <div class="bkl-bc-body">
     <table>
-      <thead><tr><th>الاسم واللقب</th><th>التصنيف</th><th>اسم المستخدم</th><th>الهاتف</th><th>البريد</th><th>الولاية</th><th>البلدية</th><th>تاريخ التسجيل</th><th>الإجراءات</th></tr></thead>
+      <thead><tr><th>الاسم واللقب</th><th>التصنيف</th><th>الخصم</th><th>اسم المستخدم</th><th>الهاتف</th><th>البريد</th><th>الولاية</th><th>البلدية</th><th>تاريخ التسجيل</th><th>الإجراءات</th></tr></thead>
       <tbody id="bkl-branch-customers-body"></tbody>
     </table>
   </div>
@@ -7289,8 +7290,10 @@ function completeCheckoutOrder() {
                 return sum + (unitDZD * qty);
             }, 0));
             const delivery = round2(Math.max(0, Number(document.getElementById('pay-delivery-price')?.value || 0) || 0));
-            const total = round2(subtotal + delivery);
-            preview.textContent = `الإجمالي: ${total.toLocaleString('ar-DZ', { maximumFractionDigits: 2 })} د.ج`;
+            const grossTotal = round2(subtotal + delivery);
+            const customer = (typeof bklFindCustomerForOrder === 'function') ? bklFindCustomerForOrder({id: currentLoggedInCustomer?.id, customerId: currentLoggedInCustomer?.id, phone: document.getElementById('pay-phone')?.value || currentLoggedInCustomer?.phone, email: currentLoggedInCustomer?.email, customerName: `${document.getElementById('pay-firstname')?.value || currentLoggedInCustomer?.firstname || ''} ${document.getElementById('pay-lastname')?.value || currentLoggedInCustomer?.lastname || ''}`}) : currentLoggedInCustomer;
+            const dd = (typeof bklGetCustomerDiscountData === 'function') ? bklGetCustomerDiscountData(customer, grossTotal) : {percent:0,amount:0,finalTotal:grossTotal};
+            preview.innerHTML = dd.percent>0 ? `الإجمالي: <s>${grossTotal.toLocaleString('ar-DZ',{maximumFractionDigits:2})} د.ج</s> &nbsp; الخصم ${dd.percent}%: <strong>${dd.finalTotal.toLocaleString('ar-DZ',{maximumFractionDigits:2})} د.ج</strong>` : `الإجمالي: ${grossTotal.toLocaleString('ar-DZ', { maximumFractionDigits: 2 })} د.ج`;
         }
 
         function submitOrderAndPay() {
@@ -7365,8 +7368,13 @@ function completeCheckoutOrder() {
                 return sum + (unitDZD * qty);
             }, 0));
 
-            // الإجمالي النهائي = قيمة المشتريات + مبلغ التوصيل.
-            const grandTotal = round2(subtotal + deliveryPrice);
+            // الإجمالي الأصلي = قيمة المشتريات + مبلغ التوصيل، ثم نطبق خصم الزبون إن كان VIP أو الخاص.
+            const grossGrandTotal = round2(subtotal + deliveryPrice);
+            const matchedCustomer = (typeof bklFindCustomerForOrder === 'function') ? bklFindCustomerForOrder({id: currentLoggedInCustomer?.id, customerId: currentLoggedInCustomer?.id, phone, email: currentLoggedInCustomer?.email, customerName: `${firstName} ${lastName}`}) : (currentLoggedInCustomer || null);
+            const discountData = (typeof bklGetCustomerDiscountData === 'function') ? bklGetCustomerDiscountData(matchedCustomer, grossGrandTotal) : {percent:0,amount:0,finalTotal:grossGrandTotal};
+            const discountPercent = discountData.percent || 0;
+            const discountAmount = round2(discountData.amount || 0);
+            const grandTotal = round2(discountData.finalTotal ?? grossGrandTotal);
             const totalAmount = grandTotal.toLocaleString('ar-DZ', {
                 minimumFractionDigits: grandTotal % 1 ? 2 : 0,
                 maximumFractionDigits: 2
@@ -7395,6 +7403,9 @@ function completeCheckoutOrder() {
                 productSubtotal: subtotal,
                 deliveryPrice,
                 shippingPrice: deliveryPrice,
+                grossGrandTotal,
+                discountPercent,
+                discountAmount,
                 grandTotal,
                 total: totalAmount,
                 totalAmount,
@@ -9312,6 +9323,27 @@ document.addEventListener('DOMContentLoaded', function(){
     }catch(e){console.error('BKL customer type update:',e);}
   };
 
+  window.bklSetCustomerDiscount=function(id,value){
+    try{
+      const customers=bklCustomers();
+      const idx=customers.findIndex(c=>String(c?.id||'')===String(id));
+      if(idx<0)return;
+      const type=bklCustomerType(customers[idx]);
+      if(type==='normal'){
+        customers[idx].discountPercent=0;
+      }else{
+        const n=Math.max(0,Math.min(75,parseInt(value,10)||0));
+        customers[idx].discountPercent=n;
+      }
+      localStorage.setItem('store_customers',JSON.stringify(customers));
+      if(Array.isArray(registeredCustomers)){
+        const ri=registeredCustomers.findIndex(c=>String(c?.id||'')===String(id));
+        if(ri>=0)registeredCustomers[ri]=customers[idx];
+      }
+      window.renderBKLBranchCustomers();
+    }catch(e){console.error('BKL customer discount update:',e);}
+  };
+
   window.bklDeleteCustomer=function(id){
     try{
       const customers=bklCustomers();
@@ -9360,7 +9392,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if(n)n.textContent=rows.length+' زبون';
     document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.bklType===bklCustomerTypeFilter));
     const f=document.getElementById('bkl-customer-type-filter');if(f)f.value=bklCustomerTypeFilter;
-    if(!rows.length){b.innerHTML='<tr><td colspan="9" class="bkl-empty">لا يوجد زبائن مسجلون في النطاق المحدد.</td></tr>';return;}
+    if(!rows.length){b.innerHTML='<tr><td colspan="10" class="bkl-empty">لا يوجد زبائن مسجلون في النطاق المحدد.</td></tr>';return;}
     b.innerHTML=rows.map(c=>{
       const id=String(c.id||'');
       const name=(`${c.firstname||''} ${c.lastname||''}`).trim()||c.name||'—';
@@ -9370,7 +9402,9 @@ document.addEventListener('DOMContentLoaded', function(){
       const color=typeof bklGetCustomerColor==='function'?bklGetCustomerColor(c):'#000000';
       const tint=typeof bklMixColor==='function'?bklMixColor(color,0.10):color;
       const badge=type==='vip'?`<span class="bkl-customer-badge" style="background:${esc(tint)};color:${esc(color)}">⭐ VIP</span>`:type==='private'?`<span class="bkl-customer-badge" style="background:${esc(tint)};color:${esc(color)}">🔒 الخاص</span>`:'<span class="bkl-customer-badge normal" style="background:#fff;color:#000">عادي</span>';
-      return `<tr class="bkl-customer-colored" style="color:${esc(color)};border-inline-start:4px solid ${esc(color)}"><td><strong style="color:${esc(color)}">${esc(name)}</strong></td><td>${badge}</td><td>${esc(c.username)}</td><td dir="ltr">${esc(c.phone)}</td><td dir="ltr">${esc(c.email)}</td><td>${esc(c.state)}</td><td>${esc(c.municipality)}</td><td>${esc(d||'—')}</td><td><div class="bkl-row-actions">${type!=='vip'?`<button type="button" class="bkl-btn-vip" onclick="bklSetCustomerType('${esc(id)}','vip')">⭐ VIP</button>`:''}${type!=='private'?`<button type="button" class="bkl-btn-private" onclick="bklSetCustomerType('${esc(id)}','private')">🔒 الخاص</button>`:''}${type!=='normal'?`<button type="button" class="bkl-btn-normal" onclick="bklSetCustomerType('${esc(id)}','normal')">عادي</button>`:''}<button type="button" class="bkl-btn-delete" onclick="bklDeleteCustomer('${esc(id)}')">🗑️ حذف</button></div></td></tr>`;
+      const discount=Math.max(0,Math.min(75,parseInt(c.discountPercent??c.discount??0,10)||0));
+      const discountCell=(type==='vip'||type==='private')?`<select class="bkl-customer-discount" aria-label="نسبة خصم الزبون" onchange="bklSetCustomerDiscount('${esc(id)}',this.value)"><option value="0"${discount===0?' selected':''}>بدون خصم</option>${Array.from({length:75},(_,i)=>i+1).map(v=>`<option value="${v}"${discount===v?' selected':''}>${v}%</option>`).join('')}</select>`:'<span style="color:#000">—</span>';
+      return `<tr class="bkl-customer-colored" style="color:${esc(color)};border-inline-start:4px solid ${esc(color)}"><td><strong style="color:${esc(color)}">${esc(name)}</strong></td><td>${badge}</td><td>${discountCell}</td><td>${esc(c.username)}</td><td dir="ltr">${esc(c.phone)}</td><td dir="ltr">${esc(c.email)}</td><td>${esc(c.state)}</td><td>${esc(c.municipality)}</td><td>${esc(d||'—')}</td><td><div class="bkl-row-actions">${type!=='vip'?`<button type="button" class="bkl-btn-vip" onclick="bklSetCustomerType('${esc(id)}','vip')">⭐ VIP</button>`:''}${type!=='private'?`<button type="button" class="bkl-btn-private" onclick="bklSetCustomerType('${esc(id)}','private')">🔒 الخاص</button>`:''}${type!=='normal'?`<button type="button" class="bkl-btn-normal" onclick="bklSetCustomerType('${esc(id)}','normal')">عادي</button>`:''}<button type="button" class="bkl-btn-delete" onclick="bklDeleteCustomer('${esc(id)}')">🗑️ حذف</button></div></td></tr>`;
     }).join('');
   };
 
@@ -9566,6 +9600,20 @@ document.addEventListener('DOMContentLoaded', function(){
     const update=function(){const c=read();c.vip=validHex(vip.value)?vip.value:DEFAULTS.vip;c.private=validHex(pri.value)?pri.value:DEFAULTS.private;c.normal=DEFAULTS.normal;save(c);refresh();};
     vip.addEventListener('input',update);pri.addEventListener('input',update);
   }
+  window.bklFindCustomerForOrder=function(c){return find(c)||null;};
+  function getCustomerDiscount(c){
+    const customer=find(c)||c||{};
+    const t=type(customer);
+    if(t==='normal')return 0;
+    return Math.max(0,Math.min(75,parseInt(customer.discountPercent??customer.discount??0,10)||0));
+  }
+  window.bklGetCustomerDiscount=getCustomerDiscount;
+  window.bklGetCustomerDiscountData=function(c,total){
+    const gross=Math.max(0,Number(total)||0);
+    const percent=getCustomerDiscount(c);
+    const amount=Math.round(gross*percent)/100;
+    return {percent,amount,finalTotal:Math.max(0,Math.round((gross-amount)*100)/100)};
+  };
   function refresh(){
     try{if(typeof renderBKLBranchCustomers==='function')renderBKLBranchCustomers();}catch(e){}
     try{if(typeof renderOrdersList==='function')renderOrdersList();}catch(e){}
