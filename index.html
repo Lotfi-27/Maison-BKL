@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, viewport-fit=cover">
     <title>Maison BKL - متجر التسوق الذكي و إدارة الفروع</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -831,6 +831,127 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
+
+<!-- BKL Android AdjustResize / Soft Input Mode compatibility -->
+<style id="bkl-adjust-resize-fix">
+@media (max-width: 760px){
+  html, body{
+    min-height:100%;
+    min-height:100dvh;
+  }
+
+  /*
+   * interactive-widget=resizes-content يجعل المتصفح يعيد تحجيم
+   * مساحة المحتوى عند ظهور لوحة مفاتيح الهاتف، وهو السلوك الأقرب
+   * إلى Android WindowSoftInputMode=adjustResize.
+   */
+  body{
+    min-height:100dvh!important;
+  }
+
+  #category-modal{
+    height:100dvh!important;
+    max-height:100dvh!important;
+  }
+
+  #category-modal-window{
+    max-height:calc(100dvh - 24px)!important;
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+    overscroll-behavior:contain!important;
+    box-sizing:border-box!important;
+  }
+}
+</style>
+
+<script id="bkl-adjust-resize-bootstrap">
+(function(){
+  'use strict';
+
+  /*
+   * Web/PWA: interactive-widget=resizes-content handles the keyboard
+   * resize at the browser level.
+   *
+   * Native Android WebView: if the host application exposes an Android
+   * bridge with setSoftInputMode, request ADJUST_RESIZE without failing
+   * when no bridge exists.
+   */
+  try {
+    if (window.Android && typeof window.Android.setSoftInputMode === 'function') {
+      window.Android.setSoftInputMode('adjustResize');
+    }
+  } catch (e) {}
+
+  function syncVisibleViewport(){
+    try {
+      var vv = window.visualViewport;
+      if (!vv) return;
+
+      document.documentElement.style.setProperty('--bkl-vv-height', vv.height + 'px');
+      document.documentElement.style.setProperty('--bkl-vv-top', vv.offsetTop + 'px');
+
+      var modal = document.getElementById('category-modal');
+      var win = document.getElementById('category-modal-window');
+
+      if (!modal || !win || modal.classList.contains('hidden')) return;
+
+      /*
+       * Keep the category window inside the currently visible viewport.
+       * This complements AdjustResize and prevents the keyboard from
+       * covering the active input on Android phones.
+       */
+      var safe = 12;
+      var visibleHeight = Math.max(120, vv.height - safe * 2);
+      var currentRect = win.getBoundingClientRect();
+      var keyboardLikelyOpen =
+        (window.innerHeight - vv.height) > 80 ||
+        vv.height < window.innerHeight * 0.82;
+
+      if (keyboardLikelyOpen) {
+        win.style.maxHeight = visibleHeight + 'px';
+
+        var center = vv.offsetTop + vv.height / 2;
+        var half = currentRect.height / 2;
+        var minCenter = vv.offsetTop + safe + half;
+        var maxCenter = vv.offsetTop + vv.height - safe - half;
+        var safeCenter = Math.max(minCenter, Math.min(maxCenter, center));
+
+        win.style.top = safeCenter + 'px';
+        win.style.transform = 'translate(-50%, -50%)';
+      } else {
+        win.style.maxHeight = 'calc(100dvh - 24px)';
+        win.style.top = '50%';
+        win.style.transform = 'translate(-50%, -50%)';
+      }
+    } catch (e) {}
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', syncVisibleViewport, {passive:true});
+    window.visualViewport.addEventListener('scroll', syncVisibleViewport, {passive:true});
+  }
+
+  window.addEventListener('resize', syncVisibleViewport, {passive:true});
+  window.addEventListener('orientationchange', function(){
+    setTimeout(syncVisibleViewport, 120);
+  }, {passive:true});
+
+  document.addEventListener('focusin', function(e){
+    if (!e.target || !e.target.matches) return;
+    if (e.target.matches('#new-cat-id, #new-cat-name')) {
+      setTimeout(syncVisibleViewport, 80);
+      setTimeout(syncVisibleViewport, 260);
+    }
+  }, true);
+
+  document.addEventListener('focusout', function(){
+    setTimeout(syncVisibleViewport, 180);
+  }, true);
+
+  window.bklSyncAdjustResizeViewport = syncVisibleViewport;
+})();
+</script>
+
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -1479,7 +1600,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
     <!-- ================= ADD CATEGORY MODAL ================= -->
     <div id="category-modal" class="hidden fixed inset-0 z-[999999] bg-neutral-900/50 backdrop-blur-sm">
-        <div id="category-modal-window" class="bg-white rounded-3xl w-[calc(100vw-32px)] max-w-sm p-5 flex flex-col gap-4 shadow-2xl" style="position:fixed!important; left:50%; top:50%; transform:translate(-50%,-50%); max-height:calc(100vh - 24px); overflow-y:auto; overflow-x:hidden; transition:top 0.12s ease-out, transform 0.12s ease-out; -webkit-overflow-scrolling:touch; box-sizing:border-box;">
+        <div id="category-modal-window" class="bg-white rounded-3xl w-[calc(100vw-32px)] max-w-sm p-5 flex flex-col gap-4 shadow-2xl" style="position:fixed!important; left:50%; top:50%; transform:translate(-50%,-50%); max-height:calc(100vh - 24px); overflow-y:auto; transition:transform 0.18s ease-out;">
             <h3 id="category-modal-title" class="text-sm font-bold text-neutral-900">إضافة تصنيف جديد</h3>
 
             <div class="flex flex-col gap-1">
@@ -1501,8 +1622,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
     <script>
     (function () {
-        // نافذة التصنيف: عند ظهور لوحة المفاتيح تصبح نافذة عائمة داخل
-        // المساحة المرئية فعلياً، بحيث لا تدخل لوحة المفاتيح فوقها.
+        // نافذة التصنيف مهيأة للهاتف: تبقى في المركز، وعند ظهور الكلافي
+        // يتم نقل مركزها تلقائياً إلى منتصف المساحة المرئية فقط.
         const modalWindow = () => document.getElementById('category-modal-window');
 
         function positionCategoryModal() {
@@ -1512,18 +1633,15 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 
             const vv = window.visualViewport;
             if (!vv) {
-                win.style.left = '50%';
                 win.style.top = '50%';
                 win.style.maxHeight = 'calc(100vh - 24px)';
                 win.style.transform = 'translate(-50%, -50%)';
                 return;
             }
 
+            // ننتظر حتى يعيد الهاتف حساب أبعاد النافذة بعد فتح/إغلاق الكلافي.
             requestAnimationFrame(function () {
                 const keyboardOpen = (window.innerHeight - vv.height) > 80 || vv.height < window.innerHeight * 0.82;
-
-                win.style.left = '50%';
-
                 if (!keyboardOpen) {
                     win.style.top = '50%';
                     win.style.maxHeight = 'calc(100vh - 24px)';
@@ -1531,38 +1649,32 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                     return;
                 }
 
-                // عند فتح الكلافي لا نضع النافذة في منتصف الصفحة الأصلية؛
-                // نثبتها داخل الـ Visual Viewport فقط، أي فوق الكلافي مباشرة.
-                const safe = 8;
-                const visibleTop = Math.max(0, vv.offsetTop);
-                const availableHeight = Math.max(120, vv.height - (safe * 2));
-
-                win.style.top = (visibleTop + safe) + 'px';
+                const safe = 12;
+                const availableHeight = Math.max(120, vv.height - safe * 2);
                 win.style.maxHeight = availableHeight + 'px';
-                win.style.transform = 'translateX(-50%)';
 
-                // إذا كان المؤشر داخل أحد حقول النافذة، نضمن بقاء الحقل داخل
-                // المساحة المرئية بعد أن تعيد لوحة المفاتيح حساب أبعادها.
-                const active = document.activeElement;
-                if (active && win.contains(active)) {
-                    setTimeout(function () {
-                        try { active.scrollIntoView({block:'nearest', inline:'nearest'}); } catch (e) {}
-                    }, 30);
-                }
+                // المركز الجديد هو مركز الجزء الظاهر من الشاشة، وليس مركز الصفحة خلف الكلافي.
+                const visibleCenter = vv.offsetTop + (vv.height / 2);
+                const rect = win.getBoundingClientRect();
+                const halfHeight = rect.height / 2;
+                const minCenter = vv.offsetTop + safe + halfHeight;
+                const maxCenter = vv.offsetTop + vv.height - safe - halfHeight;
+                const targetCenter = Math.min(maxCenter, Math.max(minCenter, visibleCenter));
+
+                win.style.top = targetCenter + 'px';
+                win.style.transform = 'translate(-50%, -50%)';
             });
         }
 
         function resetCategoryModalPosition() {
             const win = modalWindow();
             if (!win) return;
-            win.style.left = '50%';
             win.style.top = '50%';
             win.style.maxHeight = 'calc(100vh - 24px)';
             win.style.transform = 'translate(-50%, -50%)';
         }
 
         window.addEventListener('resize', positionCategoryModal, { passive: true });
-        window.addEventListener('orientationchange', function () { setTimeout(positionCategoryModal, 120); }, { passive: true });
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', positionCategoryModal, { passive: true });
             window.visualViewport.addEventListener('scroll', positionCategoryModal, { passive: true });
@@ -1573,7 +1685,6 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 setTimeout(positionCategoryModal, 50);
                 setTimeout(positionCategoryModal, 180);
                 setTimeout(positionCategoryModal, 350);
-                setTimeout(positionCategoryModal, 600);
             }
         });
 
@@ -1584,7 +1695,6 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 const result = oldOpenCategory.apply(this, arguments);
                 resetCategoryModalPosition();
                 setTimeout(positionCategoryModal, 50);
-                setTimeout(positionCategoryModal, 180);
                 return result;
             };
         }
