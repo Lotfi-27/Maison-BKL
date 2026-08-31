@@ -674,6 +674,11 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 #bkl-branch-customers-panel .bkl-customer-badge.normal{background:#f1f5f9;color:#475569}
 #bkl-branch-customers-panel .bkl-row-actions{display:flex;gap:4px;flex-wrap:wrap}
 #bkl-branch-customers-panel .bkl-row-actions button{border:0;border-radius:7px;padding:5px 7px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap}
+#bkl-branch-customers-panel .bkl-color-settings{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:4px 7px;border:1px solid #e5e7eb;border-radius:9px;background:#f8fafc;font-size:10px;font-weight:800}
+#bkl-branch-customers-panel .bkl-color-settings label{display:flex;align-items:center;gap:4px;color:#374151}
+#bkl-branch-customers-panel .bkl-color-settings input[type=color]{width:26px;height:22px;padding:1px;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;background:#fff}
+.bkl-customer-colored{transition:background .15s,border-color .15s,color .15s}
+
 #bkl-branch-customers-panel .bkl-btn-vip{background:#fef3c7;color:#92400e}
 #bkl-branch-customers-panel .bkl-btn-private{background:#ede9fe;color:#5b21b6}
 #bkl-branch-customers-panel .bkl-btn-normal{background:#f1f5f9;color:#475569}
@@ -2998,8 +3003,10 @@ function renderOrdersList() {
         const total = (String(order.paymentMethod || '').toLowerCase() === 'كريدي' || order.creditRemainingAmount !== undefined) ? Number(order.creditRemainingAmount ?? order.grandTotal ?? order.subtotal ?? 0) || 0 : Number(order.grandTotal ?? order.subtotal ?? 0) || 0;
         const delivery = Number(order.deliveryPrice ?? order.shippingPrice ?? 0) || 0;
 
+        const bklOrderColor = typeof bklGetCustomerColor==='function' ? bklGetCustomerColor(order) : '#000000';
+        const bklOrderTint = typeof bklMixColor==='function' ? bklMixColor(bklOrderColor,0.08) : '#fff';
         return `
-            <div class="bg-white p-3 rounded-xl border border-neutral-200 flex flex-col gap-2 shadow-sm mb-2">
+            <div class="bg-white p-3 rounded-xl border border-neutral-200 flex flex-col gap-2 shadow-sm mb-2 bkl-customer-colored" style="border-inline-start:5px solid ${bklOrderColor};background:linear-gradient(90deg,${bklOrderTint},#fff 32%);">
                 <div class="flex justify-between items-center border-b pb-2">
                     <div class="flex items-center gap-2">
                         <span class="font-bold text-xs text-neutral-900">📦 طلب رقم #${order.id}</span>
@@ -3009,7 +3016,7 @@ function renderOrdersList() {
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-neutral-700">
                     <div>
-                        <p class="font-bold text-neutral-900">👤 العميل: ${order.customerName || order.customer || 'زبون مجهول'}</p>
+                        <p class="font-bold" style="color:${bklOrderColor}">👤 العميل: ${order.customerName || order.customer || 'زبون مجهول'}</p>
                         <p class="text-[11px] text-neutral-500">📞 الهاتف: ${order.phone || 'غير محدد'}</p>
                         <p class="text-[11px] text-neutral-500">📍 العنوان: ${order.state || ''} - ${order.municipality || ''} (${order.detailedAddress || order.address || ''})</p>
                     </div>
@@ -4007,6 +4014,10 @@ function printOrderInvoice(orderId, action = 'print') {
         </html>
     `;
 
+    const bklInvoiceColor = typeof bklGetCustomerColor==='function' ? bklGetCustomerColor(order) : '#000000';
+    const bklInvoiceTint = typeof bklMixColor==='function' ? bklMixColor(bklInvoiceColor,0.08) : '#ffffff';
+    invoiceHtml = invoiceHtml.replace('</head>', `<style>body{border-top:7px solid ${bklInvoiceColor}!important} .bkl-customer-color{color:${bklInvoiceColor}!important} .bkl-customer-tint{background:${bklInvoiceTint}!important;border-color:${bklInvoiceColor}!important}</style></head>`);
+
     if (action === 'save') {
         const filename = `فاتورة-${String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_')}.html`;
         const blob = new Blob([invoiceHtml], { type: 'text/html;charset=utf-8' });
@@ -4153,6 +4164,10 @@ function openOwnerDashboard() {
       <option value="vip">VIP</option>
       <option value="private">الخاص</option>
     </select>
+    <div class="bkl-color-settings" title="ألوان تصنيفات الزبائن">
+      <label>VIP <input id="bkl-color-vip" type="color" value="#7c3aed" aria-label="لون VIP"></label>
+      <label>الخاص <input id="bkl-color-private" type="color" value="#2f6b4f" aria-label="لون الخاص"></label>
+    </div>
   </div>
   <div class="bkl-bc-type-tabs">
     <button type="button" data-bkl-type="all" class="bkl-type-tab active" onclick="bklSetCustomerTypeFilter('all')">👥 الكل</button>
@@ -7845,8 +7860,8 @@ function completeCheckoutOrder() {
                 return;
             }
             box.innerHTML = list.map(entry => `
-                <div class="w-full text-right bg-white border border-amber-100 rounded-xl p-2">
-                    <div class="flex justify-between gap-2"><strong class="text-[10px] text-neutral-900">فاتورة #${escapeOrderHtml(entry.invoiceId)}</strong><span class="text-[9px] text-amber-700 font-bold">${escapeOrderHtml(entry.status)}</span></div>
+                <div class="w-full text-right bg-white border border-amber-100 rounded-xl p-2 bkl-customer-colored" style="border-inline-start:5px solid ${typeof bklGetCustomerColor==='function'?bklGetCustomerColor(entry):'#000000'};background:linear-gradient(90deg,${typeof bklMixColor==='function'?bklMixColor(typeof bklGetCustomerColor==='function'?bklGetCustomerColor(entry):'#000000',0.07):'#fff'},#fff 35%);">
+                    <div class="flex justify-between gap-2"><strong class="text-[10px]" style="color:${typeof bklGetCustomerColor==='function'?bklGetCustomerColor(entry):'#000000'}">فاتورة #${escapeOrderHtml(entry.invoiceId)}</strong><span class="text-[9px] text-amber-700 font-bold">${escapeOrderHtml(entry.status)}</span></div>
                     <div class="text-[9px] text-neutral-500 mt-1">${escapeOrderHtml(entry.date)}</div>
                     <div class="text-[9px] text-neutral-500 mt-1">إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}</div>
                     <div class="text-[9px] text-emerald-700 mt-1 font-bold">الإجمالي بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</div>
@@ -7986,9 +8001,9 @@ function completeCheckoutOrder() {
 
 function buildCreditDebtorsRegistryRows(debtors) {
             return debtors.map((d,i) => `
-                <tr>
+                <tr class="bkl-customer-colored" style="border-inline-start:5px solid ${typeof bklGetCustomerColor==='function'?bklGetCustomerColor({id:d.customerId,customerId:d.customerId,phone:d.phone,customerName:d.customerName}):'#000000'}">
                     <td>${i + 1}</td>
-                    <td><strong>${escapeOrderHtml(d.customerName)}</strong></td>
+                    <td><strong style="color:${typeof bklGetCustomerColor==='function'?bklGetCustomerColor({id:d.customerId,customerId:d.customerId,phone:d.phone,customerName:d.customerName}):'#000000'}">${escapeOrderHtml(d.customerName)}</strong></td>
                     <td>${escapeOrderHtml(d.phone || '-')}</td>
                     <td>${escapeOrderHtml(d.address || '-')}<br><small>${escapeOrderHtml([d.state,d.municipality].filter(Boolean).join(' - ') || '-')}</small></td>
                     <td>${d.debts.map(debt => `<div class="debt-box"><b>فاتورة #${escapeOrderHtml(debt.invoiceId)}</b> — ${escapeOrderHtml(debt.date || '-')}<br>الدين: ${escapeOrderHtml(formatCreditAmount(debt.total))} | المسدد: ${escapeOrderHtml(formatCreditAmount(debt.paid))} | <strong class="debt">المتبقي: ${escapeOrderHtml(formatCreditAmount(debt.remaining))}</strong>${debt.items.length ? `<br><small>${debt.items.map(it => `${escapeOrderHtml(it.name)} × ${it.quantity}`).join('، ')}</small>` : ''}</div>`).join('')}</td>
@@ -8080,8 +8095,8 @@ function buildCreditDebtorsRegistryRows(debtors) {
                 return;
             }
             box.innerHTML = list.map(entry => `
-                <div class="w-full text-right bg-white border border-amber-100 rounded-xl p-2">
-                    <div class="flex justify-between gap-2"><strong class="text-[10px] text-neutral-900">${escapeOrderHtml(entry.customerName || 'زبون')}</strong><span class="text-[9px] text-amber-700 font-bold">${escapeOrderHtml(entry.status)}</span></div>
+                <div class="w-full text-right bg-white border border-amber-100 rounded-xl p-2 bkl-customer-colored" style="border-inline-start:5px solid ${typeof bklGetCustomerColor==='function'?bklGetCustomerColor(entry):'#000000'};background:linear-gradient(90deg,${typeof bklMixColor==='function'?bklMixColor(typeof bklGetCustomerColor==='function'?bklGetCustomerColor(entry):'#000000',0.07):'#fff'},#fff 35%);">
+                    <div class="flex justify-between gap-2"><strong class="text-[10px]" style="color:${typeof bklGetCustomerColor==='function'?bklGetCustomerColor(entry):'#000000'}">${escapeOrderHtml(entry.customerName || 'زبون')}</strong><span class="text-[9px] text-amber-700 font-bold">${escapeOrderHtml(entry.status)}</span></div>
                     <div class="text-[9px] text-neutral-500 mt-1">فاتورة #${escapeOrderHtml(entry.invoiceId)} — ${escapeOrderHtml(entry.date)}</div>
                     <div class="text-[9px] text-neutral-600 mt-1">إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}</div>
                     <div class="text-[9px] text-emerald-700 mt-1 font-bold">الإجمالي بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</div>
@@ -9352,8 +9367,10 @@ document.addEventListener('DOMContentLoaded', function(){
       let d=c.createdAt||c.created_at||c.registrationDate||c.registration_date||c.date||'';
       if(!d&&/^CUST-\d+$/.test(id)){const ts=Number(id.slice(5));if(Number.isFinite(ts)&&ts>0)d=new Date(ts).toLocaleString('ar-DZ');}
       const type=bklCustomerType(c);
-      const badge=type==='vip'?'<span class="bkl-customer-badge vip">⭐ VIP</span>':type==='private'?'<span class="bkl-customer-badge private">🔒 الخاص</span>':'<span class="bkl-customer-badge normal">عادي</span>';
-      return `<tr><td><strong>${esc(name)}</strong></td><td>${badge}</td><td>${esc(c.username)}</td><td dir="ltr">${esc(c.phone)}</td><td dir="ltr">${esc(c.email)}</td><td>${esc(c.state)}</td><td>${esc(c.municipality)}</td><td>${esc(d||'—')}</td><td><div class="bkl-row-actions">${type!=='vip'?`<button type="button" class="bkl-btn-vip" onclick="bklSetCustomerType('${esc(id)}','vip')">⭐ VIP</button>`:''}${type!=='private'?`<button type="button" class="bkl-btn-private" onclick="bklSetCustomerType('${esc(id)}','private')">🔒 الخاص</button>`:''}${type!=='normal'?`<button type="button" class="bkl-btn-normal" onclick="bklSetCustomerType('${esc(id)}','normal')">عادي</button>`:''}<button type="button" class="bkl-btn-delete" onclick="bklDeleteCustomer('${esc(id)}')">🗑️ حذف</button></div></td></tr>`;
+      const color=typeof bklGetCustomerColor==='function'?bklGetCustomerColor(c):'#000000';
+      const tint=typeof bklMixColor==='function'?bklMixColor(color,0.10):color;
+      const badge=type==='vip'?`<span class="bkl-customer-badge" style="background:${esc(tint)};color:${esc(color)}">⭐ VIP</span>`:type==='private'?`<span class="bkl-customer-badge" style="background:${esc(tint)};color:${esc(color)}">🔒 الخاص</span>`:'<span class="bkl-customer-badge normal" style="background:#fff;color:#000">عادي</span>';
+      return `<tr class="bkl-customer-colored" style="color:${esc(color)};border-inline-start:4px solid ${esc(color)}"><td><strong style="color:${esc(color)}">${esc(name)}</strong></td><td>${badge}</td><td>${esc(c.username)}</td><td dir="ltr">${esc(c.phone)}</td><td dir="ltr">${esc(c.email)}</td><td>${esc(c.state)}</td><td>${esc(c.municipality)}</td><td>${esc(d||'—')}</td><td><div class="bkl-row-actions">${type!=='vip'?`<button type="button" class="bkl-btn-vip" onclick="bklSetCustomerType('${esc(id)}','vip')">⭐ VIP</button>`:''}${type!=='private'?`<button type="button" class="bkl-btn-private" onclick="bklSetCustomerType('${esc(id)}','private')">🔒 الخاص</button>`:''}${type!=='normal'?`<button type="button" class="bkl-btn-normal" onclick="bklSetCustomerType('${esc(id)}','normal')">عادي</button>`:''}<button type="button" class="bkl-btn-delete" onclick="bklDeleteCustomer('${esc(id)}')">🗑️ حذف</button></div></td></tr>`;
     }).join('');
   };
 
@@ -9516,5 +9533,53 @@ document.addEventListener('DOMContentLoaded', function(){
     const active=document.querySelector('#order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal');
     if(active&&!active.contains(btn))hide(active.id);
   },true);
+})();
+</script>
+
+<script id="bkl-customer-color-system-v1">
+(function(){
+  const KEY='bkl_customer_type_colors';
+  const DEFAULTS={vip:'#7c3aed',private:'#2f6b4f',normal:'#000000'};
+  function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'{}');return Object.assign({},DEFAULTS,x||{});}catch(e){return Object.assign({},DEFAULTS);}}
+  function validHex(v){return /^#[0-9a-fA-F]{6}$/.test(String(v||''));}
+  function save(c){try{localStorage.setItem(KEY,JSON.stringify(c));}catch(e){} window.dispatchEvent(new StorageEvent('storage',{key:KEY}));}
+  function customers(){
+    try{const a=JSON.parse(localStorage.getItem('store_customers')||'[]');return Array.isArray(a)?a:[];}catch(e){return[];}
+  }
+  function type(c){const t=String(c?.customerType||c?.customer_type||c?.classification||'').toLowerCase();return t==='vip'?'vip':(t==='private'||t==='special'?'private':'normal');}
+  function find(c){
+    if(!c)return null; const list=customers();
+    const id=String(c.id??c.customerId??'').trim(); const phone=String(c.phone??'').trim(); const email=String(c.email??c.customerEmail??'').trim().toLowerCase();
+    const name=String(c.customerName??c.name??`${c.firstname||c.firstName||''} ${c.lastname||c.lastName||''}`).trim().toLowerCase();
+    return list.find(x=> (id&&String(x.id||'')===id) || (phone&&String(x.phone||'')===phone) || (email&&String(x.email||'').toLowerCase()===email) || (name&&`${x.firstname||x.firstName||''} ${x.lastname||x.lastName||''}`.trim().toLowerCase()===name)) || null;
+  }
+  window.bklGetCustomerType=function(c){return type(find(c)||c||{});};
+  window.bklGetCustomerColor=function(c){const cs=read();return cs[window.bklGetCustomerType(c)]||DEFAULTS.normal;};
+  window.bklMixColor=function(hex,alpha){
+    if(!validHex(hex))return '#ffffff'; const n=parseInt(hex.slice(1),16),r=n>>16,g=(n>>8)&255,b=n&255;
+    const a=Math.max(0,Math.min(1,Number(alpha)||0)); return `rgba(${r},${g},${b},${a})`;
+  };
+  function injectControls(){
+    const vip=document.getElementById('bkl-color-vip'), pri=document.getElementById('bkl-color-private'); if(!vip||!pri)return;
+    const cs=read(); vip.value=validHex(cs.vip)?cs.vip:DEFAULTS.vip; pri.value=validHex(cs.private)?cs.private:DEFAULTS.private;
+    if(vip.__bklBound)return; vip.__bklBound=pri.__bklBound=true;
+    const update=function(){const c=read();c.vip=validHex(vip.value)?vip.value:DEFAULTS.vip;c.private=validHex(pri.value)?pri.value:DEFAULTS.private;c.normal=DEFAULTS.normal;save(c);refresh();};
+    vip.addEventListener('input',update);pri.addEventListener('input',update);
+  }
+  function refresh(){
+    try{if(typeof renderBKLBranchCustomers==='function')renderBKLBranchCustomers();}catch(e){}
+    try{if(typeof renderOrdersList==='function')renderOrdersList();}catch(e){}
+    try{if(typeof renderOwnerCreditLedger==='function')renderOwnerCreditLedger();}catch(e){}
+    try{if(typeof renderCustomerCreditLedger==='function')renderCustomerCreditLedger();}catch(e){}
+    try{if(typeof renderCreditDebtorsRegistry==='function')renderCreditDebtorsRegistry();}catch(e){}
+  }
+  window.bklRefreshCustomerColors=refresh;
+  function start(){injectControls();}
+  document.addEventListener('DOMContentLoaded',function(){start();setTimeout(start,300);setTimeout(start,1000);});
+  window.addEventListener('storage',function(e){if(e.key===KEY||e.key==='store_customers'){setTimeout(function(){injectControls();refresh();},0);}});
+  const oldOpen=window.openOwnerDashboard;
+  if(typeof oldOpen==='function'&&!oldOpen.__bklColorWrapped){
+    window.openOwnerDashboard=function(){const r=oldOpen.apply(this,arguments);setTimeout(injectControls,0);setTimeout(refresh,80);return r;};window.openOwnerDashboard.__bklColorWrapped=true;
+  }
 })();
 </script>
