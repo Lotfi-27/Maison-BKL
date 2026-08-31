@@ -1398,8 +1398,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             </div>
 
             <div class="flex flex-col gap-1">
-                <label id="lbl-prod-price" class="text-[11px] text-neutral-600 font-medium">السعر</label>
-                <input id="new-price" type="number" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
+                <label id="lbl-prod-price" class="text-[11px] text-neutral-600 font-medium">السعر بالدينار الجزائري (دج)</label>
+                <input id="new-price" type="number" min="0" step="1" inputmode="numeric" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition" placeholder="أدخل السعر بالدج">
             </div>
 
             <div class="flex flex-col gap-1">
@@ -5440,6 +5440,7 @@ let products = [
         name: "Luxury Leather Bag",
         category: "fashion",
         basePrice: 450,
+        priceDZD: 59832,
         images: ["https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400"],
         description: "حقيبة فاخرة مصممة بأعلى معايير الجودة لتناسب إطللتك المميزة.",
         sizesEnabled: true,
@@ -5451,6 +5452,7 @@ let products = [
         name: "Classic Gold Watch",
         category: "electronics",
         basePrice: 890,
+        priceDZD: 118274,
         images: ["https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400"],
         description: "ساعة يد كلاسيكية مطلية بالذهب الخالص.",
         sizesEnabled: false,
@@ -5462,6 +5464,7 @@ let products = [
         name: "Silk Evening Scarf",
         category: "fashion",
         basePrice: 120,
+        priceDZD: 15955,
         images: ["https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=400"],
         description: "وشاح من الحرير الطبيعي الناعم.",
         sizesEnabled: true,
@@ -5498,7 +5501,7 @@ function searchProducts(query) {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${formatPrice(product.basePrice, product.priceDZD)}</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج</span>
             </div>
         `;
     });
@@ -5644,7 +5647,7 @@ function renderProducts() {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${formatPrice(product.basePrice, product.priceDZD)}</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج</span>
             </div>
         `;
     });
@@ -5695,7 +5698,7 @@ function openEditModal() {
     const newName = document.getElementById('new-name');
     if (newName) newName.value = selectedProduct.name;
     const newPrice = document.getElementById('new-price');
-    if (newPrice) newPrice.value = selectedProduct.basePrice;
+    if (newPrice) newPrice.value = Number(selectedProduct.priceDZD ?? Math.round(Number(selectedProduct.basePrice || 0) * Number(currencyConfig?.DZD?.rate || 132.96)));
     const mainFile = document.getElementById('main-image-file');
     if (mainFile) mainFile.value = "";
     mainProductImage = selectedProduct.mainImage || ((selectedProduct.images || [])[0] || "");
@@ -6093,7 +6096,7 @@ function selectProduct(id) {
         const descEl = document.getElementById('product-desc');
 
         if (nameEl) nameEl.innerText = selectedProduct.name;
-        if (priceEl) priceEl.innerText = formatPrice(selectedProduct.basePrice, selectedProduct.priceDZD);
+        if (priceEl) priceEl.innerText = `${Math.round(Number(selectedProduct.priceDZD ?? (Number(selectedProduct.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج`;
         if (descEl) descEl.innerText = selectedProduct.description;
         
         const qtyInput = document.getElementById('product-quantity');
