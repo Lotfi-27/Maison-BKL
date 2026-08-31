@@ -947,50 +947,6 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 </script>
 
 
-<style id="bkl-customer-classification-style">
-/* تصنيف الزبائن: VIP أخضر / خاص أزرق */
-.bkl-customer-vip{
-    --bkl-customer-color:#16a34a;
-    --bkl-customer-bg:#f0fdf4;
-    --bkl-customer-border:#86efac;
-    color:var(--bkl-customer-color)!important;
-    background-color:var(--bkl-customer-bg)!important;
-    border-color:var(--bkl-customer-border)!important;
-}
-.bkl-customer-special{
-    --bkl-customer-color:#2563eb;
-    --bkl-customer-bg:#eff6ff;
-    --bkl-customer-border:#93c5fd;
-    color:var(--bkl-customer-color)!important;
-    background-color:var(--bkl-customer-bg)!important;
-    border-color:var(--bkl-customer-border)!important;
-}
-.bkl-customer-name-vip{color:#16a34a!important;font-weight:900!important;}
-.bkl-customer-name-special{color:#2563eb!important;font-weight:900!important;}
-#bkl-branch-customers-panel .bkl-customer-class-select{
-    min-width:105px;
-    font-weight:800;
-    border-radius:9px;
-    padding:6px 8px;
-    cursor:pointer;
-}
-#bkl-branch-customers-panel .bkl-delete-customer{
-    background:#fee2e2!important;
-    color:#dc2626!important;
-    border:1px solid #fecaca!important;
-    font-weight:800;
-}
-#bkl-branch-customers-panel .bkl-delete-customer:hover{
-    background:#fecaca!important;
-}
-#bkl-branch-customers-panel .bkl-customer-row-vip{
-    background:#f0fdf4!important;
-}
-#bkl-branch-customers-panel .bkl-customer-row-special{
-    background:#eff6ff!important;
-}
-</style>
-
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -3961,7 +3917,7 @@ function previewOrder(orderId) {
 
     content.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <div class="bg-neutral-50 border rounded-xl p-3 leading-7" data-bkl-preview-customer="1">
+            <div class="bg-neutral-50 border rounded-xl p-3 leading-7">
                 <strong>👤 بيانات الزبون</strong><br>
                 الاسم: ${escapeOrderEditorValue(order.customerName || 'زبون مجهول')}<br>
                 الهاتف: ${escapeOrderEditorValue(order.phone || 'غير محدد')}<br>
@@ -4236,24 +4192,6 @@ function printOrderInvoice(orderId, action = 'print') {
         'زبون مجهول'
     );
 
-    const customerRecord = findCustomer(order);
-    const customerClassInfo = classInfo(customerRecord || {});
-    const invoiceCustomerColor = customerClassInfo.type === 'vip'
-        ? '#16a34a'
-        : customerClassInfo.type === 'special'
-            ? '#2563eb'
-            : '#111827';
-    const invoiceCustomerBg = customerClassInfo.type === 'vip'
-        ? '#f0fdf4'
-        : customerClassInfo.type === 'special'
-            ? '#eff6ff'
-            : '#ffffff';
-    const invoiceCustomerBorder = customerClassInfo.type === 'vip'
-        ? '#86efac'
-        : customerClassInfo.type === 'special'
-            ? '#93c5fd'
-            : '#e5e7eb';
-
     const customerPhone = firstValid(
         order.phone,
         order.phoneNumber,
@@ -4494,9 +4432,9 @@ function printOrderInvoice(orderId, action = 'print') {
                 </div>
 
                 <div class="info-section">
-                    <div class="info-box" style="border-color:${invoiceCustomerBorder};background:${invoiceCustomerBg};color:${invoiceCustomerColor};">
-                        <strong style="color:${invoiceCustomerColor};">معلومات الزبون:</strong><br>
-                        <span style="color:${invoiceCustomerColor};font-weight:900;">الاسم واللقب: ${escapeHtml(customerName)}</span><br>
+                    <div class="info-box">
+                        <strong>معلومات الزبون:</strong><br>
+                        الاسم واللقب: ${escapeHtml(customerName)}<br>
                         الهاتف: ${escapeHtml(customerPhone)}<br>
                         البلد: ${escapeHtml(country)}<br>
                         الولاية: ${escapeHtml(state)}<br>
@@ -4631,7 +4569,6 @@ function printOrderInvoice(orderId, action = 'print') {
     const printWindow = bklOpenEmbeddedWindow('bkl-invoice-print-modal', 'طباعة الفاتورة');
     printWindow.document.write(invoiceHtml);
     printWindow.document.close();
-    try { setTimeout(function(){ if (typeof window.bklApplyCustomerTransactionColors === 'function') window.bklApplyCustomerTransactionColors(); }, 0); } catch(e) {}
 }
 
 
@@ -4791,7 +4728,7 @@ function openOwnerDashboard() {
   </div>
   <div class="bkl-bc-body">
     <table>
-      <thead><tr><th>الاسم واللقب</th><th>اسم المستخدم</th><th>الهاتف</th><th>البريد</th><th>الولاية</th><th>البلدية</th><th>تاريخ التسجيل</th><th>تصنيف الزبون</th><th>حذف</th></tr></thead>
+      <thead><tr><th>الاسم واللقب</th><th>اسم المستخدم</th><th>الهاتف</th><th>البريد</th><th>الولاية</th><th>البلدية</th><th>تاريخ التسجيل</th></tr></thead>
       <tbody id="bkl-branch-customers-body"></tbody>
     </table>
   </div>
@@ -10144,360 +10081,6 @@ document.addEventListener('DOMContentLoaded', function(){
 })();
 </script>
 
-
-<script id="bkl-customer-classification-system">
-(function(){
-  'use strict';
-
-  function customers(){
-    try{
-      if(typeof registeredCustomers !== 'undefined' && Array.isArray(registeredCustomers))
-        return registeredCustomers;
-    }catch(e){}
-    try{
-      const a=JSON.parse(localStorage.getItem('store_customers')||'[]');
-      return Array.isArray(a)?a:[];
-    }catch(e){return [];}
-  }
-
-  function saveCustomers(list){
-    try{
-      registeredCustomers = Array.isArray(list) ? list : [];
-    }catch(e){}
-    localStorage.setItem('store_customers', JSON.stringify(Array.isArray(list)?list:[]));
-  }
-
-  function customerName(c){
-    return (`${c?.firstname||''} ${c?.lastname||''}`).trim() || c?.name || '';
-  }
-
-  function norm(v){
-    return String(v??'').trim().toLowerCase();
-  }
-
-  function findCustomer(ref){
-    if(!ref) return null;
-    const list=customers();
-    const id=norm(ref.customerId || ref.id);
-    const phone=norm(ref.phone || ref.phoneNumber);
-    const email=norm(ref.email || ref.customerEmail);
-    const name=norm(ref.customerName || ref.customer || ref.name);
-
-    return list.find(c =>
-      (id && norm(c.id)===id) ||
-      (phone && norm(c.phone)===phone) ||
-      (email && norm(c.email)===email) ||
-      (name && norm(customerName(c))===name)
-    ) || null;
-  }
-
-  function classInfo(c){
-    const type=norm(c?.customerClass || c?.classification || c?.customerType);
-    if(type==='vip' || type==='زبون vip') return {
-      type:'vip', color:'#16a34a', bg:'#f0fdf4', border:'#86efac',
-      nameClass:'bkl-customer-name-vip', rowClass:'bkl-customer-row-vip', label:'زبون VIP'
-    };
-    if(type==='special' || type==='خاص' || type==='زبون خاص') return {
-      type:'special', color:'#2563eb', bg:'#eff6ff', border:'#93c5fd',
-      nameClass:'bkl-customer-name-special', rowClass:'bkl-customer-row-special', label:'زبون خاص'
-    };
-    return {type:'normal', color:'#111827', bg:'#fff', border:'#e5e7eb', nameClass:'', rowClass:'', label:'عادي'};
-  }
-
-  window.bklGetCustomerClassInfo=function(ref){
-    return classInfo(findCustomer(ref) || ref);
-  };
-
-  window.bklSetCustomerClassification=function(customerId, value){
-    const list=customers();
-    const idx=list.findIndex(c=>String(c.id)===String(customerId));
-    if(idx<0) return;
-
-    list[idx].customerClass = value === 'vip' || value === 'special' ? value : 'normal';
-    list[idx].classification = list[idx].customerClass;
-    saveCustomers(list);
-
-    try{
-      if(typeof currentLoggedInCustomer !== 'undefined' &&
-         currentLoggedInCustomer &&
-         String(currentLoggedInCustomer.id)===String(customerId)){
-        currentLoggedInCustomer = list[idx];
-        localStorage.setItem('store_active_customer', JSON.stringify(currentLoggedInCustomer));
-      }
-    }catch(e){}
-
-    if(typeof renderBKLBranchCustomers==='function') renderBKLBranchCustomers();
-    if(typeof renderOwnerDashboardData==='function') renderOwnerDashboardData();
-    if(typeof renderOrdersList==='function') renderOrdersList();
-    if(typeof renderCreditDebtorsRegistry==='function') renderCreditDebtorsRegistry();
-
-    // إعادة تطبيق ألوان المعاملات المفتوحة.
-    setTimeout(window.bklApplyCustomerTransactionColors, 0);
-  };
-
-  window.bklDeleteRegisteredCustomer=function(customerId){
-    const list=customers();
-    const customer=list.find(c=>String(c.id)===String(customerId));
-    if(!customer) return;
-
-    const name=customerName(customer)||'هذا الزبون';
-    const ok=confirm(
-      `هل أنت متأكد من حذف حساب "${name}" نهائياً؟\n\n`+
-      `سيتم حذف حساب الزبون من المتجر ومن قائمة الزبائن، وكذلك معاملاته المرتبطة بالحساب وسجل الشكاوى والكريدي.`
-    );
-    if(!ok) return;
-
-    const matchesCustomer=(obj)=>{
-      if(!obj) return false;
-      const id=norm(obj.customerId);
-      const phone=norm(obj.phone || obj.customerPhone);
-      const email=norm(obj.customerEmail || obj.email);
-      const nm=norm(obj.customerName || obj.customer || obj.name);
-      return (id && id===norm(customer.id)) ||
-             (phone && phone===norm(customer.phone)) ||
-             (email && email===norm(customer.email)) ||
-             (nm && nm===norm(name));
-    };
-
-    const remainingCustomers=list.filter(c=>String(c.id)!==String(customer.id));
-    saveCustomers(remainingCustomers);
-
-    // إزالة الطلبات المرتبطة بالزبون من جميع مفاتيح الطلبات المستخدمة في المتجر.
-    const orderKeys=['storeOrdersList','store_orders','orders','ordersList','purchaseOrders','customerOrders'];
-    const uniqueOrders=new Map();
-    orderKeys.forEach(key=>{
-      try{
-        const raw=JSON.parse(localStorage.getItem(key)||'[]');
-        if(Array.isArray(raw)){
-          raw.forEach(o=>{ if(o && !matchesCustomer(o)) uniqueOrders.set(String(o.id??Math.random()),o); });
-        }
-      }catch(e){}
-    });
-    const cleanOrders=Array.from(uniqueOrders.values());
-    orderKeys.forEach(key=>localStorage.setItem(key, JSON.stringify(cleanOrders)));
-    try{
-      storeOrdersList=cleanOrders;
-      bklOrdersLastLoadedAt=0;
-    }catch(e){}
-
-    // إزالة الشكاوى المرتبطة بالحساب.
-    const complaintKeys=['store_complaints','storeComplaints','complaints_data'];
-    const uniqueComplaints=new Map();
-    complaintKeys.forEach(key=>{
-      try{
-        const raw=JSON.parse(localStorage.getItem(key)||'[]');
-        if(Array.isArray(raw)){
-          raw.forEach(c=>{ if(c && !matchesCustomer(c)) uniqueComplaints.set(String(c.id??Math.random()),c); });
-        }
-      }catch(e){}
-    });
-    const cleanComplaints=Array.from(uniqueComplaints.values());
-    complaintKeys.forEach(key=>localStorage.setItem(key, JSON.stringify(cleanComplaints)));
-    try{
-      storeComplaints=cleanComplaints;
-    }catch(e){}
-
-    // إزالة سجلات الكريدي المرتبطة بالحساب.
-    ['store_credit_ledger_admin','store_credit_ledger_customer'].forEach(key=>{
-      try{
-        const raw=JSON.parse(localStorage.getItem(key)||'[]');
-        if(Array.isArray(raw)){
-          const clean=raw.filter(e=>!matchesCustomer(e));
-          localStorage.setItem(key, JSON.stringify(clean));
-        }
-      }catch(e){}
-    });
-
-    // إزالة الاسم/الهاتف/البريد من القائمة السوداء إن وجد.
-    try{
-      const black=Array.isArray(blacklistedCustomers)?blacklistedCustomers:[];
-      const vals=[name,customer.phone,customer.email,customer.id].map(norm).filter(Boolean);
-      const cleanBlack=black.filter(v=>!vals.includes(norm(v)));
-      localStorage.setItem('blacklistedCustomers', JSON.stringify(cleanBlack));
-      try{blacklistedCustomers=cleanBlack;}catch(e){}
-    }catch(e){}
-
-    try{
-      if(typeof currentLoggedInCustomer!=='undefined' &&
-         currentLoggedInCustomer &&
-         String(currentLoggedInCustomer.id)===String(customer.id)){
-        currentLoggedInCustomer=null;
-        localStorage.removeItem('store_active_customer');
-      }
-    }catch(e){}
-
-    try{
-      if(typeof saveComplaintChatData==='function') saveComplaintChatData();
-    }catch(e){}
-
-    if(typeof renderBKLBranchCustomers==='function') renderBKLBranchCustomers();
-    if(typeof renderOwnerDashboardData==='function') renderOwnerDashboardData();
-    if(typeof renderOrdersList==='function') renderOrdersList();
-    if(typeof renderCreditDebtorsRegistry==='function') renderCreditDebtorsRegistry();
-
-    alert(`تم حذف حساب "${name}" نهائياً من المتجر.`);
-  };
-
-  function esc(v){
-    const s=String(v??'—');
-    return typeof escapeHtml==='function' ? escapeHtml(s) :
-      s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  window.renderBKLBranchCustomers=function(){
-    const s=document.getElementById('bkl-branch-customers-select');
-    const b=document.getElementById('bkl-branch-customers-body');
-    const n=document.getElementById('bkl-branch-customers-count');
-    if(!s||!b)return;
-
-    const old=s.value;
-    const branches=typeof bklBranches==='function'?bklBranches():[];
-    const list=customers();
-
-    s.innerHTML=`<option value="__ALL__">جميع الفروع</option>`+
-      branches.map(x=>`<option value="${esc(String(x.id))}">${esc(String(x.name||x.id))}</option>`).join('');
-
-    if(old==='__ALL__'||branches.some(x=>String(x.id)===old)) s.value=old;
-    else s.value='__ALL__';
-
-    const selectedId=String(s.value||'__ALL__');
-    const selectedBranch=branches.find(x=>String(x.id)===selectedId)||null;
-    const q=(document.getElementById('bkl-branch-customers-search')?.value||'').toLowerCase().trim();
-
-    const rows=list.filter(c=>{
-      if(selectedId!=='__ALL__' && typeof belongs==='function' && !belongs(c,selectedBranch)) return false;
-      if(!q)return true;
-      return [c.firstname,c.lastname,c.username,c.phone,c.email,c.state,c.municipality,c.branch,c.branchName,c.registeredBranchName]
-        .map(v=>String(v??'')).join(' ').toLowerCase().includes(q);
-    });
-
-    if(n)n.textContent=rows.length+' زبون';
-
-    if(!rows.length){
-      b.innerHTML='<tr><td colspan="9" class="bkl-empty">لا يوجد زبائن مسجلون في النطاق المحدد.</td></tr>';
-      return;
-    }
-
-    b.innerHTML=rows.map(c=>{
-      const name=customerName(c)||'—';
-      let d=c.createdAt||c.created_at||c.registrationDate||c.registration_date||c.date||'';
-      if(!d&&/^CUST-\d+$/.test(String(c.id||''))){
-        const ts=Number(String(c.id).slice(5));
-        if(Number.isFinite(ts)&&ts>0)d=new Date(ts).toLocaleString('ar-DZ');
-      }
-      d=d||'—';
-      const info=classInfo(c);
-      const rowClass=info.rowClass;
-      const selectStyle=info.type==='vip'
-        ? 'color:#16a34a;border-color:#86efac;background:#f0fdf4'
-        : info.type==='special'
-          ? 'color:#2563eb;border-color:#93c5fd;background:#eff6ff'
-          : 'color:#374151;border-color:#d1d5db;background:#fff';
-
-      return `<tr class="${rowClass}">
-        <td><strong class="${info.nameClass}">${esc(name)}</strong></td>
-        <td>${esc(c.username)}</td>
-        <td dir="ltr">${esc(c.phone)}</td>
-        <td dir="ltr">${esc(c.email)}</td>
-        <td>${esc(c.state)}</td>
-        <td>${esc(c.municipality)}</td>
-        <td>${esc(d)}</td>
-        <td>
-          <select class="bkl-customer-class-select" style="${selectStyle}"
-                  aria-label="تصنيف ${esc(name)}"
-                  onchange="bklSetCustomerClassification('${esc(String(c.id))}', this.value)">
-            <option value="normal" ${info.type==='normal'?'selected':''}>عادي</option>
-            <option value="vip" ${info.type==='vip'?'selected':''}>🟢 زبون VIP</option>
-            <option value="special" ${info.type==='special'?'selected':''}>🔵 زبون خاص</option>
-          </select>
-        </td>
-        <td>
-          <button type="button" class="bkl-delete-customer px-2 py-1 rounded-lg text-[10px]"
-                  onclick="bklDeleteRegisteredCustomer('${esc(String(c.id))}')">🗑️ حذف</button>
-        </td>
-      </tr>`;
-    }).join('');
-  };
-
-  function customerFromText(text){
-    const t=norm(text);
-    if(!t)return null;
-    return customers().find(c=>{
-      const name=norm(customerName(c));
-      const phone=norm(c.phone);
-      const email=norm(c.email);
-      return (name && t.includes(name)) || (phone && t.includes(phone)) || (email && t.includes(email));
-    })||null;
-  }
-
-  window.bklApplyCustomerTransactionColors=function(){
-    const ids=[
-      'owner-orders-container',
-      'order-preview-content',
-      'credit-debtors-registry-container',
-      'owner-complaints-container'
-    ];
-
-    ids.forEach(id=>{
-      const root=document.getElementById(id);
-      if(!root)return;
-
-      root.querySelectorAll('[data-bkl-customer-colored]').forEach(el=>{
-        el.removeAttribute('data-bkl-customer-colored');
-        el.style.removeProperty('color');
-        el.style.removeProperty('background-color');
-        el.style.removeProperty('border-color');
-      });
-
-      const all=[...root.querySelectorAll('div,li,tr,td,p,strong,span')];
-      all.forEach(el=>{
-        const directText=(el.textContent||'').trim();
-        if(!directText || directText.length>250)return;
-        const c=customerFromText(directText);
-        if(!c)return;
-        const info=classInfo(c);
-        if(info.type==='normal')return;
-
-        if(el.tagName==='TR' || el.parentElement?.tagName==='TR' ||
-           id==='owner-orders-container' && el.classList.contains('bg-white')){
-          el.style.setProperty('background-color',info.bg,'important');
-          el.style.setProperty('border-color',info.border,'important');
-          el.setAttribute('data-bkl-customer-colored','1');
-        }
-
-        const nameText=customerName(c);
-        if(nameText && directText.includes(nameText)){
-          const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
-          const nodes=[];
-          while(walker.nextNode()) nodes.push(walker.currentNode);
-          nodes.forEach(node=>{
-            if(norm(node.nodeValue).includes(norm(nameText))){
-              const span=document.createElement('span');
-              span.className=info.type==='vip'?'bkl-customer-name-vip':'bkl-customer-name-special';
-              span.textContent=node.nodeValue;
-              node.parentNode.replaceChild(span,node);
-            }
-          });
-          el.setAttribute('data-bkl-customer-colored','1');
-        }
-      });
-    });
-  };
-
-  // نراقب إعادة رسم نوافذ المعاملات حتى تبقى الألوان مطبقة بعد كل تحديث.
-  const observer=new MutationObserver(function(){
-    clearTimeout(observer.__timer);
-    observer.__timer=setTimeout(window.bklApplyCustomerTransactionColors,60);
-  });
-  observer.observe(document.body,{subtree:true,childList:true});
-
-  // إعادة تطبيق بعد فتح لوحة التحكم.
-  document.addEventListener('DOMContentLoaded',function(){
-    setTimeout(window.bklApplyCustomerTransactionColors,200);
-    setTimeout(window.bklApplyCustomerTransactionColors,700);
-  });
-})();
-</script>
 
 <script id="bkl-orders-buttons-repair">
 (function(){
