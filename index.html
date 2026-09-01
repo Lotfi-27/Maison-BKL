@@ -8058,6 +8058,7 @@ function completeCheckoutOrder() {
                         </select>
                     </label>
                     <div class="flex items-end"><button type="button" onclick="resetCreditDebtorsFilters()" class="w-full bg-white border border-neutral-200 rounded-lg px-2 py-2 text-[10px] font-bold">↺ إعادة الفلترة</button></div>
+                    <div class="flex items-end"><button type="button" onclick="openCreditDebtorsRegistryViewer()" class="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-2 py-2 text-[10px] font-bold">👁️ عرض السجل</button></div>
                     <div class="flex items-end"></div>
                 </div>
                 ${debtors.length ? `<div class="overflow-x-auto rounded-xl border border-orange-100 bg-white"><table class="w-full min-w-[1200px] text-[10px] border-collapse"><thead class="bg-orange-50 text-orange-900"><tr>
@@ -8099,7 +8100,38 @@ function buildCreditDebtorsRegistryRows(debtors) {
 
         
 
-        function renderOwnerCreditLedger() {
+        
+function openCreditDebtorsRegistryViewer() {
+    const data = getCreditDebtorsRegistryHtml();
+    const old = document.getElementById('creditDebtorsViewerModal');
+    if (old) old.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'creditDebtorsViewerModal';
+    modal.className = 'fixed inset-0 z-[9999] bg-black/50 p-3 sm:p-6 flex items-center justify-center';
+    modal.innerHTML = `
+        <div class="w-full max-w-5xl max-h-[92vh] overflow-hidden bg-white rounded-2xl shadow-2xl flex flex-col" dir="rtl">
+            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b bg-white sticky top-0">
+                <div>
+                    <h2 class="font-extrabold text-base text-neutral-800">👥 سجل أصحاب الكريدي المستحقين</h2>
+                    <p class="text-[10px] text-neutral-500 mt-1">عدد أصحاب الكريدي: ${data.debtors.length} — إجمالي المتبقي: ${escapeOrderHtml(formatCreditAmount(data.totalDebt))}</p>
+                </div>
+                <button type="button" onclick="document.getElementById('creditDebtorsViewerModal')?.remove()" class="shrink-0 w-10 h-10 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-black text-lg">✕</button>
+            </div>
+            <div class="flex-1 overflow-auto p-3 sm:p-5">
+                ${data.debtors.length ? data.html : '<div class="text-center text-sm text-neutral-400 py-12">لا يوجد أصحاب كريدي مستحقون حالياً.</div>'}
+            </div>
+            <div class="border-t bg-neutral-50 px-4 py-3 flex justify-center">
+                <button type="button" onclick="document.getElementById('creditDebtorsViewerModal')?.remove()" class="w-full sm:w-auto min-w-[160px] bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-5 py-2.5 text-sm font-extrabold">✕ إغلاق والعودة للوحة التحكم</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => {
+        if (e.target === modal) modal.remove();
+    });
+}
+
+function renderOwnerCreditLedger() {
             renderCreditDebtorsRegistry();
             const box = document.getElementById('owner-credit-ledger-container');
             const count = document.getElementById('owner-credit-count');
