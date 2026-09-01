@@ -853,6 +853,31 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
+
+<style id="complaints-mobile-composer-fix">
+@media (max-width: 640px) {
+  #owner-chat-text-input,
+  #customer-chat-text-input,
+  #complaint-text,
+  #complaint-details,
+  #complaint-message {
+    width: 100% !important;
+    min-height: 88px !important;
+    display: block !important;
+  }
+  #owner-chat-text-input + *,
+  #customer-chat-text-input + * {
+    width: 100% !important;
+  }
+  #owner-chat-file-input,
+  #customer-chat-file-input,
+  #owner-chat-camera-input,
+  #customer-chat-camera-input {
+    display: none !important;
+  }
+}
+</style>
+
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -2499,11 +2524,48 @@ function ensureComplaintMessages(complaint) {
 }
 
 function saveComplaintChatData() {
-    // توحيد مصدر بيانات الشكاوى حتى تعمل لوحة التحكم والمحادثة على نفس السجل.
-    setStoredData('store_complaints', storeComplaints);
-    setStoredData('storeComplaints', storeComplaints);
-    setStoredData('complaints_data', storeComplaints);
-    try { localStorage.setItem('store_complaints', JSON.stringify(storeComplaints)); } catch (e) { console.error('تعذر حفظ الشكاوى:', e); }
+    // مصدر واحد للمحادثة، مع إبقاء المفاتيح القديمة متزامنة للتوافق.
+    const data = Array.isArray(storeComplaints) ? storeComplaints : [];
+    try {
+        localStorage.setItem('store_complaints', JSON.stringify(data));
+        localStorage.setItem('storeComplaints', JSON.stringify(data));
+        localStorage.setItem('complaints_data', JSON.stringify(data));
+    } catch (e) {
+        console.error('تعذر حفظ محادثة الشكاوى:', e);
+    }
+}
+
+function refreshComplaintChatFromStorage() {
+    try {
+        const raw = localStorage.getItem('store_complaints') ||
+                    localStorage.getItem('storeComplaints') ||
+                    localStorage.getItem('complaints_data') || '[]';
+        const parsed = JSON.parse(raw);
+        storeComplaints = Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.error('تعذر تحديث محادثة الشكاوى:', e);
+        return;
+    }
+
+    // Refresh both sides if their chat/list is currently present.
+    if (typeof activeComplaintChatId !== 'undefined' && activeComplaintChatId) {
+        const ownerComplaint = storeComplaints.find(c => String(c.id) === String(activeComplaintChatId));
+        if (ownerComplaint) {
+            ensureComplaintMessages(ownerComplaint);
+            renderComplaintChatMessages(ownerComplaint);
+        }
+    }
+
+    if (typeof window.activeCustomerComplaintChatId !== 'undefined' && window.activeCustomerComplaintChatId) {
+        const customerComplaint = storeComplaints.find(c => String(c.id) === String(window.activeCustomerComplaintChatId));
+        if (customerComplaint) {
+            ensureComplaintMessages(customerComplaint);
+            renderCustomerComplaintChatMessages(customerComplaint);
+        }
+    }
+
+    if (typeof renderCustomerComplaintChats === 'function') renderCustomerComplaintChats();
+    if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
 }
 
 function loadUnifiedComplaints() {
@@ -2605,7 +2667,7 @@ async function sendComplaintReply() {
     const media = await collectChatAttachments('owner-chat-file-input');
     if (!text && !media.length) return;
 
-    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+    refreshComplaintChatFromStorage();
     const complaint = storeComplaints.find(c => String(c.id) === String(activeComplaintChatId));
     if (!complaint) return;
     ensureComplaintMessages(complaint);
@@ -2745,7 +2807,7 @@ async function sendCustomerComplaintMessage() {
     const media = await collectChatAttachments('customer-chat-file-input');
     if (!text && !media.length) return;
 
-    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+    refreshComplaintChatFromStorage();
     const complaint = storeComplaints.find(c => String(c.id) === String(id));
     if (!complaint || !getCustomerComplaintsForAccount().some(c => String(c.id) === String(id))) return;
     ensureComplaintMessages(complaint);
@@ -4095,7 +4157,10 @@ function printOrderInvoice(orderId, action = 'print') {
         
 
 </body>
-        </html>
+        
+
+
+</html>
     `;
 
     const bklInvoiceColor = typeof bklGetCustomerColor==='function' ? bklGetCustomerColor(order) : '#000000';
@@ -8617,9 +8682,18 @@ let activeComplaintChatId = null;
 
 
         window.addEventListener('storage', function(event) {
-            if (event.key === 'store_orders' || event.key === 'storeOrdersList' || event.key === 'store_complaints' || event.key === 'storeComplaints' || event.key === 'store_credit_ledger_admin' || event.key === 'store_credit_ledger_customer') {
+            if (event.key === 'store_orders' || event.key === 'storeOrdersList' ||
+                event.key === 'store_complaints' || event.key === 'storeComplaints' ||
+                event.key === 'complaints_data' ||
+                event.key === 'store_credit_ledger_admin' || event.key === 'store_credit_ledger_customer') {
+
+                if (event.key === 'store_complaints' || event.key === 'storeComplaints' || event.key === 'complaints_data') {
+                    refreshComplaintChatFromStorage();
+                }
+
                 if (typeof renderOrdersList === 'function') renderOrdersList();
                 if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+                if (typeof renderCustomerComplaintChats === 'function') renderCustomerComplaintChats();
             }
         });
 
@@ -9151,6 +9225,31 @@ document.addEventListener('DOMContentLoaded', function(){
   };
 })();
 </script>
+
+<script id="complaints-chat-live-sync">
+(function () {
+    let lastComplaintSnapshot = '';
+    function syncComplaintConversation() {
+        try {
+            const raw = localStorage.getItem('store_complaints') ||
+                        localStorage.getItem('storeComplaints') ||
+                        localStorage.getItem('complaints_data') || '[]';
+            if (raw === lastComplaintSnapshot) return;
+            lastComplaintSnapshot = raw;
+            if (typeof refreshComplaintChatFromStorage === 'function') {
+                refreshComplaintChatFromStorage();
+            }
+        } catch (e) {}
+    }
+    window.addEventListener('storage', function (e) {
+        if (e.key === 'store_complaints' || e.key === 'storeComplaints' || e.key === 'complaints_data') {
+            lastComplaintSnapshot = '';
+            syncComplaintConversation();
+        }
+    });
+    setInterval(syncComplaintConversation, 1200);
+})();
+</script>
 </body>
 
 <script id="bkl-registration-location-init">
@@ -9179,292 +9278,3 @@ document.addEventListener('DOMContentLoaded', function(){
 })();
 </script>
 </html>
-
-<script id="bkl-branch-customers-js">
-(function(){
-  function safeParse(key){
-    try{
-      const raw=localStorage.getItem(key);
-      if(!raw)return [];
-      const value=JSON.parse(raw);
-      return Array.isArray(value)?value:[];
-    }catch(e){return [];}
-  }
-
-  function bklBranches(){
-    let branches=[];
-    try{
-      if(typeof getBranches==='function'){
-        const b=getBranches();
-        if(Array.isArray(b)) branches=b;
-      }
-    }catch(e){}
-    if(!branches.length) branches=safeParse('store_branches');
-    if(!branches.length){
-      branches=[
-        {id:'main',name:'المتجر الرئيسي'},
-        {id:'branch-1',name:'فرع مستغانم'}
-      ];
-    }
-    const clean=branches.filter(x=>x&&x.id!=null&&String(x.name||x.id).trim());
-    return clean.length?clean:[{id:'main',name:'المتجر الرئيسي'}];
-  }
-
-  // قراءة جميع مصادر الزبائن ودمجها بدون تكرار.
-  function bklCustomers(){
-    const all=[];
-    const add=list=>{
-      if(!Array.isArray(list))return;
-      list.forEach(c=>{if(c&&typeof c==='object')all.push(c);});
-    };
-    add(safeParse('store_customers'));
-    try{if(typeof registeredCustomers!=='undefined')add(registeredCustomers);}catch(e){}
-    try{if(Array.isArray(window.registeredCustomers))add(window.registeredCustomers);}catch(e){}
-    add(safeParse('registeredCustomers'));
-
-    const seen=new Set();
-    return all.filter(c=>{
-      const key=String(c.id||c.customerId||c.username||c.email||c.phone||
-        ((c.firstname||'')+'|'+(c.lastname||''))).trim().toLowerCase();
-      if(!key)return true;
-      if(seen.has(key))return false;
-      seen.add(key);
-      return true;
-    });
-  }
-
-  function bklBranchIds(c){
-    const a=[];
-    ['branchId','branchID','branch','branchName','storeBranchId','registeredBranchId',
-     'registeredBranchName','currentBranchId'].forEach(k=>{
-      if(c&&c[k]!=null&&String(c[k]).trim())a.push(String(c[k]).trim());
-    });
-    if(Array.isArray(c&&c.branchIds))c.branchIds.forEach(v=>a.push(String(v).trim()));
-    if(Array.isArray(c&&c.branches))c.branches.forEach(v=>a.push(String(typeof v==='object'
-      ?(v.id||v.branchId||v.branchID||v.name||v.branchName||''):v).trim()));
-    return [...new Set(a.filter(Boolean))];
-  }
-
-  function belongs(c,branch){
-    if(!branch)return false;
-    const ids=bklBranchIds(c);
-    const branchId=String(branch.id??'').trim();
-    const branchName=String(branch.name??'').trim();
-    const candidates=new Set([branchId,branchName].filter(Boolean));
-    if(ids.some(v=>candidates.has(String(v))))return true;
-    const storedName=String(c?.registeredBranchName||c?.branchName||'').trim();
-    if(storedName&&branchName&&storedName===branchName)return true;
-    if(!ids.length&&!storedName&&branchId==='main')return true;
-    return false;
-  }
-
-  function esc(v){
-    const text=String(v??'—');
-    return typeof escapeHtml==='function'?escapeHtml(text):text
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-
-  let bklCustomerTypeFilter = 'all';
-
-  function bklCustomerType(c){
-    const t=String(c?.customerType||c?.customer_type||c?.classification||'').toLowerCase();
-    return t==='vip'?'vip':(t==='private'||t==='special'?'private':'normal');
-  }
-
-  window.bklSetCustomerTypeFilter=function(type){
-    bklCustomerTypeFilter=['all','vip','private','normal'].includes(type)?type:'all';
-    const f=document.getElementById('bkl-customer-type-filter');
-    if(f)f.value=bklCustomerTypeFilter;
-    document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.bklType===bklCustomerTypeFilter));
-    window.renderBKLBranchCustomers();
-  };
-
-  window.bklSetCustomerType=function(id,type){
-    try{
-      const customers=bklCustomers();
-      const idx=customers.findIndex(c=>String(c?.id||'')===String(id));
-      if(idx<0)return;
-      customers[idx].customerType=(type==='vip'||type==='private'||type==='normal')?type:'';
-      if(type==='normal') customers[idx].discountPercent=0;
-      localStorage.setItem('store_customers',JSON.stringify(customers));
-      if(Array.isArray(registeredCustomers)){
-        const ri=registeredCustomers.findIndex(c=>String(c?.id||'')===String(id));
-        if(ri>=0)registeredCustomers[ri]=customers[idx];
-      }
-      window.renderBKLBranchCustomers();
-    }catch(e){console.error('BKL customer type update:',e);}
-  };
-
-  window.bklSetCustomerDiscount=function(id,value){
-    try{
-      const customers=bklCustomers();
-      const idx=customers.findIndex(c=>String(c?.id||'')===String(id));
-      if(idx<0)return;
-      const type=bklCustomerType(customers[idx]);
-      if(type==='normal'){
-        customers[idx].discountPercent=0;
-      }else{
-        const n=Math.max(0,Math.min(75,parseInt(value,10)||0));
-        customers[idx].discountPercent=n;
-      }
-      localStorage.setItem('store_customers',JSON.stringify(customers));
-      if(Array.isArray(registeredCustomers)){
-        const ri=registeredCustomers.findIndex(c=>String(c?.id||'')===String(id));
-        if(ri>=0)registeredCustomers[ri]=customers[idx];
-      }
-      window.renderBKLBranchCustomers();
-    }catch(e){console.error('BKL customer discount update:',e);}
-  };
-
-  window.bklDeleteCustomer=function(id){
-    try{
-      const customers=bklCustomers();
-      const idx=customers.findIndex(c=>String(c?.id||'')===String(id));
-      if(idx<0)return;
-      const c=customers[idx];
-      const name=(`${c?.firstname||''} ${c?.lastname||''}`).trim()||c?.username||c?.phone||'هذا الزبون';
-      if(!window.confirm(`هل تريد حذف حساب الزبون «${name}» نهائياً من المتجر؟\n\nلا يمكن التراجع عن هذا الحذف.`))return;
-      customers.splice(idx,1);
-      localStorage.setItem('store_customers',JSON.stringify(customers));
-      if(typeof registeredCustomers!=='undefined')registeredCustomers=customers;
-      try{
-        const active=JSON.parse(localStorage.getItem('store_active_customer')||'null');
-        if(active&&String(active.id||'')===String(id)){
-          localStorage.removeItem('store_active_customer');
-          currentLoggedInCustomer=null;
-        }
-      }catch(e){}
-      window.renderBKLBranchCustomers();
-      if(typeof renderOwnerDashboardData==='function'){try{renderOwnerDashboardData();}catch(e){}}
-    }catch(e){console.error('BKL customer delete:',e);alert('تعذر حذف حساب الزبون.');}
-  };
-
-  window.renderBKLBranchCustomers=function(){
-    const s=document.getElementById('bkl-branch-customers-select');
-    const b=document.getElementById('bkl-branch-customers-body');
-    const n=document.getElementById('bkl-branch-customers-count');
-    if(!s||!b)return;
-    const old=s.value;
-    const branches=bklBranches();
-    const customers=bklCustomers();
-    s.innerHTML=`<option value="__ALL__">جميع الفروع</option>`+branches.map(x=>`<option value="${esc(String(x.id))}">${esc(String(x.name||x.id))}</option>`).join('');
-    if(old==='__ALL__'||branches.some(x=>String(x.id)===old))s.value=old;
-    else{const firstWithBranch=customers.find(c=>bklBranchIds(c).length);const ids=firstWithBranch?bklBranchIds(firstWithBranch):[];s.value=ids.find(id=>branches.some(x=>String(x.id)===String(id)))||'__ALL__';}
-    const selectedId=String(s.value||'__ALL__');
-    const selectedBranch=branches.find(x=>String(x.id)===selectedId)||null;
-    const q=(document.getElementById('bkl-branch-customers-search')?.value||'').toLowerCase().trim();
-    const typeFilter=document.getElementById('bkl-customer-type-filter')?.value||bklCustomerTypeFilter||'all';
-    bklCustomerTypeFilter=['all','vip','private','normal'].includes(typeFilter)?typeFilter:'all';
-    const rows=customers.filter(c=>{
-      if(selectedId!=='__ALL__'&&!belongs(c,selectedBranch))return false;
-      if(bklCustomerTypeFilter!=='all'&&bklCustomerType(c)!==bklCustomerTypeFilter)return false;
-      if(!q)return true;
-      return [c.firstname,c.lastname,c.username,c.phone,c.email,c.state,c.municipality,c.branch,c.branchName,c.registeredBranchName].map(v=>String(v??'')).join(' ').toLowerCase().includes(q);
-    });
-    if(n)n.textContent=rows.length+' زبون';
-    document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.bklType===bklCustomerTypeFilter));
-    const f=document.getElementById('bkl-customer-type-filter');if(f)f.value=bklCustomerTypeFilter;
-    if(!rows.length){b.innerHTML='<tr><td colspan="10" class="bkl-empty">لا يوجد زبائن مسجلون في النطاق المحدد.</td></tr>';return;}
-    b.innerHTML=rows.map(c=>{
-      const id=String(c.id||'');
-      const name=(`${c.firstname||''} ${c.lastname||''}`).trim()||c.name||'—';
-      let d=c.createdAt||c.created_at||c.registrationDate||c.registration_date||c.date||'';
-      if(!d&&/^CUST-\d+$/.test(id)){const ts=Number(id.slice(5));if(Number.isFinite(ts)&&ts>0)d=new Date(ts).toLocaleString('ar-DZ');}
-      const type=bklCustomerType(c);
-      const color=typeof bklGetCustomerColor==='function'?bklGetCustomerColor(c):'#000000';
-      const tint=typeof bklMixColor==='function'?bklMixColor(color,0.10):color;
-      const badge=type==='vip'?`<span class="bkl-customer-badge" style="background:${esc(tint)};color:${esc(color)}">⭐ VIP</span>`:type==='private'?`<span class="bkl-customer-badge" style="background:${esc(tint)};color:${esc(color)}">🔒 الخاص</span>`:'<span class="bkl-customer-badge normal" style="background:#fff;color:#000">عادي</span>';
-      const discount=Math.max(0,Math.min(75,parseInt(c.discountPercent??c.discount??0,10)||0));
-      const discountCell=(type==='vip'||type==='private')?`<select class="bkl-customer-discount" aria-label="نسبة خصم الزبون" onchange="bklSetCustomerDiscount('${esc(id)}',this.value)"><option value="0"${discount===0?' selected':''}>بدون خصم</option>${Array.from({length:75},(_,i)=>i+1).map(v=>`<option value="${v}"${discount===v?' selected':''}>${v}%</option>`).join('')}</select>`:'<span style="color:#000">—</span>';
-      return `<tr class="bkl-customer-colored" style="color:${esc(color)};border-inline-start:4px solid ${esc(color)}"><td><strong style="color:${esc(color)}">${esc(name)}</strong></td><td>${badge}</td><td>${discountCell}</td><td>${esc(c.username)}</td><td dir="ltr">${esc(c.phone)}</td><td dir="ltr">${esc(c.email)}</td><td>${esc(c.state)}</td><td>${esc(c.municipality)}</td><td>${esc(d||'—')}</td><td><div class="bkl-row-actions">${type!=='vip'?`<button type="button" class="bkl-btn-vip" onclick="bklSetCustomerType('${esc(id)}','vip')">⭐ VIP</button>`:''}${type!=='private'?`<button type="button" class="bkl-btn-private" onclick="bklSetCustomerType('${esc(id)}','private')">🔒 الخاص</button>`:''}${type!=='normal'?`<button type="button" class="bkl-btn-normal" onclick="bklSetCustomerType('${esc(id)}','normal')">عادي</button>`:''}<button type="button" class="bkl-btn-delete" onclick="bklDeleteCustomer('${esc(id)}')">🗑️ حذف</button></div></td></tr>`;
-    }).join('');
-  };
-
-  const oldOpen=window.openOwnerDashboard;
-  if(typeof oldOpen==='function'&&!oldOpen.__bklCustomersWrapped){
-    window.openOwnerDashboard=function(){
-      const r=oldOpen.apply(this,arguments);
-      try{window.renderBKLBranchCustomers();}catch(e){console.error('BKL customers render after dashboard open:',e);}
-      return r;
-    };
-    window.openOwnerDashboard.__bklCustomersWrapped=true;
-  }
-
-  document.addEventListener('DOMContentLoaded',()=>{
-    setTimeout(window.renderBKLBranchCustomers,100);
-    setTimeout(window.renderBKLBranchCustomers,500);
-  });
-
-  window.addEventListener('storage',e=>{
-    if(['store_customers','store_branches','registeredCustomers'].includes(e.key))
-      setTimeout(window.renderBKLBranchCustomers,0);
-  });
-})();
-</script>
-
-
-
-
-
-<script id="bkl-customer-color-system-v1">
-(function(){
-  const KEY='bkl_customer_type_colors';
-  const DEFAULTS={vip:'#7c3aed',private:'#2f6b4f',normal:'#000000'};
-  function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'{}');return Object.assign({},DEFAULTS,x||{});}catch(e){return Object.assign({},DEFAULTS);}}
-  function validHex(v){return /^#[0-9a-fA-F]{6}$/.test(String(v||''));}
-  function save(c){try{localStorage.setItem(KEY,JSON.stringify(c));}catch(e){} window.dispatchEvent(new StorageEvent('storage',{key:KEY}));}
-  function customers(){
-    try{const a=JSON.parse(localStorage.getItem('store_customers')||'[]');return Array.isArray(a)?a:[];}catch(e){return[];}
-  }
-  function type(c){const t=String(c?.customerType||c?.customer_type||c?.classification||'').toLowerCase();return t==='vip'?'vip':(t==='private'||t==='special'?'private':'normal');}
-  function find(c){
-    if(!c)return null; const list=customers();
-    const id=String(c.id??c.customerId??'').trim(); const phone=String(c.phone??'').trim(); const email=String(c.email??c.customerEmail??'').trim().toLowerCase();
-    const name=String(c.customerName??c.name??`${c.firstname||c.firstName||''} ${c.lastname||c.lastName||''}`).trim().toLowerCase();
-    return list.find(x=> (id&&String(x.id||'')===id) || (phone&&String(x.phone||'')===phone) || (email&&String(x.email||'').toLowerCase()===email) || (name&&`${x.firstname||x.firstName||''} ${x.lastname||x.lastName||''}`.trim().toLowerCase()===name)) || null;
-  }
-  window.bklGetCustomerType=function(c){return type(find(c)||c||{});};
-  window.bklGetCustomerColor=function(c){const cs=read();return cs[window.bklGetCustomerType(c)]||DEFAULTS.normal;};
-  window.bklMixColor=function(hex,alpha){
-    if(!validHex(hex))return '#ffffff'; const n=parseInt(hex.slice(1),16),r=n>>16,g=(n>>8)&255,b=n&255;
-    const a=Math.max(0,Math.min(1,Number(alpha)||0)); return `rgba(${r},${g},${b},${a})`;
-  };
-  function injectControls(){
-    const vip=document.getElementById('bkl-color-vip'), pri=document.getElementById('bkl-color-private'); if(!vip||!pri)return;
-    const cs=read(); vip.value=validHex(cs.vip)?cs.vip:DEFAULTS.vip; pri.value=validHex(cs.private)?cs.private:DEFAULTS.private;
-    if(vip.__bklBound)return; vip.__bklBound=pri.__bklBound=true;
-    const update=function(){const c=read();c.vip=validHex(vip.value)?vip.value:DEFAULTS.vip;c.private=validHex(pri.value)?pri.value:DEFAULTS.private;c.normal=DEFAULTS.normal;save(c);refresh();};
-    vip.addEventListener('input',update);pri.addEventListener('input',update);
-  }
-  window.bklFindCustomerForOrder=function(c){return find(c)||null;};
-  function getCustomerDiscount(c){
-    const customer=find(c)||c||{};
-    const t=type(customer);
-    if(t==='normal')return 0;
-    return Math.max(0,Math.min(75,parseInt(customer.discountPercent??customer.discount??0,10)||0));
-  }
-  window.bklGetCustomerDiscount=getCustomerDiscount;
-  window.bklGetCustomerDiscountData=function(c,total){
-    const gross=Math.max(0,Number(total)||0);
-    const percent=getCustomerDiscount(c);
-    const amount=Math.round(gross*percent)/100;
-    return {percent,amount,finalTotal:Math.max(0,Math.round((gross-amount)*100)/100)};
-  };
-  function refresh(){
-    try{if(typeof renderBKLBranchCustomers==='function')renderBKLBranchCustomers();}catch(e){}
-    try{if(typeof renderOrdersList==='function')renderOrdersList();}catch(e){}
-    try{if(typeof renderOwnerCreditLedger==='function')renderOwnerCreditLedger();}catch(e){}
-    try{if(typeof renderCustomerCreditLedger==='function')renderCustomerCreditLedger();}catch(e){}
-    try{if(typeof renderCreditDebtorsRegistry==='function')renderCreditDebtorsRegistry();}catch(e){}
-  }
-  window.bklRefreshCustomerColors=refresh;
-  function start(){injectControls();}
-  document.addEventListener('DOMContentLoaded',function(){start();setTimeout(start,300);setTimeout(start,1000);});
-  window.addEventListener('storage',function(e){if(e.key===KEY||e.key==='store_customers'){setTimeout(function(){injectControls();refresh();},0);}});
-  const oldOpen=window.openOwnerDashboard;
-  if(typeof oldOpen==='function'&&!oldOpen.__bklColorWrapped){
-    window.openOwnerDashboard=function(){const r=oldOpen.apply(this,arguments);setTimeout(injectControls,0);setTimeout(refresh,80);return r;};window.openOwnerDashboard.__bklColorWrapped=true;
-  }
-})();
-</script>
