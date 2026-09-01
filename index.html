@@ -3029,10 +3029,10 @@ function renderOrdersList() {
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-neutral-100">
-                    <button data-order-action="preview" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">👁️ عرض الطلب</button>
+                    <button type="button" data-order-action="preview" data-order-id="${escapeOrderHtml(String(order.id))}" onclick="return window.bklOpenOrderPreview && window.bklOpenOrderPreview(this.getAttribute('data-order-id'));" class="bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">👁️ عرض الطلب</button>
                     <button data-order-action="confirm" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✅ تأكيد الطلب</button>
                     <button type="button" data-order-action="edit" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✏️ تعديل الطلب</button>
-                    <button type="button" data-order-action="invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-neutral-800 hover:bg-neutral-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">🖨️ طباعة الفاتورة</button>
+                    <button type="button" data-order-action="invoice" data-order-id="${escapeOrderHtml(String(order.id))}" onclick="return window.bklPrintOrderInvoice && window.bklPrintOrderInvoice(this.getAttribute('data-order-id'));" class="bg-neutral-800 hover:bg-neutral-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">🖨️ طباعة الفاتورة</button>
                     <button data-order-action="delete" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">🗑️ حذف</button>
                 </div>
             </div>
@@ -3445,6 +3445,16 @@ function previewOrder(orderId) {
     modal.style.pointerEvents = 'auto';
     modal.style.zIndex = '300000';
 }
+
+window.bklOpenOrderPreview = function(orderId) {
+    try { previewOrder(orderId); } catch (e) { console.error('BKL preview error:', e); alert('تعذر عرض الطلب.'); }
+    return false;
+};
+
+window.bklPrintOrderInvoice = function(orderId) {
+    try { printOrderInvoice(orderId, 'print'); } catch (e) { console.error('BKL print invoice error:', e); alert('تعذر طباعة الفاتورة.'); }
+    return false;
+};
 
 function closeOrderPreview() {
     const modal = document.getElementById('order-preview-modal');
