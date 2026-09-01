@@ -3452,7 +3452,14 @@ window.bklOpenOrderPreview = function(orderId) {
 };
 
 window.bklPrintOrderInvoice = function(orderId) {
-    try { printOrderInvoice(orderId, 'print'); } catch (e) { console.error('BKL print invoice error:', e); alert('تعذر طباعة الفاتورة.'); }
+    try {
+        const fn = window.printOrderInvoice;
+        if (typeof fn !== 'function') throw new Error('printOrderInvoice غير متاحة');
+        fn.call(window, orderId, 'print');
+    } catch (e) {
+        console.error('BKL print invoice error:', e);
+        alert('تعذر طباعة الفاتورة.');
+    }
     return false;
 };
 
@@ -3539,7 +3546,7 @@ function printOrderInvoice(orderId, action = 'print') {
     );
 
     const formatDZD = (value) => `${Math.round(toNumber(value)).toLocaleString('ar-DZ')} د.ج`;
-    const rateDZD = Number(currencyConfig?.DZD?.rate || 132.96);
+    const rateDZD = (typeof currencyConfig !== 'undefined' && currencyConfig && currencyConfig.DZD && Number.isFinite(Number(currencyConfig.DZD.rate))) ? Number(currencyConfig.DZD.rate) : 132.96;
 
     // -----------------------------------------------------
     // 1. استخراج جميع عناصر السلة المحفوظة داخل الطلب
@@ -4086,9 +4093,6 @@ function printOrderInvoice(orderId, action = 'print') {
 
 window.printOrderInvoice = printOrderInvoice;
 
-function saveOrderInvoice(orderId) {
-    return printOrderInvoice(orderId, 'save');
-}
 
 // دالة التحديث الفوري المباشر والدوري كل 5 ثوانٍ
 setInterval(function() {
