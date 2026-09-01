@@ -4024,18 +4024,22 @@ function printOrderInvoice(orderId, action = 'print') {
                     }
                 }
                 function closeInvoiceWindow() {
-                    // الرجوع إلى المتجر: إعادة التركيز على نافذة المتجر ثم إنهاء عرض الفاتورة فقط.
-                    // زر الرجوع يغلق نافذة الفاتورة فقط ولا يغيّر صفحة المتجر الأصلية.
+                    // زر "رجوع" = خطوة واحدة إلى الصفحة السابقة فقط.
+                    // لا نستخدم window.close() ولا about:blank حتى لا يتم الخروج من المتجر.
+                    try {
+                        if (window.history.length > 1) {
+                            window.history.back();
+                            return;
+                        }
+                    } catch (e) {
+                        console.error('BKL invoice back error:', e);
+                    }
+                    // إذا لم توجد صفحة سابقة في سجل هذه النافذة، نعيد التركيز فقط على المتجر الأصلي.
                     try {
                         if (window.opener && !window.opener.closed) {
                             window.opener.focus();
                         }
                     } catch (e) {}
-                    try {
-                        window.close();
-                    } catch (e) {
-                        console.error('BKL invoice close error:', e);
-                    }
                 }
                 // تتم الطباعة من النافذة الأصلية بعد تجهيز محتوى الفاتورة.
             <\/script>
