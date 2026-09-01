@@ -3908,7 +3908,7 @@ function printOrderInvoice(orderId, action = 'print') {
         </head>
         <body>
             <div class="invoice-actions" data-no-print>
-                <button type="button" class="close-btn" onclick="closeInvoiceWindow()">↩️ رجوع</button>
+                <button type="button" class="close-btn" onclick="return closeInvoiceWindow();">↩️ رجوع</button>
             </div>
 
             <div class="invoice-box">
@@ -4024,19 +4024,22 @@ function printOrderInvoice(orderId, action = 'print') {
                     }
                 }
                 function closeInvoiceWindow() {
-                    // زر "رجوع": العودة إلى نافذة المتجر/إدارة الطلبات التي فتحت الفاتورة.
-                    // الفاتورة نافذة منبثقة مستقلة، لذلك لا نستخدم history.back().
-                    // نعيد التركيز إلى المتجر أولاً ثم نغلق نافذة الفاتورة نفسها فقط.
+                    // نفس وظيفة الرجوع المستخدمة في نافذة العرض/التعديل:
+                    // إخفاء نافذة العرض والعودة إلى واجهة إدارة الطلبات فقط.
                     try {
                         if (window.opener && !window.opener.closed) {
+                            // نسخ وظيفة closeOrderPreview من نافذة المتجر كما هي.
+                            if (typeof window.opener.closeOrderPreview === 'function') {
+                                window.opener.closeOrderPreview();
+                            }
                             window.opener.focus();
                         }
-                    } catch (e) {}
-                    try {
-                        window.close();
                     } catch (e) {
-                        console.error('BKL invoice return error:', e);
+                        console.error('BKL invoice back error:', e);
                     }
+                    // نافذة الفاتورة هي النافذة الفرعية فقط؛ إغلاقها يعيد المستخدم للمتجر.
+                    try { window.close(); } catch (e) {}
+                    return false;
                 }
                 // تتم الطباعة من النافذة الأصلية بعد تجهيز محتوى الفاتورة.
             <\/script>
