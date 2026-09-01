@@ -3448,6 +3448,24 @@ function closeOrderPreview() {
 }
 
 function printOrderInvoice(orderId, action = 'print') {
+    // افتح نافذة الطباعة مباشرة داخل حدث النقر حتى لا يمنعها المتصفح كنافذة منبثقة.
+    let printWindow = null;
+    if (action !== 'save') {
+        try {
+            printWindow = window.open('', '_blank', 'width=800,height=900');
+            if (!printWindow) {
+                alert('تعذر فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة لهذا المتجر ثم المحاولة مرة أخرى.');
+                return;
+            }
+            printWindow.document.open();
+            printWindow.document.write('<!doctype html><html><body style="font-family:Arial;text-align:center;padding:40px">جاري تجهيز الفاتورة...</body></html>');
+            printWindow.document.close();
+        } catch (e) {
+            console.error('BKL print window open error:', e);
+            alert('تعذر فتح نافذة الطباعة.');
+            return;
+        }
+    }
     const orders = getStoreOrders();
     const order = orders.find(o => o && o.id == orderId);
     if (!order) {
@@ -4057,11 +4075,11 @@ function printOrderInvoice(orderId, action = 'print') {
         return;
     }
 
-    const printWindow = window.open('', '_blank', 'width=800,height=900');
     if (!printWindow) {
-        alert('تعذر فتح نافذة الفاتورة. يرجى السماح بالنوافذ المنبثقة من المتجر.');
+        alert('تعذر فتح نافذة الفاتورة.');
         return;
     }
+    printWindow.document.open();
     printWindow.document.write(invoiceHtml);
     printWindow.document.close();
 }
@@ -4069,12 +4087,7 @@ function printOrderInvoice(orderId, action = 'print') {
 window.printOrderInvoice = printOrderInvoice;
 
 
-// دالة التحديث الفوري المباشر والدوري كل 5 ثوانٍ
-setInterval(function() {
-    if (document.getElementById('owner-dashboard-modal') && !document.getElementById('owner-dashboard-modal').classList.contains('hidden')) {
-        renderOrdersList();
-    }
-}, 5000);
+// تحديث الطلبات يتم عند فتح/تحديث اللوحة فقط لتجنب إعادة رسم القائمة أثناء التعديل والطباعة.
 
 // ==========================================
 // 4. لوحة تحكم صاحب المتجر
@@ -8964,51 +8977,50 @@ document.addEventListener('DOMContentLoaded', function(){
 </script>
 
 
-<!-- BKL ORDER WINDOWS STABLE FIX
-     إدارة نوافذ الطلبات بدون MutationObserver أو تغليف متكرر للدوال. -->
-<style id="bkl-order-windows-stable-fix">
+
+
+<!-- BKL ORDER MANAGEMENT SINGLE CONTROLLER -->
+<style id="bkl-order-windows-final-style">
 #order-preview-modal,#order-editor-modal,#bkl-modern-order-modal{position:fixed!important;inset:0!important;z-index:2147483000!important;}
 #order-preview-modal.hidden,#order-editor-modal.hidden,#bkl-modern-order-modal.hidden{display:none!important;pointer-events:none!important;}
 #order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal:not(.hidden){display:flex!important;pointer-events:auto!important;}
 </style>
-<script id="bkl-order-windows-stable-script">
+<script id="bkl-order-management-single-controller">
 (function(){
   'use strict';
-  const ids=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
-  const get=id=>document.getElementById(id);
-  function hide(id){const m=get(id);if(!m)return;m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}
-  function hideAll(){ids.forEach(hide);}
-  function promote(id){const m=get(id);if(!m)return;if(m.parentElement!==document.body)document.body.appendChild(m);m.style.setProperty('position','fixed','important');m.style.setProperty('inset','0','important');m.style.setProperty('z-index','2147483000','important');}
+  const IDS=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
+  const $=id=>document.getElementById(id);
+  function hide(id){const m=$(id);if(!m)return;m.classList.add('hidden');m.style.display='none';m.style.visibility='hidden';m.style.pointerEvents='none';m.setAttribute('aria-hidden','true');}
+  function hideAll(){IDS.forEach(hide);}
+  function show(id){const m=$(id);if(!m)return;m.classList.remove('hidden');m.style.display='flex';m.style.visibility='visible';m.style.pointerEvents='auto';m.style.zIndex='2147483000';m.setAttribute('aria-hidden','false');if(m.parentElement!==document.body)document.body.appendChild(m);}
   window.closeAllBKLOrderWindows=hideAll;
-  window.bklPromoteOrderModal=promote;
-  document.addEventListener('click',function(e){
-    const btn=e.target.closest&&e.target.closest('#owner-orders-container [data-order-action]');
+  window.bklPromoteOrderModal=show;
+  function runAction(action,id){
+    hideAll();
+    if(action==='preview' && typeof window.previewOrder==='function'){window.previewOrder(id);show('order-preview-modal');return;}
+    if(action==='edit' && typeof window.editOrderPrompt==='function'){window.editOrderPrompt(id);show('order-editor-modal');return;}
+    if(action==='invoice' && typeof window.printOrderInvoice==='function'){window.printOrderInvoice(id,'print');return;}
+    if(action==='confirm' && typeof window.updateOrderStatus==='function'){window.updateOrderStatus(id,'مؤكد');return;}
+    if(action==='delete' && typeof window.deleteOrder==='function'){window.deleteOrder(id);return;}
+    throw new Error('وظيفة إدارة الطلب غير متاحة: '+action);
+  }
+  function onClick(e){
+    const btn=e.target.closest?.('#owner-orders-container [data-order-action]');
     if(!btn)return;
     const id=btn.getAttribute('data-order-id');
     const action=btn.getAttribute('data-order-action');
     if(!id||!action)return;
-    e.preventDefault();
-    e.stopPropagation();
-    try{
-      hideAll();
-      if(action==='preview' && typeof previewOrder==='function') previewOrder(id);
-      else if(action==='confirm' && typeof updateOrderStatus==='function') updateOrderStatus(id,'مؤكد');
-      else if(action==='edit' && typeof editOrderPrompt==='function') editOrderPrompt(id);
-      else if(action==='invoice' && typeof printOrderInvoice==='function') printOrderInvoice(id,'print');
-      else if(action==='delete' && typeof deleteOrder==='function') deleteOrder(id);
-      const active=ids.map(get).find(m=>m&&!m.classList.contains('hidden')&&m.style.display!=='none');
-      if(active)promote(active.id);
-    }catch(err){console.error('BKL order action error:',action,id,err);alert('تعذر تنفيذ العملية.');}
-  },false);
-  document.addEventListener('keydown',function(e){
-    if(e.key==='Escape'){const active=ids.map(get).find(m=>m&&!m.classList.contains('hidden')&&m.style.display!=='none');if(active){hide(active.id);e.preventDefault();}}
-  },false);
-})();
-</script>
-<script id="bkl-clean-order-window-init">
-(function(){
-  function init(){['order-preview-modal','order-editor-modal','bkl-modern-order-modal'].forEach(function(id){const m=document.getElementById(id);if(m){if(m.parentElement!==document.body)document.body.appendChild(m);m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+    e.preventDefault(); e.stopPropagation();
+    try{runAction(action,id);}catch(err){console.error('BKL order management error',action,id,err);hideAll();alert(action==='invoice'?'تعذر طباعة الفاتورة. تحقق من السماح بالنوافذ المنبثقة ثم حاول مرة أخرى.':action==='edit'?'تعذر فتح تعديل الطلب.': 'تعذر تنفيذ العملية.');}
+  }
+  function init(){
+    const c=$('owner-orders-container');
+    if(c && !c.__bklSingleOrderHandler){c.__bklSingleOrderHandler=true;c.addEventListener('click',onClick,false);}
+    IDS.forEach(id=>{const m=$(id);if(m&&m.parentElement!==document.body)document.body.appendChild(m);});
+  }
+  document.addEventListener('DOMContentLoaded',init,{once:true});
+  setTimeout(init,0);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){const active=IDS.find(id=>{const m=$(id);return m&&!m.classList.contains('hidden')&&m.style.display!=='none';});if(active){hide(active);e.preventDefault();}}},false);
 })();
 </script>
 </body>
@@ -9265,77 +9277,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
 
-<script id="bkl-order-window-manager-final">
-(function(){
-  const ids=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
-  function el(id){return document.getElementById(id);}
-  function hide(id){const m=el(id);if(m){m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}}
-  function hideAll(){ids.forEach(hide);}
-  function normalize(){ids.forEach(id=>{const m=el(id);if(m&&!m.classList.contains('hidden')){m.style.display='flex';m.style.pointerEvents='auto';m.style.zIndex='100000';}});}
-  window.closeAllBKLOrderWindows=hideAll;
 
-  // تغليف دوال الطلبات الموجودة أصلاً لضمان عدم تداخل النوافذ.
-  ['previewOrder','editOrderPrompt','updateOrderStatus','deleteOrder','printOrderInvoice'].forEach(name=>{
-    const fn=window[name];
-    if(typeof fn!=='function'||fn.__bklWindowSafe)return;
-    const wrapped=function(){
-      if(name==='previewOrder') ids.filter(x=>x!=='order-preview-modal').forEach(hide);
-      else if(name==='editOrderPrompt') ids.filter(x=>x!=='order-editor-modal').forEach(hide);
-      else hideAll();
-      const result=fn.apply(this,arguments);
-      setTimeout(normalize,0);
-      return result;
-    };
-    wrapped.__bklWindowSafe=true;
-    window[name]=wrapped;
-  });
-
-  // كل نافذة طلب جديدة تصبح النافذة النشطة الوحيدة.
-  const obs=new MutationObserver(function(ms){
-    for(const mu of ms){
-      for(const n of mu.addedNodes){
-        if(!(n instanceof HTMLElement))continue;
-        for(const id of ids){
-          const m=n.id===id?n:n.querySelector?.('#'+id);
-          if(m){
-            ids.filter(x=>x!==id).forEach(hide);
-            m.style.zIndex='100000';m.style.pointerEvents='auto';
-          }
-        }
-      }
-    }
-    normalize();
-  });
-  obs.observe(document.body,{childList:true,subtree:true});
-
-  // إغلاق آمن بالنقر على X أو الخلفية أو Escape.
-  document.addEventListener('click',function(e){
-    const close=e.target.closest?.('[data-close],[data-act="close"],.bkl-om-x');
-    if(close){
-      const m=close.closest('#order-preview-modal,#order-editor-modal,#bkl-modern-order-modal');
-      if(m){e.preventDefault();e.stopPropagation();hide(m.id);return;}
-    }
-    const back=e.target.closest?.('.bkl-om-backdrop');
-    if(back&&e.target===back){const m=back.closest('#bkl-modern-order-modal');if(m)hide(m.id);}
-  },true);
-  document.addEventListener('keydown',function(e){
-    if(e.key!=='Escape')return;
-    for(let i=ids.length-1;i>=0;i--){const m=el(ids[i]);if(m&&!m.classList.contains('hidden')&&m.style.display!=='none'){hide(ids[i]);e.preventDefault();break;}}
-  },true);
-
-  // إصلاح مباشر لأزرار قائمة الطلبات، مع أولوية للـ data-order-action.
-  document.addEventListener('click',function(e){
-    const btn=e.target.closest?.('[data-order-action]');
-    if(!btn)return;
-    const id=btn.getAttribute('data-order-id');
-    const action=btn.getAttribute('data-order-action');
-    if(!id||!action)return;
-    // إذا كانت نافذة فوق القائمة، أغلقها أولاً بدلاً من تركها حاجباً للنقرات.
-    const active=document.querySelector('#order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal');
-    if(active&&!active.contains(btn))hide(active.id);
-  },true);
-})();
-</script>
 
 <script id="bkl-customer-color-system-v1">
 (function(){
