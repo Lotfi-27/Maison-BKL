@@ -4180,6 +4180,7 @@ function openOwnerDashboard() {
       <option value="all">كل الزبائن</option>
       <option value="vip">VIP</option>
       <option value="private">الخاص</option>
+      <option value="normal">العادي</option>
     </select>
     <div class="bkl-color-settings" title="ألوان تصنيفات الزبائن">
       <label>VIP <input id="bkl-color-vip" type="color" value="#7c3aed" aria-label="لون VIP"></label>
@@ -4190,6 +4191,7 @@ function openOwnerDashboard() {
     <button type="button" data-bkl-type="all" class="bkl-type-tab active" onclick="bklSetCustomerTypeFilter('all')">👥 الكل</button>
     <button type="button" data-bkl-type="vip" class="bkl-type-tab" onclick="bklSetCustomerTypeFilter('vip')">⭐ VIP</button>
     <button type="button" data-bkl-type="private" class="bkl-type-tab" onclick="bklSetCustomerTypeFilter('private')">🔒 الخاص</button>
+    <button type="button" data-bkl-type="normal" class="bkl-type-tab" onclick="bklSetCustomerTypeFilter('normal')">👤 العادي</button>
   </div>
   <div class="bkl-bc-body">
     <table>
@@ -9320,7 +9322,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   window.bklSetCustomerTypeFilter=function(type){
-    bklCustomerTypeFilter=['all','vip','private'].includes(type)?type:'all';
+    bklCustomerTypeFilter=['all','vip','private','normal'].includes(type)?type:'all';
     const f=document.getElementById('bkl-customer-type-filter');
     if(f)f.value=bklCustomerTypeFilter;
     document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.bklType===bklCustomerTypeFilter));
@@ -9332,7 +9334,8 @@ document.addEventListener('DOMContentLoaded', function(){
       const customers=bklCustomers();
       const idx=customers.findIndex(c=>String(c?.id||'')===String(id));
       if(idx<0)return;
-      customers[idx].customerType=(type==='vip'||type==='private')?type:'';
+      customers[idx].customerType=(type==='vip'||type==='private'||type==='normal')?type:'';
+      if(type==='normal') customers[idx].discountPercent=0;
       localStorage.setItem('store_customers',JSON.stringify(customers));
       if(Array.isArray(registeredCustomers)){
         const ri=registeredCustomers.findIndex(c=>String(c?.id||'')===String(id));
@@ -9401,7 +9404,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const selectedBranch=branches.find(x=>String(x.id)===selectedId)||null;
     const q=(document.getElementById('bkl-branch-customers-search')?.value||'').toLowerCase().trim();
     const typeFilter=document.getElementById('bkl-customer-type-filter')?.value||bklCustomerTypeFilter||'all';
-    bklCustomerTypeFilter=['all','vip','private'].includes(typeFilter)?typeFilter:'all';
+    bklCustomerTypeFilter=['all','vip','private','normal'].includes(typeFilter)?typeFilter:'all';
     const rows=customers.filter(c=>{
       if(selectedId!=='__ALL__'&&!belongs(c,selectedBranch))return false;
       if(bklCustomerTypeFilter!=='all'&&bklCustomerType(c)!==bklCustomerTypeFilter)return false;
