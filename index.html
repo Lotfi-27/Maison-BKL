@@ -1398,8 +1398,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
             </div>
 
             <div class="flex flex-col gap-1">
-                <label id="lbl-prod-price" class="text-[11px] text-neutral-600 font-medium">السعر بالدينار الجزائري (دج)</label>
-                <input id="new-price" type="number" min="0" step="1" inputmode="numeric" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition" placeholder="أدخل السعر بالدج">
+                <label id="lbl-prod-price" class="text-[11px] text-neutral-600 font-medium">السعر</label>
+                <input id="new-price" type="number" class="bg-neutral-50 border border-neutral-200 rounded-xl p-2 text-xs text-neutral-900 outline-none focus:border-amber-600 transition">
             </div>
 
             <div class="flex flex-col gap-1">
@@ -3029,10 +3029,11 @@ function renderOrdersList() {
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-neutral-100">
-                    <button type="button" data-order-action="preview" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">👁️ عرض الطلب</button>
+                    <button data-order-action="preview" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">👁️ عرض الطلب</button>
                     <button data-order-action="confirm" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✅ تأكيد الطلب</button>
                     <button type="button" data-order-action="edit" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">✏️ تعديل الطلب</button>
-                    <button type="button" data-order-action="invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-neutral-800 hover:bg-neutral-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">🖨️ طباعة الفاتورة</button>
+                    <button data-order-action="invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-neutral-800 hover:bg-neutral-900 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">🖨️ طباعة الفاتورة</button>
+                    <button data-order-action="save-invoice" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1">💾 حفظ الفاتورة</button>
                     <button data-order-action="delete" data-order-id="${escapeOrderHtml(String(order.id))}" class="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg transition cursor-pointer">🗑️ حذف</button>
                 </div>
             </div>
@@ -3052,7 +3053,33 @@ function bindOrderManagementEvents() {
 
 // BKL V17: معالج مركزي وآمن لأزرار إدارة الطلبات فقط.
 // لا يراقب أي زر خارج owner-orders-container، ولا يتدخل في أزرار نوافذ العرض/التعديل/الفاتورة.
-function bindOrderManagementEventsV17() { return; }
+function bindOrderManagementEventsV17() {
+    const container = document.getElementById('owner-orders-container');
+    if (!container || container.__bklOrderEventsV17) return;
+    container.__bklOrderEventsV17 = true;
+    container.addEventListener('click', function(event) {
+        const button = event.target.closest('[data-order-action]');
+        if (!button || !container.contains(button)) return;
+        const id = button.getAttribute('data-order-id');
+        const action = button.getAttribute('data-order-action');
+        if (!id || !action) return;
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+            switch (action) {
+                case 'preview': previewOrder(id); break;
+                case 'confirm': updateOrderStatus(id, 'مؤكد'); break;
+                case 'edit': editOrderPrompt(id); break;
+                case 'invoice': printOrderInvoice(id); break;
+                case 'save-invoice': saveOrderInvoice(id); break;
+                case 'delete': deleteOrder(id); break;
+            }
+        } catch (error) {
+            console.error('BKL V17 order action error:', action, id, error);
+            alert('تعذر تنفيذ العملية. لم يتم إعادة تحميل المتجر.');
+        }
+    });
+}
 
 function updateOrderStatus(orderId, newStatus) {
     const orders = getStoreOrders();
@@ -3421,23 +3448,6 @@ function previewOrder(orderId) {
     modal.style.zIndex = '300000';
 }
 
-window.bklOpenOrderPreview = function(orderId) {
-    try { previewOrder(orderId); } catch (e) { console.error('BKL preview error:', e); alert('تعذر عرض الطلب.'); }
-    return false;
-};
-
-window.bklPrintOrderInvoice = function(orderId) {
-    try {
-        const fn = window.printOrderInvoice;
-        if (typeof fn !== 'function') throw new Error('printOrderInvoice غير متاحة');
-        fn.call(window, orderId, 'print');
-    } catch (e) {
-        console.error('BKL print invoice error:', e);
-        alert('تعذر طباعة الفاتورة.');
-    }
-    return false;
-};
-
 function closeOrderPreview() {
     const modal = document.getElementById('order-preview-modal');
     if (!modal) return;
@@ -3448,24 +3458,6 @@ function closeOrderPreview() {
 }
 
 function printOrderInvoice(orderId, action = 'print') {
-    // افتح نافذة الطباعة مباشرة داخل حدث النقر حتى لا يمنعها المتصفح كنافذة منبثقة.
-    let printWindow = null;
-    if (action !== 'save') {
-        try {
-            printWindow = window.open('', '_blank', 'width=800,height=900');
-            if (!printWindow) {
-                alert('تعذر فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة لهذا المتجر ثم المحاولة مرة أخرى.');
-                return;
-            }
-            printWindow.document.open();
-            printWindow.document.write('<!doctype html><html><body style="font-family:Arial;text-align:center;padding:40px">جاري تجهيز الفاتورة...</body></html>');
-            printWindow.document.close();
-        } catch (e) {
-            console.error('BKL print window open error:', e);
-            alert('تعذر فتح نافذة الطباعة.');
-            return;
-        }
-    }
     const orders = getStoreOrders();
     const order = orders.find(o => o && o.id == orderId);
     if (!order) {
@@ -3539,7 +3531,7 @@ function printOrderInvoice(orderId, action = 'print') {
     );
 
     const formatDZD = (value) => `${Math.round(toNumber(value)).toLocaleString('ar-DZ')} د.ج`;
-    const rateDZD = (typeof currencyConfig !== 'undefined' && currencyConfig && currencyConfig.DZD && Number.isFinite(Number(currencyConfig.DZD.rate))) ? Number(currencyConfig.DZD.rate) : 132.96;
+    const rateDZD = Number(currencyConfig?.DZD?.rate || 132.96);
 
     // -----------------------------------------------------
     // 1. استخراج جميع عناصر السلة المحفوظة داخل الطلب
@@ -3732,12 +3724,8 @@ function printOrderInvoice(orderId, action = 'print') {
         0
     )));
 
-    // الإجمالي الذي يُطبّق عليه الخصم هو إجمالي الفاتورة مع التوصيل.
-    const originalGrandTotalDZD = Math.max(0, toNumber(order.grossGrandTotal ?? (productsSubtotalDZD + shippingFeeDZD)));
-    const discountPercentDZD = Math.min(75, Math.max(0, toNumber(order.discountPercent ?? order.discountPercentage ?? 0)));
-    const discountAmountDZD = Math.min(originalGrandTotalDZD, Math.max(0, toNumber(order.discountAmount ?? (originalGrandTotalDZD * discountPercentDZD / 100))));
-    const discountedGrandTotalDZD = Math.max(0, Math.round((originalGrandTotalDZD - discountAmountDZD) * 100) / 100);
-    const creditRemainingDZD = (String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined) ? Math.max(0, toNumber(order.creditRemainingAmount)) : discountedGrandTotalDZD;
+    const originalGrandTotalDZD = Number(order.grossGrandTotal ?? (productsSubtotalDZD + shippingFeeDZD)) || 0;
+    const creditRemainingDZD = (String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined) ? Math.max(0, toNumber(order.creditRemainingAmount)) : originalGrandTotalDZD;
     const grandTotalDZD = creditRemainingDZD;
 
     const orderDate = firstValid(
@@ -3908,6 +3896,7 @@ function printOrderInvoice(orderId, action = 'print') {
         </head>
         <body>
             <div class="invoice-actions" data-no-print>
+                <button type="button" class="save-btn" onclick="saveInvoiceFile()">💾 حفظ الفاتورة</button>
                 <button type="button" class="close-btn" onclick="closeInvoiceWindow()">↩️ رجوع / إغلاق</button>
             </div>
 
@@ -3961,32 +3950,19 @@ function printOrderInvoice(orderId, action = 'print') {
                         <span>سعر التوصيل (${escapeHtml(state)} - ${escapeHtml(municipality)}):</span>
                         <strong>${escapeHtml(formatDZD(shippingFeeDZD))}</strong>
                     </div>
-                    <div class="summary-row">
-                        <span>المبلغ الإجمالي مع التوصيل:</span>
-                        <strong>${escapeHtml(formatDZD(originalGrandTotalDZD))}</strong>
-                    </div>
-                    ${discountPercentDZD > 0 ? `
-                    <div class="summary-row">
-                        <span>نسبة الخصم:</span>
-                        <strong>${escapeHtml(discountPercentDZD)}%</strong>
-                    </div>
-                    <div class="summary-row">
-                        <span>قيمة الخصم:</span>
-                        <strong>${escapeHtml(formatDZD(discountAmountDZD))}</strong>
-                    </div>` : ''}
-                    <div class="summary-row total">
-                        <span>${String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined ? 'المبلغ المستحق بعد الخصم:' : 'المبلغ المستحق للدفع:'}</span>
-                        <strong>${escapeHtml(formatDZD(discountedGrandTotalDZD))}</strong>
-                    </div>
                     ${String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined ? `
                     <div class="summary-row">
-                        <span>إجمالي المدفوع:</span>
-                        <strong>${escapeHtml(formatDZD(Math.max(0, discountedGrandTotalDZD - grandTotalDZD)))}</strong>
+                        <span>إجمالي الفاتورة الأصلية:</span>
+                        <strong>${escapeHtml(formatDZD(originalGrandTotalDZD))}</strong>
                     </div>
-                    <div class="summary-row total">
-                        <span>المبلغ المتبقي بعد التسديد:</span>
-                        <strong>${escapeHtml(formatDZD(grandTotalDZD))}</strong>
+                    <div class="summary-row">
+                        <span>إجمالي المدفوع:</span>
+                        <strong>${escapeHtml(formatDZD(Math.max(0, originalGrandTotalDZD - grandTotalDZD)))}</strong>
                     </div>` : ''}
+                    <div class="summary-row total">
+                        <span>${String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined ? 'المبلغ المتبقي بعد التسديد:' : 'المبلغ الإجمالي:'}</span>
+                        <strong>${escapeHtml(formatDZD(grandTotalDZD))}</strong>
+                    </div>
                 </div>
 
                 <div class="footer">
@@ -4075,19 +4051,25 @@ function printOrderInvoice(orderId, action = 'print') {
         return;
     }
 
+    const printWindow = window.open('', '_blank', 'width=800,height=900');
     if (!printWindow) {
-        alert('تعذر فتح نافذة الفاتورة.');
+        alert('تعذر فتح نافذة الفاتورة. يرجى السماح بالنوافذ المنبثقة من المتجر.');
         return;
     }
-    printWindow.document.open();
     printWindow.document.write(invoiceHtml);
     printWindow.document.close();
 }
 
-window.printOrderInvoice = printOrderInvoice;
+function saveOrderInvoice(orderId) {
+    return printOrderInvoice(orderId, 'save');
+}
 
-
-// تحديث الطلبات يتم عند فتح/تحديث اللوحة فقط لتجنب إعادة رسم القائمة أثناء التعديل والطباعة.
+// دالة التحديث الفوري المباشر والدوري كل 5 ثوانٍ
+setInterval(function() {
+    if (document.getElementById('owner-dashboard-modal') && !document.getElementById('owner-dashboard-modal').classList.contains('hidden')) {
+        renderOrdersList();
+    }
+}, 5000);
 
 // ==========================================
 // 4. لوحة تحكم صاحب المتجر
@@ -4182,7 +4164,6 @@ function openOwnerDashboard() {
       <option value="all">كل الزبائن</option>
       <option value="vip">VIP</option>
       <option value="private">الخاص</option>
-      <option value="normal">العادي</option>
     </select>
     <div class="bkl-color-settings" title="ألوان تصنيفات الزبائن">
       <label>VIP <input id="bkl-color-vip" type="color" value="#7c3aed" aria-label="لون VIP"></label>
@@ -4193,7 +4174,6 @@ function openOwnerDashboard() {
     <button type="button" data-bkl-type="all" class="bkl-type-tab active" onclick="bklSetCustomerTypeFilter('all')">👥 الكل</button>
     <button type="button" data-bkl-type="vip" class="bkl-type-tab" onclick="bklSetCustomerTypeFilter('vip')">⭐ VIP</button>
     <button type="button" data-bkl-type="private" class="bkl-type-tab" onclick="bklSetCustomerTypeFilter('private')">🔒 الخاص</button>
-    <button type="button" data-bkl-type="normal" class="bkl-type-tab" onclick="bklSetCustomerTypeFilter('normal')">👤 العادي</button>
   </div>
   <div class="bkl-bc-body">
     <table>
@@ -5443,7 +5423,6 @@ let products = [
         name: "Luxury Leather Bag",
         category: "fashion",
         basePrice: 450,
-        priceDZD: 59832,
         images: ["https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=400"],
         description: "حقيبة فاخرة مصممة بأعلى معايير الجودة لتناسب إطللتك المميزة.",
         sizesEnabled: true,
@@ -5455,7 +5434,6 @@ let products = [
         name: "Classic Gold Watch",
         category: "electronics",
         basePrice: 890,
-        priceDZD: 118274,
         images: ["https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400"],
         description: "ساعة يد كلاسيكية مطلية بالذهب الخالص.",
         sizesEnabled: false,
@@ -5467,7 +5445,6 @@ let products = [
         name: "Silk Evening Scarf",
         category: "fashion",
         basePrice: 120,
-        priceDZD: 15955,
         images: ["https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=400"],
         description: "وشاح من الحرير الطبيعي الناعم.",
         sizesEnabled: true,
@@ -5504,7 +5481,7 @@ function searchProducts(query) {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${formatPrice(product.basePrice, product.priceDZD)}</span>
             </div>
         `;
     });
@@ -5650,7 +5627,7 @@ function renderProducts() {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${formatPrice(product.basePrice, product.priceDZD)}</span>
             </div>
         `;
     });
@@ -5701,7 +5678,7 @@ function openEditModal() {
     const newName = document.getElementById('new-name');
     if (newName) newName.value = selectedProduct.name;
     const newPrice = document.getElementById('new-price');
-    if (newPrice) newPrice.value = Number(selectedProduct.priceDZD ?? Math.round(Number(selectedProduct.basePrice || 0) * Number(currencyConfig?.DZD?.rate || 132.96)));
+    if (newPrice) newPrice.value = selectedProduct.basePrice;
     const mainFile = document.getElementById('main-image-file');
     if (mainFile) mainFile.value = "";
     mainProductImage = selectedProduct.mainImage || ((selectedProduct.images || [])[0] || "");
@@ -6099,7 +6076,7 @@ function selectProduct(id) {
         const descEl = document.getElementById('product-desc');
 
         if (nameEl) nameEl.innerText = selectedProduct.name;
-        if (priceEl) priceEl.innerText = `${Math.round(Number(selectedProduct.priceDZD ?? (Number(selectedProduct.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج`;
+        if (priceEl) priceEl.innerText = formatPrice(selectedProduct.basePrice, selectedProduct.priceDZD);
         if (descEl) descEl.innerText = selectedProduct.description;
         
         const qtyInput = document.getElementById('product-quantity');
@@ -8977,50 +8954,229 @@ document.addEventListener('DOMContentLoaded', function(){
 </script>
 
 
-
-
-<!-- BKL ORDER MANAGEMENT SINGLE CONTROLLER -->
-<style id="bkl-order-windows-final-style">
-#order-preview-modal,#order-editor-modal,#bkl-modern-order-modal{position:fixed!important;inset:0!important;z-index:2147483000!important;}
-#order-preview-modal.hidden,#order-editor-modal.hidden,#bkl-modern-order-modal.hidden{display:none!important;pointer-events:none!important;}
-#order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal:not(.hidden){display:flex!important;pointer-events:auto!important;}
+<!-- BKL FINAL ORDER WINDOWS LAYER FIX
+     يمنع ظهور نوافذ عرض/تعديل الطلبات تحت لوحة التحكم أو حاوية إدارة الطلبات والفواتير. -->
+<style id="bkl-order-windows-top-layer-fix">
+#order-preview-modal,
+#order-editor-modal,
+#bkl-modern-order-modal{
+    position:fixed!important;
+    inset:0!important;
+    z-index:2147483000!important;
+    isolation:isolate!important;
+    pointer-events:auto!important;
+}
+#order-preview-modal.hidden,
+#order-editor-modal.hidden,
+#bkl-modern-order-modal.hidden{
+    display:none!important;
+    pointer-events:none!important;
+}
+#order-preview-modal:not(.hidden),
+#order-editor-modal:not(.hidden),
+#bkl-modern-order-modal:not(.hidden){
+    display:flex!important;
+    pointer-events:auto!important;
+}
+#order-preview-modal > div,
+#order-editor-modal > div,
+#bkl-modern-order-modal > .bkl-om-backdrop{
+    position:relative!important;
+    z-index:2147483001!important;
+    pointer-events:auto!important;
+}
 </style>
-<script id="bkl-order-management-single-controller">
+<script id="bkl-order-windows-top-layer-fix-script">
 (function(){
-  'use strict';
-  const IDS=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
-  const $=id=>document.getElementById(id);
-  function hide(id){const m=$(id);if(!m)return;m.classList.add('hidden');m.style.display='none';m.style.visibility='hidden';m.style.pointerEvents='none';m.setAttribute('aria-hidden','true');}
-  function hideAll(){IDS.forEach(hide);}
-  function show(id){const m=$(id);if(!m)return;m.classList.remove('hidden');m.style.display='flex';m.style.visibility='visible';m.style.pointerEvents='auto';m.style.zIndex='2147483000';m.setAttribute('aria-hidden','false');if(m.parentElement!==document.body)document.body.appendChild(m);}
-  window.closeAllBKLOrderWindows=hideAll;
-  window.bklPromoteOrderModal=show;
-  function runAction(action,id){
-    hideAll();
-    if(action==='preview' && typeof window.previewOrder==='function'){window.previewOrder(id);show('order-preview-modal');return;}
-    if(action==='edit' && typeof window.editOrderPrompt==='function'){window.editOrderPrompt(id);show('order-editor-modal');return;}
-    if(action==='invoice' && typeof window.printOrderInvoice==='function'){window.printOrderInvoice(id,'print');return;}
-    if(action==='confirm' && typeof window.updateOrderStatus==='function'){window.updateOrderStatus(id,'مؤكد');return;}
-    if(action==='delete' && typeof window.deleteOrder==='function'){window.deleteOrder(id);return;}
-    throw new Error('وظيفة إدارة الطلب غير متاحة: '+action);
+    'use strict';
+    const ORDER_MODAL_IDS=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
+    const TOP_Z='2147483000';
+
+    function get(id){ return document.getElementById(id); }
+
+    function promote(id){
+        const modal=get(id);
+        if(!modal) return;
+
+        /* أهم إصلاح: النافذة يجب أن تكون ابناً مباشراً لـ body.
+           إذا بقيت داخل owner-dashboard-modal أو أي حاوية أخرى،
+           فإن z-index الخاص بها يبقى محصوراً داخل stacking context للحاوية. */
+        if(modal.parentElement!==document.body){
+            document.body.appendChild(modal);
+        }
+
+        modal.style.setProperty('position','fixed','important');
+        modal.style.setProperty('inset','0','important');
+        modal.style.setProperty('z-index',TOP_Z,'important');
+        modal.style.setProperty('isolation','isolate','important');
+
+        if(modal.classList.contains('hidden') || modal.style.display==='none'){
+            modal.style.setProperty('pointer-events','none','important');
+        }else{
+            modal.style.setProperty('display','flex','important');
+            modal.style.setProperty('pointer-events','auto','important');
+        }
+    }
+
+    function promoteAll(){ ORDER_MODAL_IDS.forEach(promote); }
+
+    function hideOtherModals(activeId){
+        ORDER_MODAL_IDS.forEach(id=>{
+            if(id===activeId) return;
+            const m=get(id);
+            if(!m) return;
+            m.classList.add('hidden');
+            m.style.setProperty('display','none','important');
+            m.style.setProperty('pointer-events','none','important');
+        });
+    }
+
+    function repairOpenModal(){
+        let active=null;
+        for(let i=ORDER_MODAL_IDS.length-1;i>=0;i--){
+            const m=get(ORDER_MODAL_IDS[i]);
+            if(m && !m.classList.contains('hidden') && m.style.display!=='none'){
+                active=m;
+                break;
+            }
+        }
+        if(active){
+            hideOtherModals(active.id);
+            promote(active.id);
+        }else{
+            promoteAll();
+        }
+    }
+
+    /* التقاط لحظة إنشاء النافذة قبل أن تبقى تحت لوحة التحكم. */
+    const observer=new MutationObserver(function(records){
+        let relevant=false;
+        for(const record of records){
+            for(const node of record.addedNodes){
+                if(!(node instanceof HTMLElement)) continue;
+                if(ORDER_MODAL_IDS.includes(node.id) || ORDER_MODAL_IDS.some(id=>node.querySelector?.('#'+id))){
+                    relevant=true;
+                }
+            }
+            if(record.type==='attributes' && ORDER_MODAL_IDS.includes(record.target.id)) relevant=true;
+        }
+        if(relevant){
+            ORDER_MODAL_IDS.forEach(promote);
+            repairOpenModal();
+        }
+    });
+
+    function start(){
+        promoteAll();
+        observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+        setTimeout(promoteAll,50);
+        setTimeout(promoteAll,200);
+    }
+
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true});
+    else start();
+
+    /* ضمان إضافي عند استدعاء دوال العرض/التعديل من أزرار الطلبات. */
+    ['previewOrder','editOrderPrompt','modernView'].forEach(function(name){
+        const fn=window[name];
+        if(typeof fn!=='function' || fn.__bklTopLayerWrapped) return;
+        const wrapped=function(){
+            const result=fn.apply(this,arguments);
+            setTimeout(repairOpenModal,0);
+            setTimeout(repairOpenModal,30);
+            return result;
+        };
+        wrapped.__bklTopLayerWrapped=true;
+        window[name]=wrapped;
+    });
+})();
+</script>
+
+<!-- BKL SAFE ORDER EDIT FIX V16 -->
+<script id="bkl-safe-order-edit-v16">
+(function(){
+  function esc(v){
+    return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
-  function onClick(e){
-    const btn=e.target.closest?.('#owner-orders-container [data-order-action]');
-    if(!btn)return;
-    const id=btn.getAttribute('data-order-id');
-    const action=btn.getAttribute('data-order-action');
-    if(!id||!action)return;
-    e.preventDefault(); e.stopPropagation();
-    try{runAction(action,id);}catch(err){console.error('BKL order management error',action,id,err);hideAll();alert(action==='invoice'?'تعذر طباعة الفاتورة. تحقق من السماح بالنوافذ المنبثقة ثم حاول مرة أخرى.':action==='edit'?'تعذر فتح تعديل الطلب.': 'تعذر تنفيذ العملية.');}
+  function getOrdersSafe(){
+    try{
+      if(typeof getStoreOrders==='function'){
+        const a=getStoreOrders();
+        return Array.isArray(a)?a:[];
+      }
+    }catch(e){console.error('BKL getStoreOrders:',e);}
+    try{
+      const a=JSON.parse(localStorage.getItem('store_orders')||'[]');
+      return Array.isArray(a)?a:[];
+    }catch(e){return []}
   }
-  function init(){
-    const c=$('owner-orders-container');
-    if(c && !c.__bklSingleOrderHandler){c.__bklSingleOrderHandler=true;c.addEventListener('click',onClick,false);}
-    IDS.forEach(id=>{const m=$(id);if(m&&m.parentElement!==document.body)document.body.appendChild(m);});
+  function safeItems(order){
+    let a=Array.isArray(order.items)?order.items:[];
+    if(!a.length && Array.isArray(order.products)) a=order.products;
+    if(!a.length && (order.productName||order.name)) a=[{name:order.productName||order.name,productName:order.productName||order.name,quantity:order.quantity||order.qty||1,basePrice:order.basePrice,priceDZD:order.priceDZD,unitPrice:order.unitPrice,color:order.color,size:order.size}];
+    return a.map(function(x){
+      const price = Number(x.priceDZD ?? x.unitPriceDZD ?? x.price ?? x.unitPrice ?? x.basePrice ?? 0) || 0;
+      const qty = Math.max(1,parseInt(x.quantity ?? x.qty ?? 1,10)||1);
+      return {id:x.id||x.productId||'',productId:x.productId||x.id||'',name:x.name||x.productName||'منتج',productName:x.productName||x.name||'منتج',priceDZD:price,basePrice:x.basePrice,quantity:qty,qty:qty,color:x.color||x.selectedColor||'',size:x.size||x.selectedSize||''};
+    });
   }
-  document.addEventListener('DOMContentLoaded',init,{once:true});
-  setTimeout(init,0);
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){const active=IDS.find(id=>{const m=$(id);return m&&!m.classList.contains('hidden')&&m.style.display!=='none';});if(active){hide(active);e.preventDefault();}}},false);
+  function openSafe(id){
+    try{
+      const orders=getOrdersSafe();
+      const order=orders.find(function(o){return String(o.id)===String(id)});
+      if(!order){alert('لم يتم العثور على الطلبية.');return false;}
+      if(typeof ensureOrderEditorModal!=='function'){alert('تعذر فتح نافذة تعديل الطلب.');return false;}
+      const modal=ensureOrderEditorModal();
+      if(!modal) return false;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      Object.assign(modal.style,{display:'flex',position:'fixed',inset:'0',zIndex:'999999',pointerEvents:'auto'});
+      modal.setAttribute('aria-hidden','false');
+      const set=function(id,val){const el=document.getElementById(id);if(el)el.value=val==null?'':val};
+      const full=String(order.customerName||order.customer||'').trim().split(/\s+/);
+      set('edit-order-id',order.id);
+      set('edit-order-firstname',order.firstName||full.shift()||'');
+      set('edit-order-lastname',order.lastName||full.join(' '));
+      set('edit-order-phone',order.phone||'');
+      set('edit-order-country',order.country||'الجزائر');
+      set('edit-order-state',order.state||order.wilaya||'');
+      set('edit-order-municipality',order.municipality||order.commune||'');
+      set('edit-order-address',order.detailedAddress||order.address||'');
+      set('edit-order-payment',order.paymentMethod||order.payment_method||'الدفع عند الاستلام');
+      set('edit-order-status',order.status||'قيد التجهيز');
+      set('edit-order-delivery',Number(order.deliveryPrice??order.shippingPrice??0)||0);
+      const box=document.getElementById('edit-order-items');
+      if(!box) return true;
+      box.innerHTML='';
+      const items=safeItems(order);
+      items.forEach(function(item,i){
+        const row=document.createElement('div');
+        row.className='border border-neutral-200 rounded-xl p-3 bg-neutral-50';
+        row.dataset.index=String(i); row.dataset.productId=item.productId||'';
+        row.innerHTML='<div class="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">'+
+          '<label class="text-[10px] font-bold md:col-span-2">اسم المنتج<input data-field="name" value="'+esc(item.name)+'" class="mt-1 w-full border rounded-lg px-2 py-1.5 text-[11px]"></label>'+ 
+          '<label class="text-[10px] font-bold">السعر (د.ج)<input data-field="priceDZD" type="number" min="0" step="1" value="'+esc(item.priceDZD)+'" class="mt-1 w-full border rounded-lg px-2 py-1.5 text-[11px]"></label>'+ 
+          '<label class="text-[10px] font-bold">الكمية<input data-field="quantity" type="number" min="1" step="1" value="'+esc(item.quantity)+'" class="mt-1 w-full border rounded-lg px-2 py-1.5 text-[11px]"></label>'+ 
+          '<label class="text-[10px] font-bold">اللون<input data-field="color" value="'+esc(item.color)+'" class="mt-1 w-full border rounded-lg px-2 py-1.5 text-[11px]"></label>'+ 
+          '<label class="text-[10px] font-bold">المقاس<input data-field="size" value="'+esc(item.size)+'" class="mt-1 w-full border rounded-lg px-2 py-1.5 text-[11px]"></label></div>'+ 
+          '<div class="flex justify-end mt-2"><button type="button" class="bkl-remove-edit-item text-[10px] font-bold text-rose-600 bg-white border border-rose-200 px-2 py-1 rounded-lg">🗑️ حذف هذا المنتج</button></div>';
+        box.appendChild(row);
+        row.querySelectorAll('input').forEach(function(inp){inp.addEventListener('input',function(){try{updateEditedOrderTotalPreview()}catch(e){}})});
+        row.querySelector('.bkl-remove-edit-item').addEventListener('click',function(){row.remove();try{updateEditedOrderTotalPreview()}catch(e){}});
+      });
+      try{updateEditedOrderTotalPreview()}catch(e){
+        const t=document.getElementById('edit-order-total-preview'); if(t)t.textContent='';
+      }
+      return true;
+    }catch(e){
+      console.error('BKL SAFE EDIT ERROR:',e);
+      alert('تعذر فتح نافذة تعديل الطلب. لم يتم تغيير الطلبية.');
+      return false;
+    }
+  }
+  window.editOrderPrompt=openSafe;
+  // ضمان أن استدعاءات الكود القديمة تستخدم النسخة الآمنة أيضاً.
+  window.BKL_SAFE_EDIT_ORDER=openSafe;
 })();
 </script>
 </body>
@@ -9145,7 +9301,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   window.bklSetCustomerTypeFilter=function(type){
-    bklCustomerTypeFilter=['all','vip','private','normal'].includes(type)?type:'all';
+    bklCustomerTypeFilter=['all','vip','private'].includes(type)?type:'all';
     const f=document.getElementById('bkl-customer-type-filter');
     if(f)f.value=bklCustomerTypeFilter;
     document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn=>btn.classList.toggle('active',btn.dataset.bklType===bklCustomerTypeFilter));
@@ -9157,8 +9313,7 @@ document.addEventListener('DOMContentLoaded', function(){
       const customers=bklCustomers();
       const idx=customers.findIndex(c=>String(c?.id||'')===String(id));
       if(idx<0)return;
-      customers[idx].customerType=(type==='vip'||type==='private'||type==='normal')?type:'';
-      if(type==='normal') customers[idx].discountPercent=0;
+      customers[idx].customerType=(type==='vip'||type==='private')?type:'';
       localStorage.setItem('store_customers',JSON.stringify(customers));
       if(Array.isArray(registeredCustomers)){
         const ri=registeredCustomers.findIndex(c=>String(c?.id||'')===String(id));
@@ -9227,7 +9382,7 @@ document.addEventListener('DOMContentLoaded', function(){
     const selectedBranch=branches.find(x=>String(x.id)===selectedId)||null;
     const q=(document.getElementById('bkl-branch-customers-search')?.value||'').toLowerCase().trim();
     const typeFilter=document.getElementById('bkl-customer-type-filter')?.value||bklCustomerTypeFilter||'all';
-    bklCustomerTypeFilter=['all','vip','private','normal'].includes(typeFilter)?typeFilter:'all';
+    bklCustomerTypeFilter=['all','vip','private'].includes(typeFilter)?typeFilter:'all';
     const rows=customers.filter(c=>{
       if(selectedId!=='__ALL__'&&!belongs(c,selectedBranch))return false;
       if(bklCustomerTypeFilter!=='all'&&bklCustomerType(c)!==bklCustomerTypeFilter)return false;
@@ -9275,9 +9430,145 @@ document.addEventListener('DOMContentLoaded', function(){
 })();
 </script>
 
+<script id="bkl-orders-buttons-repair">
+(function(){
+  function orders(){try{return typeof getStoreOrders==='function'?getStoreOrders():[];}catch(e){return[];}}
+  function getOrder(id){return orders().find(o=>String(o.id??o.orderId??o.invoiceNumber??'')===String(id))||null;}
+  function idOf(btn){
+    const row=btn.closest('tr,[data-order-id],[data-id],.order-card,.order-item');
+    return btn.dataset.orderId||btn.getAttribute('data-order-id')||btn.dataset.id||btn.getAttribute('data-id')||row?.dataset.orderId||row?.dataset.id||'';
+  }
+  function refresh(){try{if(typeof renderOrdersList==='function')renderOrdersList();}catch(e){} try{if(typeof renderOwnerDashboardData==='function')renderOwnerDashboardData();}catch(e){}}
 
+  function modernView(id){
+    const order=getOrder(id); if(!order){alert('تعذر العثور على بيانات الطلب.');return;}
+    if(typeof notifyCustomerForOrder==='function'){try{notifyCustomerForOrder(order,`تمت مشاهدة طلبك رقم #${order.id} من طرف إدارة المتجر.`,'view');}catch(e){}}
+    const old=document.getElementById('bkl-modern-order-modal'); if(old)old.remove();
+    const esc=v=>String(v??'—').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const items=typeof getOrderItems==='function'?(getOrderItems(order)||[]):(order.items||order.products||order.orderItems||[]);
+    const delivery=Number(order.deliveryPrice??order.shippingPrice??0)||0;
+    let subtotal=Number(order.subtotal??order.totalBeforeDelivery??0)||0;
+    const rows=Array.isArray(items)?items.map((item,i)=>{
+      const raw=Number(item.price??item.unitPrice??item.priceDZD??item.basePrice??item.unitPriceDZD??item.unitPriceUSD??0)||0;
+      const unit=raw>0?raw:0;
+      const qty=Math.max(1,Number(item.quantity??item.qty??1)||1);
+      const line=Number(item.total??item.lineTotal??0)||unit*qty;
+      if(!subtotal) subtotal += line;
+      return `<tr>
+        <td>${i+1}</td><td><strong>${esc(item.name||item.productName||'منتج')}</strong></td>
+        <td>${esc(item.color||item.selectedColor||'—')}</td><td>${esc(item.size||'—')}</td>
+        <td>${qty}</td><td>${unit.toLocaleString('ar-DZ')} د.ج</td><td><strong>${line.toLocaleString('ar-DZ')} د.ج</strong></td>
+      </tr>`;
+    }).join('') : '';
+    const storedTotal=Number(order.grandTotal??order.totalAmount??order.total??0)||0;
+    const total=storedTotal||subtotal+delivery;
+    const status=String(order.status||'قيد التجهيز');
+    const modal=document.createElement('div'); modal.id='bkl-modern-order-modal';
+    modal.innerHTML=`<div class="bkl-om-backdrop">
+      <div class="bkl-om-card" dir="rtl">
+        <div class="bkl-om-head"><div><div class="bkl-om-kicker">تفاصيل الطلبية</div><h2>طلب رقم <span>#${esc(order.id||order.orderId||'—')}</span></h2></div><button class="bkl-om-x" data-close>×</button></div>
+        <div class="bkl-om-status"><span class="bkl-status-dot"></span><strong>${esc(status)}</strong><span class="bkl-om-date">${esc(order.date||order.createdAt||'')}</span></div>
+        <div class="bkl-om-grid">
+          <section class="bkl-om-box"><h3>👤 بيانات الزبون</h3><div class="bkl-info"><div><small>الاسم واللقب</small><b>${esc(order.customerName||order.name||((order.firstName||'')+' '+(order.lastName||'')).trim()||'زبون مجهول')}</b></div><div><small>الهاتف</small><b dir="ltr">${esc(order.phone||'غير محدد')}</b></div><div><small>البريد</small><b dir="ltr">${esc(order.email||'غير محدد')}</b></div><div><small>الولاية</small><b>${esc(order.state||'غير محددة')}</b></div><div><small>البلدية</small><b>${esc(order.municipality||'غير محددة')}</b></div><div class="full"><small>العنوان</small><b>${esc(order.detailedAddress||order.address||order.fullAddress||'غير محدد')}</b></div></div></section>
+          <section class="bkl-om-box"><h3>🧾 معلومات الطلب والدفع</h3><div class="bkl-info"><div><small>رقم الطلب</small><b>#${esc(order.id||order.orderId||'—')}</b></div><div><small>طريقة الدفع</small><b>${esc(order.paymentMethod||'غير محددة')}</b></div><div><small>سعر التوصيل</small><b>${delivery.toLocaleString('ar-DZ')} د.ج</b></div><div><small>عدد المنتجات</small><b>${Array.isArray(items)?items.length:0}</b></div><div class="full"><small>ملاحظة</small><b>${esc(order.note||order.notes||'لا توجد ملاحظات')}</b></div></div></section>
+        </div>
+        <section class="bkl-om-products"><div class="bkl-om-section-title"><h3>🛍️ تفاصيل المنتجات</h3><span>${Array.isArray(items)?items.length:0} منتج</span></div><div class="bkl-om-table-wrap"><table><thead><tr><th>#</th><th>المنتج</th><th>اللون</th><th>المقاس</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th></tr></thead><tbody>${rows||'<tr><td colspan="7" class="empty">لا توجد منتجات مسجلة في الطلبية.</td></tr>'}</tbody></table></div></section>
+        <div class="bkl-om-total"><div><span>مجموع المنتجات</span><b>${subtotal.toLocaleString('ar-DZ')} د.ج</b></div><div><span>التوصيل</span><b>${delivery.toLocaleString('ar-DZ')} د.ج</b></div><div class="grand"><span>الإجمالي النهائي</span><strong>${total.toLocaleString('ar-DZ')} د.ج</strong></div></div>
+        <div class="bkl-om-actions"><button data-act="close" class="secondary">إغلاق</button><button data-act="edit" class="edit">✏️ تعديل الطلبية</button><button data-act="confirm" class="confirm">✓ تأكيد الطلب</button><button data-act="print" class="print">🖨️ طباعة الفاتورة</button><button data-act="save" class="save">💾 حفظ الفاتورة</button></div>
+      </div></div>`;
+    document.body.appendChild(modal);
+    modal.querySelectorAll('[data-close],[data-act="close"]').forEach(b=>b.onclick=()=>modal.remove());
+    modal.querySelector('[data-act="edit"]').onclick=()=>{modal.remove(); if(typeof editOrderPrompt==='function')editOrderPrompt(id); else alert('دالة تعديل الطلب غير متاحة.');};
+    modal.querySelector('[data-act="confirm"]').onclick=()=>{if(typeof updateOrderStatus==='function')updateOrderStatus(id,'مؤكد'); modal.remove(); setTimeout(()=>modernView(id),50);};
+    modal.querySelector('[data-act="print"]').onclick=()=>{if(typeof printOrderInvoice==='function')printOrderInvoice(id); else window.print();};
+    modal.querySelector('[data-act="save"]').onclick=()=>{if(typeof saveOrderInvoice==='function')saveOrderInvoice(id);};
+    modal.querySelector('.bkl-om-backdrop').onclick=e=>{if(e.target===e.currentTarget)modal.remove();};
+  }
 
+  function edit(id){if(typeof editOrderPrompt==='function'){editOrderPrompt(id);return;} alert('تعذر العثور على دالة تعديل الطلب.');}
+  function confirmOrder(id){if(typeof updateOrderStatus==='function'){updateOrderStatus(id,'مؤكد');return;} const o=getOrder(id);if(o){o.status='مؤكد';if(typeof saveStoreOrders==='function')saveStoreOrders(orders());refresh();}}
+  function remove(id){if(typeof deleteOrder==='function'){deleteOrder(id);return;} if(!confirm('هل أنت متأكد من حذف هذه الطلبية؟'))return; const a=orders().filter(o=>String(o.id)!==String(id));try{localStorage.setItem('store_orders',JSON.stringify(a));}catch(e){} refresh();}
+  function print(id){if(typeof printOrderInvoice==='function'){printOrderInvoice(id);return;} window.print();}
 
+  const style=document.createElement('style'); style.textContent=`
+    #bkl-modern-order-modal{position:fixed;inset:0;z-index:99999;font-family:Arial,sans-serif}#bkl-modern-order-modal *{box-sizing:border-box}.bkl-om-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.66);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:20px}.bkl-om-card{width:min(1120px,96vw);max-height:94vh;overflow:auto;background:#fff;border-radius:22px;box-shadow:0 25px 80px rgba(0,0,0,.28);padding:22px;color:#172033}.bkl-om-head{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #edf0f5;padding-bottom:14px}.bkl-om-kicker{font-size:12px;color:#f28a00;font-weight:800}.bkl-om-head h2{margin:3px 0 0;font-size:22px}.bkl-om-head h2 span{color:#f28a00}.bkl-om-x{width:36px;height:36px;border:0;border-radius:50%;background:#f3f4f6;font-size:25px;cursor:pointer}.bkl-om-status{display:flex;gap:9px;align-items:center;margin:14px 0;padding:10px 13px;background:#f8fafc;border-radius:12px;font-size:12px}.bkl-status-dot{width:9px;height:9px;border-radius:50%;background:#16a34a}.bkl-om-date{margin-right:auto;color:#64748b}.bkl-om-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.bkl-om-box{border:1px solid #e7eaf0;border-radius:16px;padding:15px;background:#fff}.bkl-om-box h3{margin:0 0 12px;font-size:14px}.bkl-info{display:grid;grid-template-columns:1fr 1fr;gap:11px}.bkl-info div{background:#f8fafc;border-radius:10px;padding:8px 10px}.bkl-info .full{grid-column:1/-1}.bkl-info small{display:block;color:#64748b;font-size:10px;margin-bottom:3px}.bkl-info b{font-size:12px;word-break:break-word}.bkl-om-products{margin-top:14px;border:1px solid #e7eaf0;border-radius:16px;overflow:hidden}.bkl-om-section-title{display:flex;justify-content:space-between;align-items:center;padding:13px 15px;background:#f8fafc}.bkl-om-section-title h3{margin:0;font-size:14px}.bkl-om-section-title span{font-size:11px;color:#64748b}.bkl-om-table-wrap{overflow:auto}.bkl-om-table-wrap table{width:100%;border-collapse:collapse;min-width:760px}.bkl-om-table-wrap th{background:#172033;color:#fff;padding:11px 9px;font-size:11px;white-space:nowrap}.bkl-om-table-wrap td{padding:11px 9px;border-bottom:1px solid #edf0f5;font-size:11px;text-align:center}.bkl-om-table-wrap td:nth-child(2){text-align:right;font-weight:700}.bkl-om-table-wrap tr:last-child td{border-bottom:0}.bkl-om-table-wrap .empty{padding:25px;color:#94a3b8}.bkl-om-total{display:flex;justify-content:flex-end;gap:28px;align-items:end;margin-top:14px;padding:14px;background:#fffaf2;border:1px solid #fde7c2;border-radius:16px}.bkl-om-total div{display:flex;flex-direction:column;gap:4px;font-size:11px;color:#64748b}.bkl-om-total b{font-size:14px;color:#172033}.bkl-om-total .grand{padding-right:20px;border-right:1px solid #f1d9b0}.bkl-om-total .grand strong{font-size:21px;color:#f28a00}.bkl-om-actions{display:flex;justify-content:flex-start;gap:8px;margin-top:15px;flex-wrap:wrap}.bkl-om-actions button{border:0;border-radius:11px;padding:10px 16px;font-weight:800;cursor:pointer}.bkl-om-actions .secondary{background:#eef2f7}.bkl-om-actions .edit{background:#fef3c7;color:#92400e}.bkl-om-actions .confirm{background:#dcfce7;color:#166534}.bkl-om-actions .print{background:#172033;color:#fff}.bkl-om-actions .save{background:#059669;color:#fff}@media(max-width:750px){.bkl-om-grid{grid-template-columns:1fr}.bkl-info{grid-template-columns:1fr}.bkl-om-total{flex-direction:column;align-items:stretch;gap:9px}.bkl-om-total .grand{border-right:0;padding-right:0}.bkl-om-card{padding:14px}}
+  `; document.head.appendChild(style);
+
+    // تم حذف معالج النقر العام القديم: كان يلتقط أزرار نوافذ الفواتير أيضاً ويشغل أكثر من دالة في النقرة الواحدة.
+})();
+</script>
+
+<script id="bkl-order-window-manager-final">
+(function(){
+  const ids=['order-preview-modal','order-editor-modal','bkl-modern-order-modal'];
+  function el(id){return document.getElementById(id);}
+  function hide(id){const m=el(id);if(m){m.classList.add('hidden');m.style.display='none';m.style.pointerEvents='none';}}
+  function hideAll(){ids.forEach(hide);}
+  function normalize(){ids.forEach(id=>{const m=el(id);if(m&&!m.classList.contains('hidden')){m.style.display='flex';m.style.pointerEvents='auto';m.style.zIndex='100000';}});}
+  window.closeAllBKLOrderWindows=hideAll;
+
+  // تغليف دوال الطلبات الموجودة أصلاً لضمان عدم تداخل النوافذ.
+  ['previewOrder','editOrderPrompt','updateOrderStatus','deleteOrder','printOrderInvoice'].forEach(name=>{
+    const fn=window[name];
+    if(typeof fn!=='function'||fn.__bklWindowSafe)return;
+    const wrapped=function(){
+      if(name==='previewOrder') ids.filter(x=>x!=='order-preview-modal').forEach(hide);
+      else if(name==='editOrderPrompt') ids.filter(x=>x!=='order-editor-modal').forEach(hide);
+      else hideAll();
+      const result=fn.apply(this,arguments);
+      setTimeout(normalize,0);
+      return result;
+    };
+    wrapped.__bklWindowSafe=true;
+    window[name]=wrapped;
+  });
+
+  // كل نافذة طلب جديدة تصبح النافذة النشطة الوحيدة.
+  const obs=new MutationObserver(function(ms){
+    for(const mu of ms){
+      for(const n of mu.addedNodes){
+        if(!(n instanceof HTMLElement))continue;
+        for(const id of ids){
+          const m=n.id===id?n:n.querySelector?.('#'+id);
+          if(m){
+            ids.filter(x=>x!==id).forEach(hide);
+            m.style.zIndex='100000';m.style.pointerEvents='auto';
+          }
+        }
+      }
+    }
+    normalize();
+  });
+  obs.observe(document.body,{childList:true,subtree:true});
+
+  // إغلاق آمن بالنقر على X أو الخلفية أو Escape.
+  document.addEventListener('click',function(e){
+    const close=e.target.closest?.('[data-close],[data-act="close"],.bkl-om-x');
+    if(close){
+      const m=close.closest('#order-preview-modal,#order-editor-modal,#bkl-modern-order-modal');
+      if(m){e.preventDefault();e.stopPropagation();hide(m.id);return;}
+    }
+    const back=e.target.closest?.('.bkl-om-backdrop');
+    if(back&&e.target===back){const m=back.closest('#bkl-modern-order-modal');if(m)hide(m.id);}
+  },true);
+  document.addEventListener('keydown',function(e){
+    if(e.key!=='Escape')return;
+    for(let i=ids.length-1;i>=0;i--){const m=el(ids[i]);if(m&&!m.classList.contains('hidden')&&m.style.display!=='none'){hide(ids[i]);e.preventDefault();break;}}
+  },true);
+
+  // إصلاح مباشر لأزرار قائمة الطلبات، مع أولوية للـ data-order-action.
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest?.('[data-order-action]');
+    if(!btn)return;
+    const id=btn.getAttribute('data-order-id');
+    const action=btn.getAttribute('data-order-action');
+    if(!id||!action)return;
+    // إذا كانت نافذة فوق القائمة، أغلقها أولاً بدلاً من تركها حاجباً للنقرات.
+    const active=document.querySelector('#order-preview-modal:not(.hidden),#order-editor-modal:not(.hidden),#bkl-modern-order-modal');
+    if(active&&!active.contains(btn))hide(active.id);
+  },true);
+})();
+</script>
 
 <script id="bkl-customer-color-system-v1">
 (function(){
