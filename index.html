@@ -3888,7 +3888,25 @@ function printOrderInvoice(orderId, action = 'print') {
                     cursor: pointer;
                 }
                 .invoice-actions .save-btn { background: #059669; color: #fff; }
-                .invoice-actions .close-btn { background: #eef2f7; color: #111827; }
+                .invoice-actions .close-btn {
+                    width: 36px;
+                    height: 36px;
+                    flex: 0 0 36px;
+                    border: 0;
+                    border-radius: 9999px;
+                    background: #f5f5f5;
+                    color: #404040;
+                    font-size: 18px;
+                    font-weight: 700;
+                    line-height: 1;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0;
+                    cursor: pointer;
+                    transition: background .15s ease, color .15s ease;
+                }
+                .invoice-actions .close-btn:hover { background: #ffe4e6; color: #e11d48; }
                 .invoice-actions button:hover { filter: brightness(.95); }
                 @media (max-width: 600px) {
                     body { padding: 12px; }
@@ -3908,7 +3926,7 @@ function printOrderInvoice(orderId, action = 'print') {
         </head>
         <body>
             <div class="invoice-actions" data-no-print>
-                <button type="button" class="close-btn" onclick="return closeInvoiceWindow();">↩️ رجوع</button>
+                <button type="button" class="close-btn" onclick="return closeInvoiceWindow();" aria-label="إغلاق" title="إغلاق">✕</button>
             </div>
 
             <div class="invoice-box">
@@ -4024,21 +4042,18 @@ function printOrderInvoice(orderId, action = 'print') {
                     }
                 }
                 function closeInvoiceWindow() {
-                    // نفس وظيفة الرجوع المستخدمة في نافذة العرض/التعديل:
-                    // إخفاء نافذة العرض والعودة إلى واجهة إدارة الطلبات فقط.
+                    // زر X في الفاتورة يعمل مثل زر X في نافذة التعديل/العرض:
+                    // يغلق نافذة الفاتورة فقط ويُبقي متجر Maison BKL مفتوحاً.
                     try {
                         if (window.opener && !window.opener.closed) {
-                            // نسخ وظيفة closeOrderPreview من نافذة المتجر كما هي.
-                            if (typeof window.opener.closeOrderPreview === 'function') {
-                                window.opener.closeOrderPreview();
-                            }
                             window.opener.focus();
                         }
+                    } catch (e) {}
+                    try {
+                        window.close();
                     } catch (e) {
-                        console.error('BKL invoice back error:', e);
+                        console.error('BKL invoice close error:', e);
                     }
-                    // نافذة الفاتورة هي النافذة الفرعية فقط؛ إغلاقها يعيد المستخدم للمتجر.
-                    try { window.close(); } catch (e) {}
                     return false;
                 }
                 // تتم الطباعة من النافذة الأصلية بعد تجهيز محتوى الفاتورة.
