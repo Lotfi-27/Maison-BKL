@@ -3450,22 +3450,8 @@ function closeOrderPreview() {
 function printOrderInvoice(orderId, action = 'print') {
     // افتح نافذة الطباعة مباشرة داخل حدث النقر حتى لا يمنعها المتصفح كنافذة منبثقة.
     let printWindow = null;
-    if (action !== 'save') {
-        try {
-            printWindow = window.open('', '_blank', 'width=800,height=900');
-            if (!printWindow) {
-                alert('تعذر فتح نافذة الطباعة. يرجى السماح بالنوافذ المنبثقة لهذا المتجر ثم المحاولة مرة أخرى.');
-                return;
-            }
-            printWindow.document.open();
-            printWindow.document.write('<!doctype html><html><body style="font-family:Arial;text-align:center;padding:40px">جاري تجهيز الفاتورة...</body></html>');
-            printWindow.document.close();
-        } catch (e) {
-            console.error('BKL print window open error:', e);
-            alert('تعذر فتح نافذة الطباعة.');
-            return;
-        }
-    }
+    // الفاتورة تُعرض داخل نافذة عائمة في نفس المتجر، مثل نافذتي العرض والتعديل.
+    // لا نفتح نافذة متصفح جديدة حتى لا يكون زر X مرتبطاً بإغلاق نافذة المتجر.
     const orders = getStoreOrders();
     const order = orders.find(o => o && o.id == orderId);
     if (!order) {
@@ -3926,7 +3912,7 @@ function printOrderInvoice(orderId, action = 'print') {
         </head>
         <body>
             <div class="invoice-actions" data-no-print>
-                <button type="button" class="close-btn" onclick="return closeInvoiceWindow();" aria-label="إغلاق" title="إغلاق">✕</button>
+                <button type="button" class="close-btn" onclick="return false;" aria-label="إغلاق" title="إغلاق">✕</button>
             </div>
 
             <div class="invoice-box">
@@ -4042,18 +4028,11 @@ function printOrderInvoice(orderId, action = 'print') {
                     }
                 }
                 function closeInvoiceWindow() {
-                    // زر X في الفاتورة يعمل مثل زر X في نافذة التعديل/العرض:
-                    // يغلق نافذة الفاتورة فقط ويُبقي متجر Maison BKL مفتوحاً.
                     try {
-                        if (window.opener && !window.opener.closed) {
-                            window.opener.focus();
+                        if (window.parent && window.parent !== window && typeof window.parent.bklCloseInvoiceModal === 'function') {
+                            window.parent.bklCloseInvoiceModal();
                         }
                     } catch (e) {}
-                    try {
-                        window.close();
-                    } catch (e) {
-                        console.error('BKL invoice close error:', e);
-                    }
                     return false;
                 }
                 // تتم الطباعة من النافذة الأصلية بعد تجهيز محتوى الفاتورة.
@@ -4100,33 +4079,52 @@ function printOrderInvoice(orderId, action = 'print') {
         return;
     }
 
-    if (!printWindow) {
-        alert('تعذر فتح نافذة الفاتورة.');
-        return;
-    }
     try {
-        printWindow.document.open();
-        printWindow.document.write(invoiceHtml);
-        printWindow.document.close();
-        // تنفيذ الطباعة من نفس نافذة الفاتورة بعد اكتمال تحميل محتواها.
-        const doPrint = () => {
+        // نافذة فاتورة عائمة داخل نفس المتجر، بنفس مبدأ نافذة العرض/التعديل.
+        const oldModal = document.getElementById('bkl-invoice-print-modal');
+        if (oldModal) oldModal.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'bkl-invoice-print-modal';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.60);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;';
+        modal.innerHTML = `
+          <div dir="rtl" style="position:relative;width:min(980px,100%);height:min(94vh,1100px);background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.35);">
+            <button type="button" onclick="bklCloseInvoiceModal()" aria-label="إغلاق" title="إغلاق" style="position:absolute;top:10px;left:10px;z-index:20;width:36px;height:36px;border-radius:999px;border:0;background:#f5f5f5;color:#404040;font-size:20px;font-weight:800;display:flex;align-items:center;justify-content:center;cursor:pointer;">✕</button>
+            <iframe id="bkl-invoice-print-frame" title="فاتورة الشراء" style="width:100%;height:100%;border:0;background:#fff;"></iframe>
+          </div>`;
+        document.body.appendChild(modal);
+
+        window.bklCloseInvoiceModal = function() {
+            const m = document.getElementById('bkl-invoice-print-modal');
+            if (m) m.remove();
+            try { document.body.style.overflow = ''; document.documentElement.style.overflow = ''; } catch (e) {}
+            return false;
+        };
+
+        const frame = document.getElementById('bkl-invoice-print-frame');
+        if (!frame) throw new Error('تعذر إنشاء إطار الفاتورة');
+        const frameDoc = frame.contentDocument || frame.contentWindow.document;
+        frameDoc.open();
+        frameDoc.write(invoiceHtml);
+        frameDoc.close();
+
+        const printFrame = () => {
             try {
-                printWindow.focus();
-                printWindow.print();
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
             } catch (printError) {
                 console.error('BKL direct print error:', printError);
                 alert('تعذر تنفيذ الطباعة.');
             }
         };
-        if (printWindow.document.readyState === 'complete') {
-            setTimeout(doPrint, 150);
-        } else {
-            printWindow.onload = () => setTimeout(doPrint, 150);
-            setTimeout(doPrint, 800);
-        }
+
+        frame.onload = () => setTimeout(printFrame, 150);
+        setTimeout(() => {
+            if (document.getElementById('bkl-invoice-print-modal')) printFrame();
+        }, 500);
     } catch (e) {
         console.error('BKL invoice render error:', e);
-        try { printWindow.close(); } catch (_) {}
+        try { if (typeof window.bklCloseInvoiceModal === 'function') window.bklCloseInvoiceModal(); } catch (_) {}
         alert('تعذر تجهيز الفاتورة للطباعة.');
     }
 }
