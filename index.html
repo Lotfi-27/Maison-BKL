@@ -4024,12 +4024,17 @@ function printOrderInvoice(orderId, action = 'print') {
                     }
                 }
                 function closeInvoiceWindow() {
-                    try { window.close(); } catch(e) {}
-                    setTimeout(function(){
-                        if (!window.closed) {
-                            try { window.location.href = 'about:blank'; } catch(e) {}
+                    // زر الرجوع يغلق نافذة الفاتورة فقط ولا يغيّر صفحة المتجر الأصلية.
+                    try {
+                        if (window.opener && !window.opener.closed) {
+                            window.opener.focus();
                         }
-                    }, 150);
+                    } catch (e) {}
+                    try {
+                        window.close();
+                    } catch (e) {
+                        console.error('BKL invoice close error:', e);
+                    }
                 }
                 // تتم الطباعة من النافذة الأصلية بعد تجهيز محتوى الفاتورة.
             <\/script>
