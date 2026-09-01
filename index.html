@@ -8386,21 +8386,26 @@ footer button{
 </style></head><body><div class="box"><div class="head"><strong>Maison BKL - متجر السوق الذكي</strong><strong>📒 دفتر الكريدي</strong></div><div class="actions invoice-actions"><button class="print" onclick="window.print()">🖨️ طباعة دفتر الكريدي</button><button type="button" class="close-btn" onclick="closeInvoiceWindow()" aria-label="إغلاق" title="إغلاق">✕</button></div><div class="info"><b>رقم الفاتورة:</b> ${escapeOrderHtml(entry.invoiceId)}<br><b>الزبون:</b> ${escapeOrderHtml(entry.customerName)}<br><b>الهاتف:</b> ${escapeOrderHtml(entry.phone)}<br><b>الولاية:</b> ${escapeOrderHtml(entry.state)}<br><b>البلدية:</b> ${escapeOrderHtml(entry.municipality)}<br><b>العنوان:</b> ${escapeOrderHtml(entry.address)}<br><b>التاريخ:</b> ${escapeOrderHtml(entry.date)}<br><b>الحالة:</b> ${escapeOrderHtml(entry.status)}</div><table><thead><tr><th>المنتج</th><th>الكمية</th><th>المجموع</th></tr></thead><tbody>${rows}</tbody></table><div class="totals">مجموع المنتجات: ${escapeOrderHtml(formatCreditAmount(entry.subtotal))}<br>سعر التوصيل: ${escapeOrderHtml(formatCreditAmount(entry.deliveryPrice))}<br>إجمالي الفاتورة الأصلي: ${escapeOrderHtml(formatCreditAmount(entry.grandTotal))}<br><span class="paid">إجمالي المدفوع: ${escapeOrderHtml(formatCreditAmount(entry.paidAmount))}</span><br><span class="remaining">إجمالي الفاتورة بعد التسديد: ${escapeOrderHtml(formatCreditAmount(entry.remainingAmount))}</span><br>طريقة آخر تسديد: ${escapeOrderHtml(entry.lastPaymentMethod || 'لا يوجد')}</div><div class="lock">🔒 هذه النسخة محفوظة كسجل كريدي. لا يمكن تعديل بيانات الفاتورة الأصلية. تسجيل الدفعات يتم من دفتر صاحب المتجر فقط.</div></div><script>
                 function closeInvoiceWindow() {
                     try {
+                        // نافذة عرض دفتر الكريدي فُتحت من صفحة المتجر.
+                        // نرجع الصفحة الأصلية خطوة واحدة ثم نغلق نافذة العرض نفسها فقط.
                         if (window.opener && !window.opener.closed) {
                             window.opener.focus();
-                        }
-                    } catch (e) {}
-
-                    // الرجوع إلى الصفحة السابقة فقط.
-                    // لا نستخدم window.close() حتى لا يتم إغلاق المتجر.
-                    try {
-                        if (window.history.length > 1) {
-                            window.history.back();
+                            try {
+                                if (window.opener.history.length > 1) {
+                                    window.opener.history.back();
+                                }
+                            } catch (e) {}
+                            try {
+                                window.close();
+                            } catch (e) {}
                             return false;
                         }
-                    } catch (e) {}
 
-                    // إذا لم توجد صفحة سابقة، ابقَ في نافذة العرض ولا تغلق المتجر.
+                        // احتياطياً إذا لم يوجد opener.
+                        if (window.history.length > 1) {
+                            window.history.back();
+                        }
+                    } catch (e) {}
                     return false;
                 }
             <\/script></body></html>`);
