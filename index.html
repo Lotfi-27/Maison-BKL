@@ -8101,54 +8101,17 @@ function buildCreditDebtorsRegistryRows(debtors) {
             const data = getCreditDebtorsRegistryHtml();
             const oldModal = document.getElementById('credit-debtors-viewer-modal');
             if (oldModal) oldModal.remove();
-
             const modal = document.createElement('div');
             modal.id = 'credit-debtors-viewer-modal';
-            modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:20px;direction:rtl;';
-            modal.innerHTML = `
-                <div style="width:min(1400px,100%);height:min(94vh,1000px);background:#f3f4f6;border-radius:18px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;">
-                    <div style="background:#fff;padding:16px 20px;border-bottom:3px solid #f59e0b;display:flex;align-items:center;justify-content:space-between;gap:15px;">
-                        <div><h2 style="margin:0;font-size:20px;font-weight:900;color:#111;">Maison BKL - متجر السوق الذكي</h2><p style="margin:5px 0 0;font-size:12px;color:#666;">سجل أصحاب الكريدي المستحقين</p></div>
-                        <button type="button" id="credit-debtors-close-new" style="border:0;background:#e5e7eb;color:#111;border-radius:10px;padding:10px 18px;font-weight:900;cursor:pointer;font-family:inherit;">✕ إغلاق</button>
-                    </div>
-                    <div style="overflow:auto;padding:20px;flex:1;background:#f3f4f6;">
-                        <div style="max-width:1350px;margin:auto;background:#fff;padding:25px;border-radius:18px;box-shadow:0 10px 35px rgba(0,0,0,.08);">
-                            <div style="display:flex;justify-content:space-between;gap:20px;align-items:center;border-bottom:3px solid #f59e0b;padding-bottom:15px;">
-                                <div><h1 style="font-size:23px;margin:0;">سجل أصحاب الكريدي المستحقين</h1><p style="font-size:12px;color:#666;margin:6px 0 0;">التفاصيل الحالية لأصحاب الكريدي الذين لديهم مبلغ متبقٍ</p></div>
-                                <strong style="font-size:12px;">التاريخ: ${escapeOrderHtml(getCurrentFullDateTime())}</strong>
-                            </div>
-                            <div style="display:flex;flex-wrap:wrap;gap:10px;margin:18px 0;">
-                                <button type="button" onclick="window.printCreditDebtorsRegistryFromViewer && window.printCreditDebtorsRegistryFromViewer()" style="border:0;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;background:#059669;color:#fff;font-family:inherit;">🖨️ طباعة / حفظ PDF</button>
-                                <button type="button" id="credit-debtors-refresh-viewer" style="border:0;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;font-family:inherit;">🔄 تحديث</button>
-                            </div>
-                            <div style="display:flex;gap:10px;flex-wrap:wrap;margin:15px 0;">
-                                <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 15px;min-width:190px;"><b style="display:block;font-size:11px;color:#9a3412;margin-bottom:4px;">عدد أصحاب الكريدي</b><span style="font-size:17px;font-weight:900;">${data.debtors.length}</span></div>
-                                <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:10px 15px;min-width:190px;"><b style="display:block;font-size:11px;color:#9a3412;margin-bottom:4px;">إجمالي الدين المتبقي</b><span style="font-size:17px;font-weight:900;">${escapeOrderHtml(formatCreditAmount(data.totalDebt))}</span></div>
-                            </div>
-                            <div style="overflow:auto;">${data.html}</div>
-                            <div style="margin-top:18px;padding:10px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;color:#92400e;">هذا العرض مستقل عن لوحة التحكم ويمكن طباعته أو حفظه بصيغة PDF.</div>
-                        </div>
-                    </div>
-                </div>`;
-
+            modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;padding:12px;direction:rtl;';
+            const cards = data.debtors.map(d => {
+                const debts = d.debts.map(x => `<div style="margin-top:10px;padding:10px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;"><div style="font-weight:900;font-size:12px;color:#334155;">فاتورة #${escapeOrderHtml(x.invoiceId)}</div><div style="font-size:11px;color:#64748b;margin-top:3px;">${escapeOrderHtml(x.date || '-')}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;font-size:11px;"><span>الدين: <b>${escapeOrderHtml(formatCreditAmount(x.total))}</b></span><span>المتبقي: <b style="color:#dc2626;">${escapeOrderHtml(formatCreditAmount(x.remaining))}</b></span></div></div>`).join('');
+                return `<article style="background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:15px;box-shadow:0 3px 12px rgba(15,23,42,.06);"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;"><div style="min-width:0;"><div style="font-size:16px;font-weight:900;color:#111827;overflow-wrap:anywhere;">${escapeOrderHtml(d.customerName)}</div><div style="font-size:11px;color:#64748b;margin-top:4px;">📞 ${escapeOrderHtml(d.phone || 'بدون هاتف')}</div></div><div style="background:#fef2f2;color:#b91c1c;border-radius:12px;padding:7px 9px;text-align:center;white-space:nowrap;"><div style="font-size:9px;">المتبقي</div><strong style="font-size:13px;">${escapeOrderHtml(formatCreditAmount(d.remainingTotal))}</strong></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;"><div style="background:#f8fafc;border-radius:12px;padding:9px;"><small style="color:#64748b;display:block;font-size:9px;">إجمالي الفواتير</small><b style="font-size:12px;">${escapeOrderHtml(formatCreditAmount(d.invoiceTotal))}</b></div><div style="background:#ecfdf5;border-radius:12px;padding:9px;"><small style="color:#047857;display:block;font-size:9px;">المسدّد</small><b style="font-size:12px;color:#047857;">${escapeOrderHtml(formatCreditAmount(d.paidTotal))}</b></div></div><details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;font-weight:800;color:#9a3412;">تفاصيل الفواتير (${d.debts.length})</summary>${debts}</details></article>`;
+            }).join('');
+            modal.innerHTML = `<div style="width:100%;max-width:620px;height:calc(100vh - 24px);background:#f8fafc;border-radius:22px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.28);display:flex;flex-direction:column;"><header style="background:#fff;padding:14px 15px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;z-index:2;"><div><h2 style="margin:0;font-size:17px;font-weight:900;color:#111827;">👥 سجل أصحاب الكريدي</h2><p style="margin:3px 0 0;font-size:10px;color:#64748b;">الأشخاص الذين لديهم مبلغ متبقٍ</p></div><button type="button" id="credit-debtors-close-new" style="border:0;background:#111827;color:#fff;border-radius:12px;width:40px;height:40px;font-size:18px;font-weight:900;cursor:pointer;">✕</button></header><main style="overflow:auto;padding:12px;flex:1;"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;"><div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:11px;"><div style="font-size:9px;color:#9a3412;">عدد أصحاب الكريدي</div><strong style="font-size:18px;">${data.debtors.length}</strong></div><div style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;padding:11px;"><div style="font-size:9px;color:#b91c1c;">إجمالي المتبقي</div><strong style="font-size:14px;color:#b91c1c;">${escapeOrderHtml(formatCreditAmount(data.totalDebt))}</strong></div></div><div style="display:grid;gap:10px;">${cards || '<div style="background:#fff;border-radius:16px;padding:30px;text-align:center;color:#64748b;font-size:12px;">لا يوجد أصحاب كريدي مستحقون حاليًا.</div>'}</div></main></div>`;
             document.body.appendChild(modal);
-
-            const closeViewer = () => {
-                const el = document.getElementById('credit-debtors-viewer-modal');
-                if (el) el.remove();
-                document.body.style.overflow = '';
-                window.focus();
-            };
-
             document.body.style.overflow = 'hidden';
-            document.getElementById('credit-debtors-close-new').onclick = closeViewer;
-            document.getElementById('credit-debtors-refresh-viewer').onclick = () => {
-                closeViewer();
-                setTimeout(() => openCreditDebtorsRegistryViewer(), 0);
-            };
-            window.printCreditDebtorsRegistryFromViewer = function(){
-                try { printCreditDebtorsRegistry(); } catch(e) { console.error(e); }
-            };
+            document.getElementById('credit-debtors-close-new').onclick = () => { modal.remove(); document.body.style.overflow = ''; };
         }
 
         function printCreditDebtorsRegistry() {
