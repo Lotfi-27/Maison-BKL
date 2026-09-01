@@ -3768,7 +3768,7 @@ function printOrderInvoice(orderId, action = 'print') {
         </tr>
     `).join('');
 
-    const invoiceHtml = `
+    let invoiceHtml = `
         <!DOCTYPE html>
         <html dir="rtl" lang="ar">
         <head>
@@ -4076,52 +4076,34 @@ function printOrderInvoice(orderId, action = 'print') {
     }
 
     if (!printWindow) {
-        alert('تعذر فتح نافذة الفاتورة. اسمح بالنوافذ المنبثقة لهذا المتجر ثم اضغط طباعة مرة أخرى.');
-        return false;
+        alert('تعذر فتح نافذة الفاتورة.');
+        return;
     }
-
     try {
-        // مهم: نربط onload قبل كتابة الفاتورة حتى لا تضيع إشارة التحميل.
-        let printed = false;
-        const doPrint = () => {
-            if (printed) return;
-            printed = true;
-            try {
-                printWindow.focus();
-                const ready = printWindow.document.fonts && printWindow.document.fonts.ready
-                    ? printWindow.document.fonts.ready
-                    : Promise.resolve();
-                Promise.resolve(ready).catch(() => {}).then(() => {
-                    setTimeout(() => {
-                        try { printWindow.focus(); } catch (_) {}
-                        try { printWindow.print(); } catch (printError) {
-                            console.error('BKL direct print error:', printError);
-                            alert('تعذر تنفيذ الطباعة.');
-                        }
-                    }, 250);
-                });
-            } catch (printError) {
-                console.error('BKL direct print preparation error:', printError);
-                alert('تعذر تنفيذ الطباعة.');
-            }
-        };
-
-        printWindow.onload = doPrint;
         printWindow.document.open();
         printWindow.document.write(invoiceHtml);
         printWindow.document.close();
-
-        // احتياط للمتصفحات التي لا تطلق onload في نافذة document.write.
-        setTimeout(() => {
-            if (!printed && printWindow.document.readyState === 'complete') doPrint();
-        }, 1200);
+        // تنفيذ الطباعة من نفس نافذة الفاتورة بعد اكتمال تحميل محتواها.
+        const doPrint = () => {
+            try {
+                printWindow.focus();
+                printWindow.print();
+            } catch (printError) {
+                console.error('BKL direct print error:', printError);
+                alert('تعذر تنفيذ الطباعة.');
+            }
+        };
+        if (printWindow.document.readyState === 'complete') {
+            setTimeout(doPrint, 150);
+        } else {
+            printWindow.onload = () => setTimeout(doPrint, 150);
+            setTimeout(doPrint, 800);
+        }
     } catch (e) {
         console.error('BKL invoice render error:', e);
         try { printWindow.close(); } catch (_) {}
         alert('تعذر تجهيز الفاتورة للطباعة.');
-        return false;
     }
-    return false;
 }
 
 window.printOrderInvoice = printOrderInvoice;
