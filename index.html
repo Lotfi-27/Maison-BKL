@@ -4031,7 +4031,7 @@ function printOrderInvoice(orderId, action = 'print') {
                         }
                     }, 150);
                 }
-                window.onload = function() { setTimeout(function(){ window.print(); }, 120); };
+                // تتم الطباعة من النافذة الأصلية بعد تجهيز محتوى الفاتورة.
             <\/script>
         
 
@@ -4079,9 +4079,31 @@ function printOrderInvoice(orderId, action = 'print') {
         alert('تعذر فتح نافذة الفاتورة.');
         return;
     }
-    printWindow.document.open();
-    printWindow.document.write(invoiceHtml);
-    printWindow.document.close();
+    try {
+        printWindow.document.open();
+        printWindow.document.write(invoiceHtml);
+        printWindow.document.close();
+        // تنفيذ الطباعة من نفس نافذة الفاتورة بعد اكتمال تحميل محتواها.
+        const doPrint = () => {
+            try {
+                printWindow.focus();
+                printWindow.print();
+            } catch (printError) {
+                console.error('BKL direct print error:', printError);
+                alert('تعذر تنفيذ الطباعة.');
+            }
+        };
+        if (printWindow.document.readyState === 'complete') {
+            setTimeout(doPrint, 150);
+        } else {
+            printWindow.onload = () => setTimeout(doPrint, 150);
+            setTimeout(doPrint, 800);
+        }
+    } catch (e) {
+        console.error('BKL invoice render error:', e);
+        try { printWindow.close(); } catch (_) {}
+        alert('تعذر تجهيز الفاتورة للطباعة.');
+    }
 }
 
 window.printOrderInvoice = printOrderInvoice;
