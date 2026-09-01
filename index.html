@@ -8390,15 +8390,17 @@ footer button{
                             window.opener.focus();
                         }
                     } catch (e) {}
+
+                    // الرجوع إلى الصفحة السابقة فقط.
+                    // لا نستخدم window.close() حتى لا يتم إغلاق المتجر.
                     try {
                         if (window.history.length > 1) {
                             window.history.back();
                             return false;
                         }
                     } catch (e) {}
-                    try {
-                        window.close();
-                    } catch (e) {}
+
+                    // إذا لم توجد صفحة سابقة، ابقَ في نافذة العرض ولا تغلق المتجر.
                     return false;
                 }
             <\/script></body></html>`);
