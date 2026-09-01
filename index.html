@@ -8253,44 +8253,89 @@ function openCreditDebtorsRegistryViewer() {
 
 function printCreditDebtorsRegistry() {
     const content = document.getElementById('creditRegistryPrintable');
-    if (!content) return;
+    if (!content) {
+        alert('تعذر العثور على سجل الكريدي للطباعة.');
+        return;
+    }
 
-    const printWindow = window.open('', '_blank', 'width=900,height=700');
-    if (!printWindow) return;
+    // Print from the current page instead of opening a new window.
+    // This is much more reliable on phones and avoids popup blockers.
+    const oldPrint = document.getElementById('creditRegistryPrintArea');
+    if (oldPrint) oldPrint.remove();
 
-    printWindow.document.write(`
-      <!doctype html>
-      <html lang="ar" dir="rtl">
-      <head>
-        <meta charset="UTF-8">
-        <title>سجل أصحاب الكريدي المستحقين</title>
-        <style>
-          *{box-sizing:border-box}
-          body{font-family:Arial,Tahoma,sans-serif;margin:0;padding:18px;background:#fff;color:#171717}
-          h1{font-size:20px;margin:0 0 6px}
-          .print-title{margin-bottom:16px;border-bottom:2px solid #222;padding-bottom:10px}
-          .credit-registry-card{border:1px solid #ddd;border-radius:12px;padding:12px;margin:8px 0;break-inside:avoid}
-          .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-          .grid > div{padding:8px;border-radius:8px;background:#f7f7f7}
-          .text-red-700{color:#b91c1c}.text-emerald-700{color:#047857}.text-amber-700{color:#b45309}
-          .text-sm{font-size:14px}.text-xs{font-size:12px}.text-lg{font-size:18px}
-          .font-black,.font-bold{font-weight:800}
-          .no-print,details summary{display:none!important}
-          @media print{body{padding:8mm}.credit-registry-card{box-shadow:none}}
-        </style>
-      </head>
-      <body>
-        <div class="print-title">
-          <h1>سجل أصحاب الكريدي المستحقين</h1>
-          <div>تاريخ الطباعة: ${new Date().toLocaleDateString('fr-FR')}</div>
-        </div>
-        ${content.innerHTML}
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
+    const printArea = document.createElement('div');
+    printArea.id = 'creditRegistryPrintArea';
+    printArea.innerHTML = `
+      <div class="credit-print-header" dir="rtl">
+        <h1>سجل أصحاب الكريدي المستحقين</h1>
+        <div>التاريخ: ${escapeOrderHtml(getCurrentFullDateTime())}</div>
+      </div>
+      ${content.innerHTML}
+    `;
+    document.body.appendChild(printArea);
+
+    const style = document.createElement('style');
+    style.id = 'creditRegistryPrintStyle';
+    style.textContent = `
+      @media print {
+        body > *:not(#creditRegistryPrintArea) { display: none !important; }
+        #creditRegistryPrintArea {
+          display: block !important;
+          position: static !important;
+          width: 100% !important;
+          padding: 8mm !important;
+          background: #fff !important;
+          color: #111 !important;
+          direction: rtl !important;
+          font-family: Arial, Tahoma, sans-serif !important;
+        }
+        #creditRegistryPrintArea .no-print,
+        #creditRegistryPrintArea details summary { display: none !important; }
+        #creditRegistryPrintArea details { display: block !important; }
+        #creditRegistryPrintArea .credit-registry-card {
+          break-inside: avoid !important;
+          page-break-inside: avoid !important;
+          border: 1px solid #d4d4d4 !important;
+          border-radius: 12px !important;
+          margin: 8px 0 !important;
+          padding: 12px !important;
+          box-shadow: none !important;
+        }
+        #creditRegistryPrintArea .grid {
+          display: grid !important;
+          grid-template-columns: repeat(4, 1fr) !important;
+          gap: 8px !important;
+        }
+        #creditRegistryPrintArea .credit-print-header {
+          display: block !important;
+          border-bottom: 2px solid #222 !important;
+          margin-bottom: 14px !important;
+          padding-bottom: 10px !important;
+        }
+        #creditRegistryPrintArea .credit-print-header h1 {
+          font-size: 20px !important;
+          margin: 0 0 5px !important;
+        }
+      }
+      #creditRegistryPrintArea { display: none; }
+    `;
+    document.head.appendChild(style);
+
+    const cleanup = () => {
+        printArea.remove();
+        style.remove();
+        window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+
+    // Let the browser finish laying out the print area before opening print UI.
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            window.print();
+            // Some mobile browsers don't fire afterprint reliably.
+            setTimeout(cleanup, 2000);
+        });
+    });
 }
 
 function renderOwnerCreditLedger() {
