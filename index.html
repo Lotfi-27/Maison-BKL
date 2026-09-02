@@ -4192,12 +4192,35 @@ function printOrderInvoice(orderId, action = 'print') {
                     .invoice-actions button { width: 100%; }
                 }
                 @media print {
-                    body { padding: 0; }
+                    * {
+                        color: #000000 !important;
+                        font-weight: 700 !important;
+                        text-shadow: none !important;
+                    }
+                    body {
+                        padding: 0;
+                        color: #000000 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                     .invoice-actions { display: none !important; }
                     .invoice-box {
                         border: none;
                         box-shadow: none;
                         max-width: none;
+                        color: #000000 !important;
+                    }
+                    .header, .info-box, .summary, .summary-row, table, tr, td, th {
+                        position: relative;
+                        z-index: 1;
+                    }
+                    .bkl-customer-tint {
+                        position: relative;
+                        z-index: 0;
+                    }
+                    .bkl-customer-color, .summary-row.total, table th {
+                        color: #000000 !important;
+                        font-weight: 700 !important;
                     }
                 }
             </style>
@@ -4336,7 +4359,7 @@ function printOrderInvoice(orderId, action = 'print') {
 
     const bklInvoiceColor = typeof bklGetCustomerColor==='function' ? bklGetCustomerColor(order) : '#000000';
     const bklInvoiceTint = typeof bklMixColor==='function' ? bklMixColor(bklInvoiceColor,0.08) : '#ffffff';
-    invoiceHtml = invoiceHtml.replace('</head>', `<style>body{border-top:7px solid ${bklInvoiceColor}!important} .bkl-customer-color{color:${bklInvoiceColor}!important} .bkl-customer-tint{background:${bklInvoiceTint}!important;border-color:${bklInvoiceColor}!important} .header{border-bottom-color:${bklInvoiceColor}!important} table th{background:${bklInvoiceColor}!important} .summary-row.total{color:${bklInvoiceColor}!important}</style></head>`);
+    invoiceHtml = invoiceHtml.replace('</head>', `<style>body{border-top:7px solid ${bklInvoiceColor}!important} .bkl-customer-color{color:${bklInvoiceColor}!important} .bkl-customer-tint{background:${bklInvoiceTint}!important;border-color:${bklInvoiceColor}!important} .header{border-bottom-color:${bklInvoiceColor}!important} table th{background:${bklInvoiceColor}!important} .summary-row.total{color:${bklInvoiceColor}!important} @media print{*{color:#000000!important;font-weight:700!important;text-shadow:none!important}.bkl-customer-color,.summary-row.total,table th{color:#000000!important;font-weight:700!important}}</style></head>`);
 
     if (action === 'save') {
         const filename = `فاتورة-${String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_')}.html`;
