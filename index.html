@@ -2419,6 +2419,22 @@ async function getComplaintMediaBlob(id) {
     return value && value.blob ? value.blob : null;
 }
 
+async function deleteComplaintMediaBlob(id) {
+    if (!id) return;
+    try {
+        const db = await openComplaintMediaDB();
+        await new Promise((resolve, reject) => {
+            const tx = db.transaction('media', 'readwrite');
+            tx.objectStore('media').delete(id);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error || new Error('تعذر حذف الصورة'));
+        });
+        db.close();
+    } catch (e) {
+        console.error('تعذر حذف ملف المحادثة:', e);
+    }
+}
+
 async function migrateComplaintLegacyMediaToIndexedDB() {
     const complaints = Array.isArray(storeComplaints) ? storeComplaints : [];
     let changed = false;
@@ -2445,9 +2461,10 @@ async function migrateComplaintLegacyMediaToIndexedDB() {
     return changed;
 }
 
-async function getChatMessageMediaHtml(msg, ownerView) {
+async function getChatMessageMediaHtml(msg, ownerView, complaintId, messageIndex) {
     const media = Array.isArray(msg.media) ? msg.media : [];
     if (!media.length) return '';
+    const safeComplaintId = encodeURIComponent(String(complaintId || ''));
     const parts = await Promise.all(media.map(async (file, index) => {
         const type = String(file.type || '');
         let src = String(file.data || file.url || file.src || '');
@@ -2459,54 +2476,62 @@ async function getChatMessageMediaHtml(msg, ownerView) {
                 console.error('تعذر قراءة الصورة من مساحة الملفات:', e);
             }
         }
-        const name = escapeChatHtml(file.name || `ملف ${index + 1}`);
+        const name = escapeChatHtml(file.name || ('ملف ' + (index + 1)));
         if (!src) return '';
+        const deleteButton = '<button type="button" onclick="deleteComplaintMessageMedia(\'' + safeComplaintId + '\',' + messageIndex + ',' + index + ')" class="mt-1 text-[9px] font-bold underline opacity-80 hover:opacity-100" title="حذف الوسائط">🗑 حذف الوسائط</button>';
         if (type.startsWith('image/')) {
-            return `<a href="${src}" target="_blank" rel="noopener" class="block"><img src="${src}" alt="${name}" class="max-w-full max-h-64 rounded-xl object-contain bg-black/5 border border-white/20"></a>`;
+            return '<div class="flex flex-col items-start gap-1"><a href="' + src + '" target="_blank" rel="noopener" class="block"><img src="' + src + '" alt="' + name + '" class="max-w-full max-h-64 rounded-xl object-contain bg-black/5 border border-white/20"></a>' + deleteButton + '</div>';
         }
         if (type.startsWith('video/')) {
-            return `<video controls preload="metadata" class="max-w-full max-h-64 rounded-xl bg-black" src="${src}"></video>`;
+            return '<div class="flex flex-col items-start gap-1"><video controls preload="metadata" class="max-w-full max-h-64 rounded-xl bg-black" src="' + src + '"></video>' + deleteButton + '</div>';
         }
-        return `<a href="${src}" target="_blank" rel="noopener" class="underline font-bold text-xs">📎 ${name}</a>`;
+        return '<div class="flex flex-col items-start gap-1"><a href="' + src + '" target="_blank" rel="noopener" class="underline font-bold text-xs">📎 ' + name + '</a>' + deleteButton + '</div>';
     }));
-    return `<div class="mt-2 space-y-2">${parts.join('')}</div>`;
+    return '<div class="mt-2 space-y-2">' + parts.join('') + '</div>';
 }
 
-function chatReadFileAsDataURL(file) {
-    return new Promise((resolve, reject) => {
-        if (file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = () => {
-                const img = new Image();
-                img.onload = () => {
-                    const maxSide = 1280;
-                    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
-                    const canvas = document.createElement('canvas');
-                    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-                    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-                    const ctx = canvas.getContext('2d', { alpha: false });
-                    if (!ctx) return reject(new Error('تعذر تجهيز الصورة'));
-                    ctx.fillStyle = '#fff';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    canvas.toBlob(async blob => {
-                        if (!blob) return reject(new Error('تعذر ضغط الصورة'));
-                        try {
-                            const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
-                            resolve(await saveComplaintMediaBlob(blob, { name, type: 'image/jpeg' }));
-                        } catch (e) { reject(e); }
-                    }, 'image/jpeg', 0.78);
-                };
-                img.onerror = () => reject(new Error('تعذر قراءة الصورة'));
-                img.src = reader.result;
-            };
-            reader.onerror = () => reject(new Error('تعذر قراءة الصورة'));
-            reader.readAsDataURL(file);
-            return;
+async function chatReadFileAsDataURL(file) {
+    if (file.type.startsWith('image/')) {
+        let source = null;
+        if (typeof createImageBitmap === 'function') {
+            try {
+                source = await createImageBitmap(file, { imageOrientation: 'from-image' });
+            } catch (_) {}
         }
-        saveComplaintMediaBlob(file, { name: file.name || 'video', type: file.type })
-            .then(resolve).catch(reject);
-    });
+        if (!source) {
+            source = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error('تعذر قراءة الصورة'));
+                    img.src = reader.result;
+                };
+                reader.onerror = () => reject(new Error('تعذر قراءة الصورة'));
+                reader.readAsDataURL(file);
+            });
+        }
+        const width = source.width || source.naturalWidth;
+        const height = source.height || source.naturalHeight;
+        const maxSide = 1280;
+        const scale = Math.min(1, maxSide / Math.max(width, height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) throw new Error('تعذر تجهيز الصورة');
+        // لا يوجد انعكاس للصورة. يتم احترام اتجاه الصورة الأصلي عند التقاطها بالكاميرا.
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        if (source.close) source.close();
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob(b => b ? resolve(b) : reject(new Error('تعذر ضغط الصورة')), 'image/jpeg', 0.82);
+        });
+        const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+        return await saveComplaintMediaBlob(blob, { name, type: 'image/jpeg' });
+    }
+    return await saveComplaintMediaBlob(file, { name: file.name || 'video', type: file.type });
 }
 
 async function collectChatAttachments(inputId) {
@@ -2718,16 +2743,16 @@ async function renderComplaintChatMessages(complaint) {
     ensureComplaintMessages(complaint);
     const messages = complaint.messages;
     if (!messages.length) { container.innerHTML = `<div class="text-center text-neutral-400 py-6">لا توجد رسائل سابقة في هذه الشكوى</div>`; return; }
-    container.innerHTML = (await Promise.all(messages.map(async msg => {
+    container.innerHTML = (await Promise.all(messages.map(async (msg, messageIndex) => {
         const isOwner = msg.sender === 'owner';
-        const mediaHtml = await getChatMessageMediaHtml(msg, true);
+        const mediaHtml = await getChatMessageMediaHtml(msg, true, complaint.id, messageIndex);
         return `
             <div class="flex flex-col ${isOwner ? 'items-end' : 'items-start'}">
                 <div class="max-w-[82%] rounded-2xl p-2.5 ${isOwner ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-none'} shadow-sm">
                     ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
                     ${mediaHtml}
                 </div>
-                <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span>
+                <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span> <button type="button" onclick="deleteComplaintMessage('${encodeURIComponent(String(complaint.id))}',${messageIndex})" class="text-[9px] text-red-500 hover:text-red-700 font-bold ml-1" title="حذف الرسالة">🗑 حذف</button>
             </div>`;
     }))).join('');
     container.scrollTop = container.scrollHeight;
@@ -2862,15 +2887,15 @@ async function renderCustomerComplaintChatMessages(complaint) {
     ensureComplaintMessages(complaint);
     const messages = complaint.messages;
     if (!messages.length) { container.innerHTML = '<div class="text-center text-neutral-400 py-6">لا توجد رسائل</div>'; return; }
-    container.innerHTML = (await Promise.all(messages.map(async msg => {
+    container.innerHTML = (await Promise.all(messages.map(async (msg, messageIndex) => {
         const fromOwner = msg.sender === 'owner';
-        const mediaHtml = await getChatMessageMediaHtml(msg, false);
+        const mediaHtml = await getChatMessageMediaHtml(msg, false, complaint.id, messageIndex);
         return `<div class="flex flex-col ${fromOwner ? 'items-start' : 'items-end'}">
             <div class="max-w-[82%] rounded-2xl p-2.5 ${fromOwner ? 'bg-indigo-600 text-white rounded-bl-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-br-none'} shadow-sm">
                 ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
                 ${mediaHtml}
             </div>
-            <span class="text-[9px] text-neutral-400 mt-1 px-1">${fromOwner ? 'صاحب المتجر' : 'أنت'} • ${escapeChatHtml(msg.time || '')}</span>
+            <span class="text-[9px] text-neutral-400 mt-1 px-1">${fromOwner ? 'صاحب المتجر' : 'أنت'} • ${escapeChatHtml(msg.time || '')}</span> <button type="button" onclick="deleteComplaintMessage('${encodeURIComponent(String(complaint.id))}',${messageIndex})" class="text-[9px] text-red-500 hover:text-red-700 font-bold ml-1" title="حذف الرسالة">🗑 حذف</button>
         </div>`;
     }))).join('');
     container.scrollTop = container.scrollHeight;
@@ -2916,6 +2941,59 @@ async function sendCustomerComplaintMessage() {
     renderCustomerComplaintChats();
     if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
                 if (typeof renderCustomerCreditLedger === 'function') renderCustomerCreditLedger();
+}
+
+async function deleteComplaintMessage(complaintId, messageIndex) {
+    const id = decodeURIComponent(String(complaintId || ''));
+    if (!id) return;
+    if (!confirm('هل تريد حذف هذه الرسالة وجميع الصور المرفقة بها؟')) return;
+    refreshComplaintChatFromStorage();
+    const complaint = storeComplaints.find(c => String(c.id) === String(id));
+    if (!complaint || !Array.isArray(complaint.messages)) return;
+    const index = Number(messageIndex);
+    const msg = complaint.messages[index];
+    if (!msg) return;
+    if (Array.isArray(msg.media)) {
+        for (const file of msg.media) {
+            if (file && file.storage === 'indexeddb' && file.id) await deleteComplaintMediaBlob(file.id);
+        }
+    }
+    complaint.messages.splice(index, 1);
+    if (!saveComplaintChatData()) return;
+    if (String(window.activeCustomerComplaintChatId || '') === id) {
+        await renderCustomerComplaintChatMessages(complaint);
+        renderCustomerComplaintChats();
+    }
+    if (String(typeof activeComplaintChatId !== 'undefined' ? activeComplaintChatId : '') === id) {
+        await renderComplaintChatMessages(complaint);
+        if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+    }
+}
+
+async function deleteComplaintMessageMedia(complaintId, messageIndex, mediaIndex) {
+    const id = decodeURIComponent(String(complaintId || ''));
+    if (!id) return;
+    if (!confirm('هل تريد حذف هذه الصورة/الوسائط؟')) return;
+    refreshComplaintChatFromStorage();
+    const complaint = storeComplaints.find(c => String(c.id) === String(id));
+    if (!complaint || !Array.isArray(complaint.messages)) return;
+    const msg = complaint.messages[Number(messageIndex)];
+    if (!msg || !Array.isArray(msg.media)) return;
+    const index = Number(mediaIndex);
+    const file = msg.media[index];
+    if (!file) return;
+    if (file.storage === 'indexeddb' && file.id) await deleteComplaintMediaBlob(file.id);
+    msg.media.splice(index, 1);
+    if (!msg.text && msg.media.length === 0) complaint.messages.splice(Number(messageIndex), 1);
+    if (!saveComplaintChatData()) return;
+    if (String(window.activeCustomerComplaintChatId || '') === id) {
+        await renderCustomerComplaintChatMessages(complaint);
+        renderCustomerComplaintChats();
+    }
+    if (String(typeof activeComplaintChatId !== 'undefined' ? activeComplaintChatId : '') === id) {
+        await renderComplaintChatMessages(complaint);
+        if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+    }
 }
 
 function closeCustomerComplaintChat() {
