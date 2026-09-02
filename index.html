@@ -2577,13 +2577,17 @@ function buildChatComposer(prefix, sendFunction) {
     return `
         <div class="pt-3 border-t border-neutral-100 mt-2">
             <div id="${prefix}-attachment-preview" class="flex flex-wrap gap-1 mb-2"></div>
-            <div class="flex gap-2 items-center">
-                <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold px-3 py-2.5 rounded-xl text-xs cursor-pointer" title="اختيار صورة أو فيديو من الهاتف">📎</label>
-                <input id="${prefix}-file-input" type="file" accept="image/*,video/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
-                <label for="${prefix}-camera-input" class="shrink-0 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold px-3 py-2.5 rounded-xl text-xs cursor-pointer" title="التقاط صورة بالكاميرا">📷</label>
-                <input id="${prefix}-camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="renderChatAttachmentPreview('${prefix}-camera-input','${prefix}-attachment-preview')">
-                <input id="${prefix}-text-input" type="text" placeholder="اكتب رسالتك..." class="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 text-xs outline-none focus:border-indigo-500" onkeypress="if(event.key === 'Enter') ${sendFunction}()">
-                <button type="button" onclick="${sendFunction}()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer">إرسال</button>
+            <div class="flex flex-col gap-2">
+                <textarea id="${prefix}-text-input" rows="2" placeholder="اكتب رسالتك..." class="w-full min-h-[72px] bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-sm leading-6 outline-none focus:border-indigo-500 resize-none" onkeydown="if(event.key === 'Enter' && !event.shiftKey){event.preventDefault(); ${sendFunction}();}"></textarea>
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <label for="${prefix}-file-input" class="shrink-0 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 text-neutral-700 font-bold px-3 py-2.5 rounded-xl text-xs cursor-pointer" title="اختيار صورة أو فيديو من الهاتف">📎</label>
+                        <input id="${prefix}-file-input" type="file" accept="image/*,video/*" multiple class="hidden" onchange="renderChatAttachmentPreview('${prefix}-file-input','${prefix}-attachment-preview')">
+                        <label for="${prefix}-camera-input" class="shrink-0 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold px-3 py-2.5 rounded-xl text-xs cursor-pointer" title="التقاط صورة بالكاميرا">📷</label>
+                        <input id="${prefix}-camera-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="renderChatAttachmentPreview('${prefix}-camera-input','${prefix}-attachment-preview')">
+                    </div>
+                    <button type="button" onclick="${sendFunction}()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs cursor-pointer shadow-sm">إرسال</button>
+                </div>
             </div>
             <div class="text-[9px] text-neutral-400 mt-1">يمكن إرسال نصوص وصور وفيديوهات.</div>
         </div>`;
