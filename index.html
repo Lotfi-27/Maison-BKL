@@ -2600,6 +2600,18 @@ function buildChatComposer(prefix, sendFunction) {
         </div>`;
 }
 
+
+function clearChatComposer(prefix) {
+    const input = document.getElementById(prefix + '-text-input');
+    if (input) { input.value = ''; input.focus(); }
+    const fileInput = document.getElementById(prefix + '-file-input');
+    if (fileInput) fileInput.value = '';
+    const cameraInput = document.getElementById(prefix + '-camera-input');
+    if (cameraInput) cameraInput.value = '';
+    const preview = document.getElementById(prefix + '-attachment-preview');
+    if (preview) preview.innerHTML = '';
+}
+
 function ensureComplaintMessages(complaint) {
     if (!Array.isArray(complaint.messages)) complaint.messages = [];
     if (!complaint.messages.length && (complaint.details || complaint.text)) {
@@ -2818,12 +2830,8 @@ async function sendComplaintReply() {
         }
     }
 
-    if (input) input.value = '';
-    if (fileInput) fileInput.value = '';
-    const cameraInput = document.getElementById('owner-chat-camera-input');
-    if (cameraInput) cameraInput.value = '';
-    const preview = document.getElementById('owner-chat-attachment-preview');
-    if (preview) preview.innerHTML = '';
+    // تفريغ حقل الكتابة والمرفقات بعد نجاح الإرسال.
+    clearChatComposer('owner-chat');
     renderComplaintChatMessages(complaint);
     renderOwnerDashboardData();
 }
@@ -2941,13 +2949,8 @@ async function sendCustomerComplaintMessage() {
         addLogActivity(`العميل (${complaint.customerName || currentLoggedInCustomer.firstname || 'زبون'})`, `إرسال رسالة جديدة في الشكوى #${complaint.id}`, typeof currentBranchId !== 'undefined' ? currentBranchId : null);
     }
 
-    input.value = '';
-    const fileInput = document.getElementById('customer-chat-file-input');
-    if (fileInput) fileInput.value = '';
-    const cameraInput = document.getElementById('customer-chat-camera-input');
-    if (cameraInput) cameraInput.value = '';
-    const preview = document.getElementById('customer-chat-attachment-preview');
-    if (preview) preview.innerHTML = '';
+    // تفريغ حقل الكتابة والمرفقات بعد نجاح الإرسال.
+    clearChatComposer('customer-chat');
     renderCustomerComplaintChatMessages(complaint);
     renderCustomerComplaintChats();
     if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
