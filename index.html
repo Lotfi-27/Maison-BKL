@@ -2382,12 +2382,83 @@ function escapeChatHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
-function getChatMessageMediaHtml(msg, ownerView) {
+function openComplaintMediaDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('store_complaint_media', 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains('media')) db.createObjectStore('media');
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('تعذر فتح مساحة الصور'));
+    });
+}
+
+async function saveComplaintMediaBlob(blob, meta = {}) {
+    const id = 'media_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    const db = await openComplaintMediaDB();
+    await new Promise((resolve, reject) => {
+        const tx = db.transaction('media', 'readwrite');
+        tx.objectStore('media').put({ blob, name: meta.name || 'media', type: meta.type || blob.type || 'application/octet-stream' }, id);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error || new Error('تعذر حفظ الصورة'));
+    });
+    db.close();
+    return { id, name: meta.name || 'media', type: meta.type || blob.type || '', size: blob.size, storage: 'indexeddb' };
+}
+
+async function getComplaintMediaBlob(id) {
+    const db = await openComplaintMediaDB();
+    const value = await new Promise((resolve, reject) => {
+        const tx = db.transaction('media', 'readonly');
+        const req = tx.objectStore('media').get(id);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return value && value.blob ? value.blob : null;
+}
+
+async function migrateComplaintLegacyMediaToIndexedDB() {
+    const complaints = Array.isArray(storeComplaints) ? storeComplaints : [];
+    let changed = false;
+    for (const complaint of complaints) {
+        if (!Array.isArray(complaint.messages)) continue;
+        for (const msg of complaint.messages) {
+            if (!Array.isArray(msg.media)) continue;
+            for (let i = 0; i < msg.media.length; i++) {
+                const file = msg.media[i];
+                if (!file || !file.data || !String(file.data).startsWith('data:')) continue;
+                try {
+                    const response = await fetch(file.data);
+                    const blob = await response.blob();
+                    const ref = await saveComplaintMediaBlob(blob, file);
+                    msg.media[i] = ref;
+                    changed = true;
+                } catch (e) {
+                    console.error('تعذر نقل صورة قديمة إلى مساحة الملفات:', e);
+                }
+            }
+        }
+    }
+    if (changed) saveComplaintChatData();
+    return changed;
+}
+
+async function getChatMessageMediaHtml(msg, ownerView) {
     const media = Array.isArray(msg.media) ? msg.media : [];
     if (!media.length) return '';
-    return `<div class="mt-2 space-y-2">${media.map((file, index) => {
+    const parts = await Promise.all(media.map(async (file, index) => {
         const type = String(file.type || '');
-        const src = String(file.data || file.url || file.src || '');
+        let src = String(file.data || file.url || file.src || '');
+        if (!src && file.storage === 'indexeddb' && file.id) {
+            try {
+                const blob = await getComplaintMediaBlob(file.id);
+                if (blob) src = URL.createObjectURL(blob);
+            } catch (e) {
+                console.error('تعذر قراءة الصورة من مساحة الملفات:', e);
+            }
+        }
         const name = escapeChatHtml(file.name || `ملف ${index + 1}`);
         if (!src) return '';
         if (type.startsWith('image/')) {
@@ -2397,20 +2468,18 @@ function getChatMessageMediaHtml(msg, ownerView) {
             return `<video controls preload="metadata" class="max-w-full max-h-64 rounded-xl bg-black" src="${src}"></video>`;
         }
         return `<a href="${src}" target="_blank" rel="noopener" class="underline font-bold text-xs">📎 ${name}</a>`;
-    }).join('')}</div>`;
+    }));
+    return `<div class="mt-2 space-y-2">${parts.join('')}</div>`;
 }
 
 function chatReadFileAsDataURL(file) {
     return new Promise((resolve, reject) => {
-        // الصور تُضغط بقوة قبل تخزينها لأن المحادثات تعتمد على localStorage،
-        // ونسخ نفس المحادثة في أكثر من مفتاح كان يجعل الحصة تمتلئ سريعاً.
         if (file.type.startsWith('image/')) {
             const reader = new FileReader();
             reader.onload = () => {
                 const img = new Image();
                 img.onload = () => {
-                    const maxSide = 1024;
-                    const maxBlobBytes = 350 * 1024;
+                    const maxSide = 1280;
                     const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
                     const canvas = document.createElement('canvas');
                     canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -2420,47 +2489,23 @@ function chatReadFileAsDataURL(file) {
                     ctx.fillStyle = '#fff';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                    // جرّب عدة درجات جودة حتى تبقى الصورة صغيرة بما يكفي
-                    // للعمل على الهاتف وحتى لا يفشل حفظ الرسالة بسبب quota.
-                    const qualities = [0.68, 0.58, 0.48, 0.38];
-                    const makeBlob = (i) => {
-                        canvas.toBlob(blob => {
-                            if (!blob) return reject(new Error('تعذر ضغط الصورة'));
-                            if (blob.size <= maxBlobBytes || i === qualities.length - 1) {
-                                const r = new FileReader();
-                                r.onload = () => resolve({
-                                    name: (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg',
-                                    type: 'image/jpeg',
-                                    size: blob.size,
-                                    data: r.result
-                                });
-                                r.onerror = reject;
-                                r.readAsDataURL(blob);
-                            } else {
-                                makeBlob(i + 1);
-                            }
-                        }, 'image/jpeg', qualities[i]);
-                    };
-                    makeBlob(0);
+                    canvas.toBlob(async blob => {
+                        if (!blob) return reject(new Error('تعذر ضغط الصورة'));
+                        try {
+                            const name = (file.name || 'photo').replace(/\.[^.]+$/, '') + '.jpg';
+                            resolve(await saveComplaintMediaBlob(blob, { name, type: 'image/jpeg' }));
+                        } catch (e) { reject(e); }
+                    }, 'image/jpeg', 0.78);
                 };
                 img.onerror = () => reject(new Error('تعذر قراءة الصورة'));
                 img.src = reader.result;
             };
-            reader.onerror = reject;
+            reader.onerror = () => reject(new Error('تعذر قراءة الصورة'));
             reader.readAsDataURL(file);
             return;
         }
-
-        const reader = new FileReader();
-        reader.onload = () => resolve({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            data: reader.result
-        });
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
+        saveComplaintMediaBlob(file, { name: file.name || 'video', type: file.type })
+            .then(resolve).catch(reject);
     });
 }
 
@@ -2539,22 +2584,17 @@ function ensureComplaintMessages(complaint) {
 }
 
 function saveComplaintChatData() {
-    // مفتاح واحد هو المصدر الأساسي. حفظ نفس البيانات ثلاث مرات كان يستهلك
-    // مساحة localStorage ويؤدي إلى فشل حفظ الرسائل التي تحتوي على صور.
+    // بيانات الصور/الفيديوهات تُحفظ في IndexedDB، بينما localStorage يحتفظ بالرسائل والروابط فقط.
     const data = Array.isArray(storeComplaints) ? storeComplaints : [];
     try {
         const serialized = JSON.stringify(data);
-
-        // نحذف النسخ القديمة أولاً حتى نحرر المساحة قبل حفظ النسخة الجديدة.
         localStorage.removeItem('storeComplaints');
         localStorage.removeItem('complaints_data');
         localStorage.setItem('store_complaints', serialized);
         return true;
     } catch (e) {
         console.error('تعذر حفظ محادثة الشكاوى:', e);
-        try {
-            alert('تعذر حفظ الصورة. مساحة التخزين في المتصفح ممتلئة. أعد تحميل الصفحة ثم حاول مرة أخرى.');
-        } catch (_) {}
+        try { alert('تعذر حفظ بيانات المحادثة. مساحة تخزين المتصفح ممتلئة.'); } catch (_) {}
         return false;
     }
 }
@@ -2664,22 +2704,24 @@ function closeComplaintChat() {
     activeComplaintChatId = null;
 }
 
-function renderComplaintChatMessages(complaint) {
+async function renderComplaintChatMessages(complaint) {
     const container = document.getElementById('chat-messages-container');
     if (!container) return;
     ensureComplaintMessages(complaint);
     const messages = complaint.messages;
-    container.innerHTML = messages.length ? messages.map(msg => {
+    if (!messages.length) { container.innerHTML = `<div class="text-center text-neutral-400 py-6">لا توجد رسائل سابقة في هذه الشكوى</div>`; return; }
+    container.innerHTML = (await Promise.all(messages.map(async msg => {
         const isOwner = msg.sender === 'owner';
+        const mediaHtml = await getChatMessageMediaHtml(msg, true);
         return `
             <div class="flex flex-col ${isOwner ? 'items-end' : 'items-start'}">
                 <div class="max-w-[82%] rounded-2xl p-2.5 ${isOwner ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-none'} shadow-sm">
                     ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
-                    ${getChatMessageMediaHtml(msg, true)}
+                    ${mediaHtml}
                 </div>
                 <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span>
             </div>`;
-    }).join('') : `<div class="text-center text-neutral-400 py-6">لا توجد رسائل سابقة في هذه الشكوى</div>`;
+    }))).join('');
     container.scrollTop = container.scrollHeight;
 }
 
@@ -2692,6 +2734,7 @@ async function sendComplaintReply() {
     if (!text && !media.length) return;
 
     refreshComplaintChatFromStorage();
+    await migrateComplaintLegacyMediaToIndexedDB();
     const complaint = storeComplaints.find(c => String(c.id) === String(activeComplaintChatId));
     if (!complaint) return;
     ensureComplaintMessages(complaint);
@@ -2805,21 +2848,23 @@ function openCustomerComplaintChat(complaintId) {
     renderCustomerComplaintChats();
 }
 
-function renderCustomerComplaintChatMessages(complaint) {
+async function renderCustomerComplaintChatMessages(complaint) {
     const container = document.getElementById('customer-chat-messages');
     if (!container) return;
     ensureComplaintMessages(complaint);
     const messages = complaint.messages;
-    container.innerHTML = messages.length ? messages.map(msg => {
+    if (!messages.length) { container.innerHTML = '<div class="text-center text-neutral-400 py-6">لا توجد رسائل</div>'; return; }
+    container.innerHTML = (await Promise.all(messages.map(async msg => {
         const fromOwner = msg.sender === 'owner';
+        const mediaHtml = await getChatMessageMediaHtml(msg, false);
         return `<div class="flex flex-col ${fromOwner ? 'items-start' : 'items-end'}">
             <div class="max-w-[82%] rounded-2xl p-2.5 ${fromOwner ? 'bg-indigo-600 text-white rounded-bl-none' : 'bg-white text-neutral-800 border border-neutral-200 rounded-br-none'} shadow-sm">
                 ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
-                ${getChatMessageMediaHtml(msg, false)}
+                ${mediaHtml}
             </div>
             <span class="text-[9px] text-neutral-400 mt-1 px-1">${fromOwner ? 'صاحب المتجر' : 'أنت'} • ${escapeChatHtml(msg.time || '')}</span>
         </div>`;
-    }).join('') : '<div class="text-center text-neutral-400 py-6">لا توجد رسائل</div>';
+    }))).join('');
     container.scrollTop = container.scrollHeight;
 }
 
@@ -2832,6 +2877,7 @@ async function sendCustomerComplaintMessage() {
     if (!text && !media.length) return;
 
     refreshComplaintChatFromStorage();
+    await migrateComplaintLegacyMediaToIndexedDB();
     const complaint = storeComplaints.find(c => String(c.id) === String(id));
     if (!complaint || !getCustomerComplaintsForAccount().some(c => String(c.id) === String(id))) return;
     ensureComplaintMessages(complaint);
