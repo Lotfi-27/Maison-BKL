@@ -878,6 +878,13 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 }
 </style>
 
+
+<style id="bkl-customer-class-colors">
+.bkl-customer-colored{transition:background .15s ease,border-color .15s ease,color .15s ease;}
+.bkl-customer-badge{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;padding:4px 9px;font-size:10px;font-weight:900;}
+#bkl-branch-customers-panel .bkl-color-settings{flex-wrap:wrap;}
+#bkl-branch-customers-panel .bkl-color-settings input[type=color]{width:28px;height:24px;}
+</style>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -3658,11 +3665,13 @@ function previewOrder(orderId) {
         return sum + unit * qty;
     }, 0);
     const total = subtotal + delivery;
+    const customerColor = bklGetCustomerColor(order);
+    const customerTint = bklMixColor(customerColor, 0.90);
 
     content.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bkl-customer-colored" style="border-inline-start:5px solid ${customerColor};background:linear-gradient(90deg,${customerTint},#fff 35%);padding:6px;border-radius:12px;">
             <div class="bg-neutral-50 border rounded-xl p-3 leading-7">
-                <strong>👤 بيانات الزبون</strong><br>
+                <strong style="color:${customerColor}">👤 بيانات الزبون</strong><br>
                 الاسم: ${escapeOrderEditorValue(order.customerName || 'زبون مجهول')}<br>
                 الهاتف: ${escapeOrderEditorValue(order.phone || 'غير محدد')}<br>
                 الولاية: ${escapeOrderEditorValue(order.state || 'غير محددة')}<br>
@@ -4195,14 +4204,14 @@ function printOrderInvoice(orderId, action = 'print') {
         </head>
         <body>
             <div class="invoice-box">
-                <div class="header">
-                    <div class="logo">Maison BKL - متجر السوق الذكي</div>
-                    <div class="title">فاتورة شراء رقم #${escapeHtml(order.id)}</div>
+                <div class="header bkl-customer-tint">
+                    <div class="logo bkl-customer-color">Maison BKL - متجر السوق الذكي</div>
+                    <div class="title bkl-customer-color">فاتورة شراء رقم #${escapeHtml(order.id)}</div>
                 </div>
 
                 <div class="info-section">
-                    <div class="info-box">
-                        <strong>معلومات الزبون:</strong><br>
+                    <div class="info-box bkl-customer-tint">
+                        <strong class="bkl-customer-color">معلومات الزبون:</strong><br>
                         الاسم واللقب: ${escapeHtml(customerName)}<br>
                         الهاتف: ${escapeHtml(customerPhone)}<br>
                         البلد: ${escapeHtml(country)}<br>
@@ -4327,7 +4336,7 @@ function printOrderInvoice(orderId, action = 'print') {
 
     const bklInvoiceColor = typeof bklGetCustomerColor==='function' ? bklGetCustomerColor(order) : '#000000';
     const bklInvoiceTint = typeof bklMixColor==='function' ? bklMixColor(bklInvoiceColor,0.08) : '#ffffff';
-    invoiceHtml = invoiceHtml.replace('</head>', `<style>body{border-top:7px solid ${bklInvoiceColor}!important} .bkl-customer-color{color:${bklInvoiceColor}!important} .bkl-customer-tint{background:${bklInvoiceTint}!important;border-color:${bklInvoiceColor}!important}</style></head>`);
+    invoiceHtml = invoiceHtml.replace('</head>', `<style>body{border-top:7px solid ${bklInvoiceColor}!important} .bkl-customer-color{color:${bklInvoiceColor}!important} .bkl-customer-tint{background:${bklInvoiceTint}!important;border-color:${bklInvoiceColor}!important} .header{border-bottom-color:${bklInvoiceColor}!important} table th{background:${bklInvoiceColor}!important} .summary-row.total{color:${bklInvoiceColor}!important}</style></head>`);
 
     if (action === 'save') {
         const filename = `فاتورة-${String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_')}.html`;
@@ -4510,8 +4519,8 @@ function openOwnerDashboard() {
       <option value="normal">العادي</option>
     </select>
     <div class="bkl-color-settings" title="ألوان تصنيفات الزبائن">
-      <label>VIP <input id="bkl-color-vip" type="color" value="#7c3aed" aria-label="لون VIP"></label>
-      <label>الخاص <input id="bkl-color-private" type="color" value="#2f6b4f" aria-label="لون الخاص"></label>
+      <label>VIP <input id="bkl-color-vip" type="color" value="#6366f1" aria-label="لون VIP" onchange="bklSaveCustomerClassColor('vip', this.value)"></label>
+      <label>الخاص <input id="bkl-color-private" type="color" value="#2f6b4f" aria-label="لون الخاص" onchange="bklSaveCustomerClassColor('private', this.value)"></label><label>العادي <input id="bkl-color-normal" type="color" value="#111111" aria-label="لون العادي" onchange="bklSaveCustomerClassColor('normal', this.value)"></label>
     </div>
   </div>
   <div class="bkl-bc-type-tabs">
@@ -7185,6 +7194,14 @@ function completeCheckoutOrder() {
             const typeEl = document.getElementById('bkl-customer-type-filter');
             if (!select || !body) return;
 
+            const classColors = bklGetCustomerColorSettings();
+            const vipColorEl = document.getElementById('bkl-color-vip');
+            const privateColorEl = document.getElementById('bkl-color-private');
+            const normalColorEl = document.getElementById('bkl-color-normal');
+            if (vipColorEl) vipColorEl.value = classColors.vip;
+            if (privateColorEl) privateColorEl.value = classColors.private;
+            if (normalColorEl) normalColorEl.value = classColors.normal;
+
             const branches = typeof getBranches === 'function' ? getBranches() : [];
             const customers = Array.isArray(registeredCustomers) ? registeredCustomers : [];
             const previousValue = String(select.value || 'all');
@@ -7232,12 +7249,14 @@ function completeCheckoutOrder() {
                 const branch = branches.find(b => String(b.id) === branchId);
                 const type = getCustomerType(c);
                 const typeLabel = type === 'vip' ? 'VIP' : type === 'private' ? 'الخاص' : 'العادي';
+                const customerColor = bklGetCustomerColor(c);
+                const customerTint = bklMixColor(customerColor, 0.90);
                 const discount = Math.min(75, Math.max(0, Number(c?.discount ?? c?.discountRate ?? 0) || 0));
                 const discountOptions = Array.from({length: 75}, (_, i) => i + 1)
                     .map(percent => `<option value="${percent}" ${discount === percent ? 'selected' : ''}>${percent}%</option>`).join('');
-                return `<tr>
+                return `<tr class="bkl-customer-colored" style="border-inline-start:5px solid ${customerColor};background:linear-gradient(90deg,${customerTint},#fff 35%);">
                     <td>${esc(`${c?.firstname || ''} ${c?.lastname || ''}`.trim() || '—')}</td>
-                    <td>${esc(typeLabel)}</td>
+                    <td><span class="bkl-customer-badge ${type}" style="color:${customerColor};border:1px solid ${customerColor};background:${customerTint};">${esc(typeLabel)}</span></td>
                     <td>
                         <select onchange="bklChangeCustomerDiscount(this.dataset.customerId, this.value)" data-customer-id="${esc(c?.id ?? c?.username ?? '')}" class="w-full min-w-[82px] text-[11px] font-bold border border-neutral-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300" title="نسبة الخصم من القيمة الإجمالية للفاتورة">
                             <option value="0" ${discount === 0 ? 'selected' : ''}>بدون خصم</option>
@@ -7271,6 +7290,71 @@ function completeCheckoutOrder() {
                 btn.classList.toggle('active', btn.getAttribute('data-bkl-type') === (type || 'all'));
             });
             renderBKLBranchCustomers();
+        }
+
+        // =====================================================
+        // ألوان تصنيف الزبائن: اللون ينتقل مع الزبون إلى الطلبات والفواتير والكريدي
+        // VIP = أزرق بنفسجي، الخاص = أخضر بندقي، العادي = أسود.
+        // =====================================================
+        function bklGetCustomerColorSettings() {
+            const defaults = { vip: '#6366f1', private: '#2f6b4f', normal: '#111111' };
+            try {
+                const saved = JSON.parse(localStorage.getItem('store_customer_class_colors') || '{}');
+                return {
+                    vip: /^#[0-9a-fA-F]{6}$/.test(saved.vip) ? saved.vip : defaults.vip,
+                    private: /^#[0-9a-fA-F]{6}$/.test(saved.private) ? saved.private : defaults.private,
+                    normal: /^#[0-9a-fA-F]{6}$/.test(saved.normal) ? saved.normal : defaults.normal
+                };
+            } catch (e) { return defaults; }
+        }
+
+        function bklGetCustomerTypeForColor(customer) {
+            if (!customer) return 'normal';
+            const raw = String(customer?.customerType ?? customer?.type ?? customer?.category ?? customer?.classification ?? 'normal').toLowerCase();
+            if (raw.includes('vip')) return 'vip';
+            if (raw.includes('private') || raw.includes('خاص')) return 'private';
+            return 'normal';
+        }
+
+        function bklGetCustomerColor(source) {
+            let customer = null;
+            if (source && (source.customerType || source.classification || source.customerId || source.customerName || source.phone || source.customerEmail || source.email)) {
+                if (Array.isArray(registeredCustomers)) {
+                    const id = String(source.customerId ?? source.id ?? '');
+                    const phone = String(source.phone ?? '');
+                    const email = String(source.customerEmail ?? source.email ?? '').toLowerCase();
+                    const name = String(source.customerName ?? source.customer ?? '').trim().toLowerCase();
+                    customer = registeredCustomers.find(c =>
+                        (id && String(c?.id ?? '') === id) ||
+                        (phone && String(c?.phone ?? '') === phone) ||
+                        (email && String(c?.email ?? '').toLowerCase() === email) ||
+                        (name && `${c?.firstname || ''} ${c?.lastname || ''}`.trim().toLowerCase() === name)
+                    ) || null;
+                }
+                if (!customer && (source.customerType || source.classification)) customer = source;
+            }
+            const type = bklGetCustomerTypeForColor(customer);
+            return bklGetCustomerColorSettings()[type];
+        }
+
+        function bklMixColor(hex, amount = 0.08) {
+            const clean = String(hex || '#111111').replace('#','');
+            if (!/^[0-9a-fA-F]{6}$/.test(clean)) return '#ffffff';
+            const n = parseInt(clean, 16);
+            const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+            const mix = v => Math.round(v + (255 - v) * Math.max(0, Math.min(1, amount)));
+            return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+        }
+
+        function bklSaveCustomerClassColor(type, color) {
+            if (!['vip','private','normal'].includes(type) || !/^#[0-9a-fA-F]{6}$/.test(String(color || ''))) return;
+            const colors = bklGetCustomerColorSettings();
+            colors[type] = String(color);
+            localStorage.setItem('store_customer_class_colors', JSON.stringify(colors));
+            try {
+                const owner = document.getElementById('owner-dashboard-modal');
+                if (owner && !owner.classList.contains('hidden')) { renderOrdersList(); renderCreditDebtorsRegistry(); }
+            } catch (e) {}
         }
 
         // البحث عن الزبون المسجل المرتبط بالطلب.
