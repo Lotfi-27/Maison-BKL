@@ -7174,6 +7174,87 @@ function completeCheckoutOrder() {
             localStorage.setItem('store_branches', JSON.stringify(branches));
         }
 
+        // قائمة الزبائن المسجلين حسب الفرع
+        function renderBKLBranchCustomers() {
+            const select = document.getElementById('bkl-branch-customers-select');
+            const body = document.getElementById('bkl-branch-customers-body');
+            const countEl = document.getElementById('bkl-branch-customers-count');
+            const searchEl = document.getElementById('bkl-branch-customers-search');
+            const typeEl = document.getElementById('bkl-customer-type-filter');
+            if (!select || !body) return;
+
+            const branches = typeof getBranches === 'function' ? getBranches() : [];
+            const customers = Array.isArray(registeredCustomers) ? registeredCustomers : [];
+            const previousValue = String(select.value || 'all');
+
+            // تعبئة قائمة الفروع دائماً من المصدر الموحد store_branches.
+            const options = ['<option value="all">جميع الفروع</option>']
+                .concat(branches.map(b => `<option value="${String(b.id).replace(/&/g,'&amp;').replace(/"/g,'&quot;')}">${String(b.name || b.id).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</option>`));
+            select.innerHTML = options.join('');
+            select.value = options.some(() => false) ? previousValue : previousValue;
+            if (![...select.options].some(o => o.value === previousValue)) select.value = 'all';
+
+            const selectedBranch = String(select.value || 'all');
+            const search = String(searchEl?.value || '').trim().toLowerCase();
+            const typeFilter = String(typeEl?.value || 'all');
+
+            const getCustomerBranchId = c => String(c?.registeredBranchId ?? c?.branchId ?? c?.branch_id ?? '').trim();
+            const getCustomerType = c => {
+                const raw = String(c?.customerType ?? c?.type ?? c?.category ?? c?.classification ?? 'normal').toLowerCase();
+                if (raw.includes('vip')) return 'vip';
+                if (raw.includes('private') || raw.includes('خاص')) return 'private';
+                return 'normal';
+            };
+
+            const filtered = customers.filter(c => {
+                const branchId = getCustomerBranchId(c);
+                if (selectedBranch !== 'all' && branchId !== selectedBranch) return false;
+                if (typeFilter !== 'all' && getCustomerType(c) !== typeFilter) return false;
+                if (search) {
+                    const haystack = [c?.firstname, c?.lastname, c?.username, c?.phone, c?.email]
+                        .filter(Boolean).join(' ').toLowerCase();
+                    if (!haystack.includes(search)) return false;
+                }
+                return true;
+            });
+
+            if (countEl) countEl.textContent = `${filtered.length} زبون`;
+            if (!filtered.length) {
+                body.innerHTML = '<tr><td colspan="10" class="bkl-empty">لا يوجد زبائن مسجلون في هذا الفرع</td></tr>';
+                return;
+            }
+
+            const esc = value => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            body.innerHTML = filtered.map(c => {
+                const branchId = getCustomerBranchId(c);
+                const branch = branches.find(b => String(b.id) === branchId);
+                const type = getCustomerType(c);
+                const typeLabel = type === 'vip' ? 'VIP' : type === 'private' ? 'الخاص' : 'العادي';
+                const discount = c?.discount ?? c?.discountRate ?? 0;
+                return `<tr>
+                    <td>${esc(`${c?.firstname || ''} ${c?.lastname || ''}`.trim() || '—')}</td>
+                    <td>${esc(typeLabel)}</td>
+                    <td>${esc(discount)}%</td>
+                    <td>${esc(c?.username || '—')}</td>
+                    <td>${esc(c?.phone || '—')}</td>
+                    <td>${esc(c?.email || '—')}</td>
+                    <td>${esc(c?.state || '—')}</td>
+                    <td>${esc(c?.municipality || '—')}</td>
+                    <td>${esc(c?.registeredAt || c?.registrationDate || c?.createdAt || '—')}</td>
+                    <td><span class="text-[10px] font-bold text-neutral-500">${esc(branch?.name || c?.registeredBranchName || c?.branch || 'غير محدد')}</span></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function bklSetCustomerTypeFilter(type) {
+            const select = document.getElementById('bkl-customer-type-filter');
+            if (select) select.value = type || 'all';
+            document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-bkl-type') === (type || 'all'));
+            });
+            renderBKLBranchCustomers();
+        }
+
         function getActiveBranchData() {
             let branches = getBranches();
             return branches.find(b => b.id === currentBranchId) || branches[0];
