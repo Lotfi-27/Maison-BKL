@@ -2584,17 +2584,25 @@ function ensureComplaintMessages(complaint) {
 }
 
 function saveComplaintChatData() {
-    // بيانات الصور/الفيديوهات تُحفظ في IndexedDB، بينما localStorage يحتفظ بالرسائل والروابط فقط.
+    // لا نضع بيانات الصور Base64 داخل localStorage إطلاقاً. الصور الجديدة موجودة في IndexedDB،
+    // ونحفظ هنا فقط المراجع الصغيرة لها. نحذف المفاتيح المكررة أولاً حتى لا تضاعف البيانات.
     const data = Array.isArray(storeComplaints) ? storeComplaints : [];
     try {
-        const serialized = JSON.stringify(data);
         localStorage.removeItem('storeComplaints');
         localStorage.removeItem('complaints_data');
-        localStorage.setItem('store_complaints', serialized);
+
+        // أنشئ نسخة نظيفة للحفظ فقط، مع إزالة أي Base64 قديم من الصور/الفيديوهات.
+        // لا نغيّر storeComplaints في الذاكرة حتى تبقى الوسائط القديمة قابلة للعرض أثناء الجلسة.
+        const cleanData = JSON.parse(JSON.stringify(data, (key, value) => {
+            if (key === 'data' && typeof value === 'string' && value.startsWith('data:')) return undefined;
+            return value;
+        }));
+
+        localStorage.setItem('store_complaints', JSON.stringify(cleanData));
         return true;
     } catch (e) {
         console.error('تعذر حفظ محادثة الشكاوى:', e);
-        try { alert('تعذر حفظ بيانات المحادثة. مساحة تخزين المتصفح ممتلئة.'); } catch (_) {}
+        try { alert('تعذر حفظ بيانات المحادثة. تم تجاوز مشكلة الصور القديمة، أعد تحميل الصفحة ثم حاول إرسال الرسالة مرة أخرى.'); } catch (_) {}
         return false;
     }
 }
@@ -2747,7 +2755,7 @@ async function sendComplaintReply() {
         readByCustomer: false
     });
     complaint.status = 'تم الرد';
-    saveComplaintChatData();
+    if (!saveComplaintChatData()) return;
 
     // إشعار فوري للزبون بوجود رسالة/وسائط جديدة.
     const targetCustomer = findRegisteredCustomerForComplaint(complaint);
@@ -2890,7 +2898,7 @@ async function sendCustomerComplaintMessage() {
         readByOwner: false
     });
     complaint.status = 'رسالة جديدة من الزبون';
-    saveComplaintChatData();
+    if (!saveComplaintChatData()) return;
 
     // تسجيل أن لدى المتجر رسالة جديدة دون تغيير بيانات بقية لوحة التحكم.
     if (typeof addLogActivity === 'function') {
