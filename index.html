@@ -3999,10 +3999,12 @@ function printOrderInvoice(orderId, action = 'print') {
         0
     )));
 
-    // الإجمالي الذي يُطبّق عليه الخصم هو إجمالي الفاتورة مع التوصيل.
-    const originalGrandTotalDZD = Math.max(0, toNumber(order.grossGrandTotal ?? (productsSubtotalDZD + shippingFeeDZD)));
+    // إجمالي الفاتورة الصحيح = مجموع المنتجات + سعر التوصيل.
+    // لا نعتمد على grossGrandTotal المحفوظ إذا كان قديماً أو محسوباً بشكل خاطئ.
+    // الخصم يُحسب دائماً من إجمالي الفاتورة بعد إضافة التوصيل.
+    const originalGrandTotalDZD = Math.max(0, Math.round((productsSubtotalDZD + shippingFeeDZD) * 100) / 100);
     const discountPercentDZD = Math.min(75, Math.max(0, toNumber(order.discountPercent ?? order.discountPercentage ?? 0)));
-    const discountAmountDZD = Math.min(originalGrandTotalDZD, Math.max(0, toNumber(order.discountAmount ?? (originalGrandTotalDZD * discountPercentDZD / 100))));
+    const discountAmountDZD = Math.min(originalGrandTotalDZD, Math.max(0, Math.round((originalGrandTotalDZD * discountPercentDZD / 100) * 100) / 100));
     const discountedGrandTotalDZD = Math.max(0, Math.round((originalGrandTotalDZD - discountAmountDZD) * 100) / 100);
     const creditRemainingDZD = (String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined) ? Math.max(0, toNumber(order.creditRemainingAmount)) : discountedGrandTotalDZD;
     const grandTotalDZD = creditRemainingDZD;
