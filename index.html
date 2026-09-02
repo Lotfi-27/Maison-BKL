@@ -4359,7 +4359,7 @@ function printOrderInvoice(orderId, action = 'print') {
 
     const bklInvoiceColor = typeof bklGetCustomerColor==='function' ? bklGetCustomerColor(order) : '#000000';
     const bklInvoiceTint = typeof bklMixColor==='function' ? bklMixColor(bklInvoiceColor,0.08) : '#ffffff';
-    invoiceHtml = invoiceHtml.replace('</head>', `<style>body{border-top:7px solid ${bklInvoiceColor}!important} .bkl-customer-color{color:${bklInvoiceColor}!important} .bkl-customer-tint{background:${bklInvoiceTint}!important;border-color:${bklInvoiceColor}!important} .header{border-bottom-color:${bklInvoiceColor}!important} table th{background:${bklInvoiceColor}!important} .summary-row.total{color:${bklInvoiceColor}!important} @media print{*{color:#000000!important;font-weight:700!important;text-shadow:none!important}.bkl-customer-color,.summary-row.total,table th{color:#000000!important;font-weight:700!important}}</style></head>`);
+    invoiceHtml = invoiceHtml.replace('</head>', `<style>body{border-top:7px solid #000!important;background:#fff!important;color:#000!important} .bkl-customer-color{color:#000!important} .bkl-customer-tint{background:#fff!important;border-color:#000!important} .header{border-bottom-color:#000!important} table th{background:#fff!important;color:#000!important} .summary-row.total{color:#000!important} @media print{*,*::before,*::after{color:#000!important;background:#fff!important;font-weight:700!important;text-shadow:none!important;box-shadow:none!important;border-color:#000!important}.bkl-customer-color,.summary-row.total,table th{color:#000!important;background:#fff!important}}</style></head>`);
 
     if (action === 'save') {
         const filename = `فاتورة-${String(order.id).replace(/[^\w\u0600-\u06FF-]/g, '_')}.html`;
