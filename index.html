@@ -7230,11 +7230,18 @@ function completeCheckoutOrder() {
                 const branch = branches.find(b => String(b.id) === branchId);
                 const type = getCustomerType(c);
                 const typeLabel = type === 'vip' ? 'VIP' : type === 'private' ? 'الخاص' : 'العادي';
-                const discount = c?.discount ?? c?.discountRate ?? 0;
+                const discount = Math.min(75, Math.max(0, Number(c?.discount ?? c?.discountRate ?? 0) || 0));
+                const discountOptions = Array.from({length: 75}, (_, i) => i + 1)
+                    .map(percent => `<option value="${percent}" ${discount === percent ? 'selected' : ''}>${percent}%</option>`).join('');
                 return `<tr>
                     <td>${esc(`${c?.firstname || ''} ${c?.lastname || ''}`.trim() || '—')}</td>
                     <td>${esc(typeLabel)}</td>
-                    <td>${esc(discount)}%</td>
+                    <td>
+                        <select onchange="bklChangeCustomerDiscount(this.dataset.customerId, this.value)" data-customer-id="${esc(c?.id ?? c?.username ?? '')}" class="w-full min-w-[82px] text-[11px] font-bold border border-neutral-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300" title="نسبة الخصم من القيمة الإجمالية للفاتورة">
+                            <option value="0" ${discount === 0 ? 'selected' : ''}>بدون خصم</option>
+                            ${discountOptions}
+                        </select>
+                    </td>
                     <td>${esc(c?.username || '—')}</td>
                     <td>${esc(c?.phone || '—')}</td>
                     <td>${esc(c?.email || '—')}</td>
@@ -7261,6 +7268,64 @@ function completeCheckoutOrder() {
             document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn => {
                 btn.classList.toggle('active', btn.getAttribute('data-bkl-type') === (type || 'all'));
             });
+            renderBKLBranchCustomers();
+        }
+
+        // البحث عن الزبون المسجل المرتبط بالطلب.
+        function bklFindCustomerForOrder(order) {
+            if (!order) return null;
+            const customers = Array.isArray(registeredCustomers) ? registeredCustomers : [];
+            const id = String(order.customerId ?? order.id ?? '');
+            const phone = String(order.phone ?? '');
+            const email = String(order.email ?? order.customerEmail ?? '').toLowerCase();
+            const name = String(order.customerName ?? '').trim().toLowerCase();
+            return customers.find(c =>
+                (id && String(c?.id ?? '') === id) ||
+                (phone && String(c?.phone ?? '') === phone) ||
+                (email && String(c?.email ?? '').toLowerCase() === email) ||
+                (name && `${c?.firstname || ''} ${c?.lastname || ''}`.trim().toLowerCase() === name)
+            ) || null;
+        }
+
+        // حساب الخصم من القيمة الإجمالية للفاتورة (المشتريات + التوصيل).
+        // نسبة الخصم المحددة لكل زبون تطبق مباشرة على الإجمالي النهائي قبل الدفع.
+        function bklGetCustomerDiscountData(customer, grossTotal) {
+            const total = Math.max(0, Number(grossTotal) || 0);
+            if (!customer) return {percent: 0, amount: 0, finalTotal: total};
+            const configured = Number(customer?.discount ?? customer?.discountRate ?? 0) || 0;
+            const percent = Math.min(75, Math.max(0, configured));
+            const amount = Math.min(total, Math.round(total * percent) / 100);
+            return {percent, amount, finalTotal: Math.max(0, Math.round((total - amount) * 100) / 100)};
+        }
+
+        // تغيير نسبة خصم الزبون مباشرة من قائمة الزبائن المسجلين.
+        function bklChangeCustomerDiscount(customerId, discount) {
+            const id = String(customerId ?? '');
+            const newDiscount = Math.min(75, Math.max(0, Number(discount) || 0));
+            try {
+                registeredCustomers = JSON.parse(localStorage.getItem('store_customers')) || [];
+            } catch (e) {
+                registeredCustomers = Array.isArray(registeredCustomers) ? registeredCustomers : [];
+            }
+            const customer = registeredCustomers.find(c => String(c?.id ?? c?.username ?? '') === id);
+            if (!customer) return;
+
+            customer.discount = newDiscount;
+            customer.discountRate = newDiscount;
+            localStorage.setItem('store_customers', JSON.stringify(registeredCustomers));
+
+            try {
+                addLogActivity(
+                    'صاحب المتجر',
+                    `تغيير خصم الزبون (${customer.firstname || ''} ${customer.lastname || ''}`.trim() + `) إلى ${newDiscount}% من القيمة الإجمالية للفاتورة`,
+                    customer.registeredBranchId || customer.branchId || currentBranchId
+                );
+            } catch (e) {}
+
+            if (currentLoggedInCustomer && String(currentLoggedInCustomer?.id ?? '') === id) {
+                currentLoggedInCustomer = {...customer};
+                localStorage.setItem('store_active_customer', JSON.stringify(currentLoggedInCustomer));
+            }
             renderBKLBranchCustomers();
         }
 
