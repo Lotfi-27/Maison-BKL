@@ -2054,10 +2054,10 @@ function setStoredData(key, value) {
 }
 
 let blacklistedCustomers = getStoredData('blacklistedCustomers', []); 
-let storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+let storeComplaints = getStoredData('store_complaints', getStoredData('storeComplaints', getStoredData('complaints_data', [])));
 
 function loadComplaintsIntoDashboard() {
-    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', storeComplaints));
+    storeComplaints = getStoredData('store_complaints', getStoredData('storeComplaints', getStoredData('complaints_data', storeComplaints)));
     renderOwnerDashboardData();
 }
 
@@ -2346,7 +2346,7 @@ function submitComplaintForm(param) {
         status: 'قيد المراجعة'
     };
 
-    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+    storeComplaints = getStoredData('store_complaints', getStoredData('storeComplaints', getStoredData('complaints_data', [])));
     storeComplaints.unshift(newComplaint);
     
     saveComplaintChatData();
@@ -2642,9 +2642,9 @@ function refreshComplaintChatFromStorage() {
 
 function loadUnifiedComplaints() {
     const sources = [
-        getStoredData('store_complaints', []),
+        getStoredData('complaints_data', []),
         getStoredData('storeComplaints', []),
-        getStoredData('complaints_data', [])
+        getStoredData('store_complaints', [])
     ];
     const map = new Map();
     sources.flat().forEach(c => {
@@ -2816,7 +2816,7 @@ function getCustomerComplaintsForAccount() {
 
 function openCustomerComplaintChat(complaintId) {
     if (!currentLoggedInCustomer) return;
-    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+    storeComplaints = getStoredData('store_complaints', getStoredData('storeComplaints', getStoredData('complaints_data', [])));
     const complaint = storeComplaints.find(c => String(c.id) === String(complaintId));
     if (!complaint) return;
     if (!getCustomerComplaintsForAccount().some(c => String(c.id) === String(complaintId))) return;
@@ -2927,7 +2927,7 @@ function closeCustomerComplaintChat() {
 function renderCustomerComplaintChats() {
     const container = document.getElementById('customer-complaints-chat-container');
     if (!container || !currentLoggedInCustomer) return;
-    storeComplaints = getStoredData('storeComplaints', getStoredData('complaints_data', []));
+    storeComplaints = getStoredData('store_complaints', getStoredData('storeComplaints', getStoredData('complaints_data', [])));
     const complaints = getCustomerComplaintsForAccount();
     if (!complaints.length) {
         container.innerHTML = '<div class="text-[10px] text-neutral-400 text-center py-3">لا توجد محادثات شكاوى حالياً</div>';
