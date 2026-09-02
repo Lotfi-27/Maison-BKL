@@ -7241,7 +7241,16 @@ function completeCheckoutOrder() {
                     <td>${esc(c?.state || '—')}</td>
                     <td>${esc(c?.municipality || '—')}</td>
                     <td>${esc(c?.registeredAt || c?.registrationDate || c?.createdAt || '—')}</td>
-                    <td><span class="text-[10px] font-bold text-neutral-500">${esc(branch?.name || c?.registeredBranchName || c?.branch || 'غير محدد')}</span></td>
+                    <td>
+                        <div class="flex flex-col items-center gap-1.5 min-w-[105px]">
+                            <span class="text-[10px] font-bold text-neutral-500">${esc(branch?.name || c?.registeredBranchName || c?.branch || 'غير محدد')}</span>
+                            <select onchange="bklChangeCustomerType(this.dataset.customerId, this.value)" data-customer-id="${esc(c?.id ?? c?.username ?? '')}" class="w-full text-[11px] font-bold border border-neutral-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-300">
+                                <option value="vip" ${type === 'vip' ? 'selected' : ''}>⭐ VIP</option>
+                                <option value="private" ${type === 'private' ? 'selected' : ''}>🔒 الخاص</option>
+                                <option value="normal" ${type === 'normal' ? 'selected' : ''}>👤 العادي</option>
+                            </select>
+                        </div>
+                    </td>
                 </tr>`;
             }).join('');
         }
@@ -7252,6 +7261,36 @@ function completeCheckoutOrder() {
             document.querySelectorAll('#bkl-branch-customers-panel .bkl-type-tab').forEach(btn => {
                 btn.classList.toggle('active', btn.getAttribute('data-bkl-type') === (type || 'all'));
             });
+            renderBKLBranchCustomers();
+        }
+
+        // تغيير تصنيف زبون بشكل مباشر من قائمة الزبائن المسجلين.
+        function bklChangeCustomerType(customerId, type) {
+            const id = String(customerId ?? '');
+            const allowed = ['vip', 'private', 'normal'];
+            const newType = allowed.includes(String(type)) ? String(type) : 'normal';
+            try {
+                registeredCustomers = JSON.parse(localStorage.getItem('store_customers')) || [];
+            } catch (e) {
+                registeredCustomers = Array.isArray(registeredCustomers) ? registeredCustomers : [];
+            }
+            const customer = registeredCustomers.find(c => String(c?.id ?? c?.username ?? '') === id);
+            if (!customer) return;
+
+            customer.customerType = newType;
+            customer.classification = newType;
+            // الاحتفاظ بحقل type أيضاً للتوافق مع أي جزء قديم من التطبيق.
+            customer.type = newType;
+            localStorage.setItem('store_customers', JSON.stringify(registeredCustomers));
+
+            try {
+                addLogActivity(
+                    'صاحب المتجر',
+                    `تغيير تصنيف الزبون (${customer.firstname || ''} ${customer.lastname || ''}`.trim() + `) إلى ${newType === 'vip' ? 'VIP' : newType === 'private' ? 'الخاص' : 'العادي'}`,
+                    customer.registeredBranchId || customer.branchId || currentBranchId
+                );
+            } catch (e) {}
+
             renderBKLBranchCustomers();
         }
 
