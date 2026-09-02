@@ -2602,14 +2602,27 @@ function buildChatComposer(prefix, sendFunction) {
 
 
 function clearChatComposer(prefix) {
+    // تفريغ الحقل بشكل صريح بعد نجاح الإرسال، مع تحديث حالة المتصفح أيضاً.
     const input = document.getElementById(prefix + '-text-input');
-    if (input) { input.value = ''; input.focus(); }
+    if (input) {
+        input.value = '';
+        input.textContent = '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     const fileInput = document.getElementById(prefix + '-file-input');
-    if (fileInput) fileInput.value = '';
+    if (fileInput) {
+        fileInput.value = '';
+        fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     const cameraInput = document.getElementById(prefix + '-camera-input');
-    if (cameraInput) cameraInput.value = '';
+    if (cameraInput) {
+        cameraInput.value = '';
+        cameraInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
     const preview = document.getElementById(prefix + '-attachment-preview');
     if (preview) preview.innerHTML = '';
+    if (input) input.focus();
 }
 
 function ensureComplaintMessages(complaint) {
@@ -2805,6 +2818,9 @@ async function sendComplaintReply() {
     complaint.status = 'تم الرد';
     if (!saveComplaintChatData()) return;
 
+    // تفريغ الحقل فور تأكيد حفظ الرسالة بنجاح.
+    clearChatComposer('owner-chat');
+
     // إشعار فوري للزبون بوجود رسالة/وسائط جديدة.
     const targetCustomer = findRegisteredCustomerForComplaint(complaint);
     if (targetCustomer) {
@@ -2830,8 +2846,6 @@ async function sendComplaintReply() {
         }
     }
 
-    // تفريغ حقل الكتابة والمرفقات بعد نجاح الإرسال.
-    clearChatComposer('owner-chat');
     renderComplaintChatMessages(complaint);
     renderOwnerDashboardData();
 }
@@ -2944,13 +2958,14 @@ async function sendCustomerComplaintMessage() {
     complaint.status = 'رسالة جديدة من الزبون';
     if (!saveComplaintChatData()) return;
 
+    // تفريغ الحقل فور تأكيد حفظ الرسالة بنجاح.
+    clearChatComposer('customer-chat');
+
     // تسجيل أن لدى المتجر رسالة جديدة دون تغيير بيانات بقية لوحة التحكم.
     if (typeof addLogActivity === 'function') {
         addLogActivity(`العميل (${complaint.customerName || currentLoggedInCustomer.firstname || 'زبون'})`, `إرسال رسالة جديدة في الشكوى #${complaint.id}`, typeof currentBranchId !== 'undefined' ? currentBranchId : null);
     }
 
-    // تفريغ حقل الكتابة والمرفقات بعد نجاح الإرسال.
-    clearChatComposer('customer-chat');
     renderCustomerComplaintChatMessages(complaint);
     renderCustomerComplaintChats();
     if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
