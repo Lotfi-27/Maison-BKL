@@ -1450,9 +1450,12 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 <label class="text-[11px] text-neutral-600 font-medium">الصورة الرئيسية للمنتج</label>
                 <div class="bkl-media-buttons">
                     <label for="main-image-file"><i class="fa-solid fa-folder-open"></i> اختيار من الملفات</label>
-                    <button type="button" onclick="document.getElementById('main-image-file')?.click()"><i class="fa-solid fa-camera"></i> التقاط صورة</button>
+                    <button type="button" onclick="document.getElementById('main-image-camera')?.click()"><i class="fa-solid fa-camera"></i> التقاط صورة</button>
                 </div>
-                <input id="main-image-file" type="file" accept="image/*" capture="environment" style="display:none" onchange="setMainProductImage(this)">
+                <!-- اختيار من الملفات: بدون capture حتى يفتح مستكشف الملفات مباشرة -->
+                <input id="main-image-file" type="file" accept="image/*" style="display:none" onchange="setMainProductImage(this)">
+                <!-- زر التقاط صورة: مدخل مستقل مخصص للكاميرا -->
+                <input id="main-image-camera" type="file" accept="image/*" capture="environment" style="display:none" onchange="setMainProductImage(this)">
                 <div id="main-image-preview" class="min-h-[90px] flex items-center justify-center"></div>
             </div>
 
@@ -6047,6 +6050,8 @@ function openAddModal() {
     if (newPrice) newPrice.value = "";
     const mainFile = document.getElementById('main-image-file');
     if (mainFile) mainFile.value = "";
+    const mainCamera = document.getElementById('main-image-camera');
+    if (mainCamera) mainCamera.value = "";
     mainProductImage = "";
     const mainPreview = document.getElementById('main-image-preview');
     if (mainPreview) mainPreview.innerHTML = '<span class="text-neutral-400 text-xs">لم يتم اختيار صورة رئيسية</span>';
@@ -6081,6 +6086,8 @@ function openEditModal() {
     if (newPrice) newPrice.value = Number(selectedProduct.priceDZD ?? Math.round(Number(selectedProduct.basePrice || 0) * Number(currencyConfig?.DZD?.rate || 132.96)));
     const mainFile = document.getElementById('main-image-file');
     if (mainFile) mainFile.value = "";
+    const mainCamera = document.getElementById('main-image-camera');
+    if (mainCamera) mainCamera.value = "";
     mainProductImage = selectedProduct.mainImage || ((selectedProduct.images || [])[0] || "");
     const newDesc = document.getElementById('new-desc');
     if (newDesc) newDesc.value = selectedProduct.description;
@@ -6130,6 +6137,8 @@ function removeMainProductImage() {
     mainProductImage = '';
     const input = document.getElementById('main-image-file');
     if (input) input.value = '';
+    const cameraInput = document.getElementById('main-image-camera');
+    if (cameraInput) cameraInput.value = '';
     renderMainProductImagePreview();
 }
 
