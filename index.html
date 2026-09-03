@@ -1086,7 +1086,7 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
                 </div>
             </div>
 
-            <button type="button" onclick="goToPage('page-4')" id="btn-proceed" class="w-full bg-amber-600 text-white text-xs font-bold py-3 rounded-2xl hover:bg-amber-700 transition shadow cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">الانتقال إلى الدفع</button>
+            <button type="button" onclick="proceedToCheckout()" id="btn-proceed" class="w-full bg-amber-600 text-white text-xs font-bold py-3 rounded-2xl hover:bg-amber-700 transition shadow cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">الانتقال إلى الدفع</button>
         </div>
 
         <!-- ================= PAGE 4: Checkout & Payment ================= -->
@@ -4623,6 +4623,46 @@ function deleteStoreComplaint(id) {
     renderOwnerDashboardData();
 }
 
+function isCustomerBlacklisted(customer = null) {
+    const c = customer || ((typeof currentLoggedInCustomer !== 'undefined') ? currentLoggedInCustomer : null);
+    if (!c) return false;
+
+    let list = [];
+    try {
+        const raw = localStorage.getItem('blacklistedCustomers');
+        list = Array.isArray(raw ? JSON.parse(raw) : blacklistedCustomers) ? (raw ? JSON.parse(raw) : blacklistedCustomers) : [];
+    } catch (e) {
+        list = Array.isArray(blacklistedCustomers) ? blacklistedCustomers : [];
+    }
+
+    const id = String(c.id || '').trim();
+    const phone = String(c.phone || '').trim();
+    const email = String(c.email || '').trim().toLowerCase();
+    const username = String(c.username || '').trim().toLowerCase();
+    const fullName = `${c.firstname || ''} ${c.lastname || ''}`.trim().toLowerCase();
+
+    return list.some(item => {
+        const value = String(item && typeof item === 'object' ? (item.id || item.customerId || item.phone || item.email || item.username || item.name || '') : item).trim();
+        const normalized = value.toLowerCase();
+        return !!value && (
+            value === id ||
+            value === phone ||
+            normalized === email ||
+            normalized === username ||
+            normalized === fullName
+        );
+    });
+}
+
+function proceedToCheckout() {
+    const customer = (typeof currentLoggedInCustomer !== 'undefined') ? currentLoggedInCustomer : null;
+    if (customer && isCustomerBlacklisted(customer)) {
+        alert('حسابك محظور من المتجر، ولا يمكنك إجراء عملية شراء. يرجى التواصل مع إدارة المتجر.');
+        return;
+    }
+    goToPage('page-4');
+}
+
 function addToBlacklist() {
     const input = document.getElementById('blacklist-customer-name');
     const name = (input && input.value) ? input.value.trim() : '';
@@ -6774,6 +6814,12 @@ function buyProduct() {
 // 8. دالة إتمام الطلب الانتقالية وتسجيل الطلبيات
 // ==========================================
 function confirmOrder() {
+    const customer = (typeof currentLoggedInCustomer !== 'undefined') ? currentLoggedInCustomer : null;
+    if (customer && isCustomerBlacklisted(customer)) {
+        alert('حسابك محظور من المتجر، ولا يمكنك إجراء عملية شراء.');
+        return;
+    }
+
     // منع إنشاء الطلب مرتين إذا تم استدعاء الدالة أكثر من مرة أثناء الدفع.
     if (window.__bklOrderBeingCreated) return;
     window.__bklOrderBeingCreated = true;
@@ -8034,6 +8080,12 @@ function completeCheckoutOrder() {
         }
 
         function submitOrderAndPay() {
+            const customer = (typeof currentLoggedInCustomer !== 'undefined') ? currentLoggedInCustomer : null;
+            if (customer && isCustomerBlacklisted(customer)) {
+                alert('حسابك محظور من المتجر، ولا يمكنك إجراء عملية شراء.');
+                return;
+            }
+
             const getValue = (id, fallback = '') => {
                 const el = document.getElementById(id);
                 return el ? String(el.value ?? '').trim() : fallback;
