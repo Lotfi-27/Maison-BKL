@@ -2487,11 +2487,48 @@ async function migrateComplaintLegacyMediaToIndexedDB() {
     return changed;
 }
 
+function getComplaintLocalDeleteKey(isOwner) {
+    if (isOwner) return 'store_complaint_local_deleted_owner';
+    const customerId = currentLoggedInCustomer && (currentLoggedInCustomer.id || currentLoggedInCustomer.phone || currentLoggedInCustomer.email || currentLoggedInCustomer.username);
+    return 'store_complaint_local_deleted_customer_' + String(customerId || 'guest').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function getComplaintLocalDeleted(isOwner) {
+    try {
+        const raw = localStorage.getItem(getComplaintLocalDeleteKey(isOwner));
+        const data = raw ? JSON.parse(raw) : {messages:{}, media:{}};
+        return {messages: data.messages || {}, media: data.media || {}};
+    } catch (_) { return {messages:{}, media:{}}; }
+}
+
+function saveComplaintLocalDeleted(isOwner, data) {
+    try { localStorage.setItem(getComplaintLocalDeleteKey(isOwner), JSON.stringify(data)); } catch (_) {}
+}
+
+function isComplaintMessageLocallyDeleted(isOwner, complaintId, messageId) {
+    const d = getComplaintLocalDeleted(isOwner);
+    return !!d.messages[String(complaintId) + '::' + String(messageId)];
+}
+
+function getComplaintMediaLocalKey(messageId, file, index) {
+    if (file && file.id) return String(messageId) + '::' + String(file.id);
+    return String(messageId) + '::index::' + String(index) + '::' + String((file && file.name) || '');
+}
+
+function isComplaintMediaLocallyDeleted(isOwner, complaintId, messageId, file, index) {
+    const d = getComplaintLocalDeleted(isOwner);
+    return !!d.media[String(complaintId) + '::' + getComplaintMediaLocalKey(messageId, file, index)];
+}
+
 async function getChatMessageMediaHtml(msg, ownerView, complaintId, messageIndex) {
     const media = Array.isArray(msg.media) ? msg.media : [];
     if (!media.length) return '';
     const safeComplaintId = encodeURIComponent(String(complaintId || ''));
-    const parts = await Promise.all(media.map(async (file, index) => {
+    const safeMessageId = encodeURIComponent(String(msg.messageId || ''));
+    const visibleMedia = media.filter((file, index) => !isComplaintMediaLocallyDeleted(!!ownerView, complaintId, msg.messageId, file, index));
+    if (!visibleMedia.length) return '';
+    const parts = await Promise.all(visibleMedia.map(async (file) => {
+        const originalIndex = media.indexOf(file);
         const type = String(file.type || '');
         let src = String(file.data || file.url || file.src || '');
         if (!src && file.storage === 'indexeddb' && file.id) {
@@ -2502,9 +2539,9 @@ async function getChatMessageMediaHtml(msg, ownerView, complaintId, messageIndex
                 console.error('تعذر قراءة الصورة من مساحة الملفات:', e);
             }
         }
-        const name = escapeChatHtml(file.name || ('ملف ' + (index + 1)));
+        const name = escapeChatHtml(file.name || ('ملف ' + (originalIndex + 1)));
         if (!src) return '';
-        const deleteButton = '<button type="button" onclick="deleteComplaintMessageMedia(\'' + safeComplaintId + '\',' + messageIndex + ',' + index + ')" class="mt-1 text-[9px] font-bold underline opacity-80 hover:opacity-100" title="حذف الوسائط">🗑 حذف الوسائط</button>';
+        const deleteButton = '<button type="button" onclick="deleteComplaintMessageMedia(\'' + safeComplaintId + '\',\'' + safeMessageId + '\',' + originalIndex + ',' + (!!ownerView) + ')" class="mt-1 text-[9px] font-bold underline opacity-80 hover:opacity-100" title="حذف الوسائط من حسابي فقط">🗑 حذف الوسائط</button>';
         if (type.startsWith('image/')) {
             return '<div class="flex flex-col items-start gap-1"><a href="' + src + '" target="_blank" rel="noopener" class="block"><img src="' + src + '" alt="' + name + '" class="max-w-full max-h-64 rounded-xl object-contain bg-black/5 border border-white/20"></a>' + deleteButton + '</div>';
         }
@@ -2656,8 +2693,14 @@ function ensureComplaintMessages(complaint) {
             media: Array.isArray(complaint.media) ? complaint.media : []
         });
     }
-    complaint.messages.forEach(msg => {
+    complaint.messages.forEach((msg, idx) => {
         if (!Array.isArray(msg.media)) msg.media = [];
+        if (!msg.messageId) {
+            const seed = [complaint.id, msg.sender || '', msg.time || '', idx, msg.text || ''].join('|');
+            let hash = 0;
+            for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash) + seed.charCodeAt(i) | 0;
+            msg.messageId = 'MSG-' + Math.abs(hash) + '-' + idx;
+        }
         if (msg.sender === 'owner' && typeof msg.customerRead !== 'boolean') msg.customerRead = false;
         if (msg.sender === 'customer' && typeof msg.readByOwner !== 'boolean') msg.readByOwner = false;
     });
@@ -2798,8 +2841,8 @@ async function renderComplaintChatMessages(complaint) {
     const container = document.getElementById('chat-messages-container');
     if (!container) return;
     ensureComplaintMessages(complaint);
-    const messages = complaint.messages;
-    if (!messages.length) { container.innerHTML = `<div class="text-center text-neutral-400 py-6">لا توجد رسائل سابقة في هذه الشكوى</div>`; return; }
+    const messages = complaint.messages.filter(msg => !isComplaintMessageLocallyDeleted(true, complaint.id, msg.messageId));
+    if (!messages.length) { container.innerHTML = `<div class="text-center text-neutral-400 py-6">لا توجد رسائل ظاهرة لديك</div>`; return; }
     container.innerHTML = (await Promise.all(messages.map(async (msg, messageIndex) => {
         const isOwner = msg.sender === 'owner';
         const mediaHtml = await getChatMessageMediaHtml(msg, true, complaint.id, messageIndex);
@@ -2809,7 +2852,7 @@ async function renderComplaintChatMessages(complaint) {
                     ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
                     ${mediaHtml}
                 </div>
-                <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span> <button type="button" onclick="deleteComplaintMessage('${encodeURIComponent(String(complaint.id))}',${messageIndex})" class="text-[9px] text-red-500 hover:text-red-700 font-bold ml-1" title="حذف الرسالة">🗑 حذف</button>
+                <span class="text-[9px] text-neutral-400 mt-1 px-1">${isOwner ? 'صاحب المتجر' : (escapeChatHtml(complaint.customerName || 'الزبون'))} • ${escapeChatHtml(msg.time || '')}</span> <button type="button" onclick="deleteComplaintMessage('${encodeURIComponent(String(complaint.id))}','${encodeURIComponent(String(msg.messageId || ''))}',true)" class="text-[9px] text-red-500 hover:text-red-700 font-bold ml-1" title="حذف الرسالة من حسابي فقط">🗑 حذف</button>
             </div>`;
     }))).join('');
     container.scrollTop = container.scrollHeight;
@@ -2833,6 +2876,7 @@ async function sendComplaintReply() {
     ensureComplaintMessages(complaint);
     complaint.messages.push({
         sender: 'owner',
+        messageId: 'MSG-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
         text,
         media,
         time: getCurrentFullDateTime(),
@@ -2945,8 +2989,8 @@ async function renderCustomerComplaintChatMessages(complaint) {
     const container = document.getElementById('customer-chat-messages');
     if (!container) return;
     ensureComplaintMessages(complaint);
-    const messages = complaint.messages;
-    if (!messages.length) { container.innerHTML = '<div class="text-center text-neutral-400 py-6">لا توجد رسائل</div>'; return; }
+    const messages = complaint.messages.filter(msg => !isComplaintMessageLocallyDeleted(false, complaint.id, msg.messageId));
+    if (!messages.length) { container.innerHTML = '<div class="text-center text-neutral-400 py-6">لا توجد رسائل ظاهرة لديك</div>'; return; }
     container.innerHTML = (await Promise.all(messages.map(async (msg, messageIndex) => {
         const fromOwner = msg.sender === 'owner';
         const mediaHtml = await getChatMessageMediaHtml(msg, false, complaint.id, messageIndex);
@@ -2955,7 +2999,7 @@ async function renderCustomerComplaintChatMessages(complaint) {
                 ${msg.text ? `<p class="whitespace-pre-wrap break-words text-xs">${escapeChatHtml(msg.text)}</p>` : ''}
                 ${mediaHtml}
             </div>
-            <span class="text-[9px] text-neutral-400 mt-1 px-1">${fromOwner ? 'صاحب المتجر' : 'أنت'} • ${escapeChatHtml(msg.time || '')}</span> <button type="button" onclick="deleteComplaintMessage('${encodeURIComponent(String(complaint.id))}',${messageIndex})" class="text-[9px] text-red-500 hover:text-red-700 font-bold ml-1" title="حذف الرسالة">🗑 حذف</button>
+            <span class="text-[9px] text-neutral-400 mt-1 px-1">${fromOwner ? 'صاحب المتجر' : 'أنت'} • ${escapeChatHtml(msg.time || '')}</span> <button type="button" onclick="deleteComplaintMessage('${encodeURIComponent(String(complaint.id))}','${encodeURIComponent(String(msg.messageId || ''))}',false)" class="text-[9px] text-red-500 hover:text-red-700 font-bold ml-1" title="حذف الرسالة من حسابي فقط">🗑 حذف</button>
         </div>`;
     }))).join('');
     container.scrollTop = container.scrollHeight;
@@ -2977,6 +3021,7 @@ async function sendCustomerComplaintMessage() {
     ensureComplaintMessages(complaint);
     complaint.messages.push({
         sender: 'customer',
+        messageId: 'MSG-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
         text,
         media,
         time: getCurrentFullDateTime(),
@@ -3003,56 +3048,46 @@ async function sendCustomerComplaintMessage() {
     }
 }
 
-async function deleteComplaintMessage(complaintId, messageIndex) {
+async function deleteComplaintMessage(complaintId, messageId, ownerView) {
     const id = decodeURIComponent(String(complaintId || ''));
-    if (!id) return;
-    if (!confirm('هل تريد حذف هذه الرسالة وجميع الصور المرفقة بها؟')) return;
-    refreshComplaintChatFromStorage();
+    const mid = decodeURIComponent(String(messageId || ''));
+    if (!id || !mid) return;
+    const isOwner = ownerView === true || ownerView === 'true';
+    if (!confirm('هل تريد إخفاء هذه الرسالة من حسابك فقط؟ ستبقى ظاهرة للطرف الآخر.')) return;
+    const data = getComplaintLocalDeleted(isOwner);
+    data.messages[id + '::' + mid] = true;
+    saveComplaintLocalDeleted(isOwner, data);
     const complaint = storeComplaints.find(c => String(c.id) === String(id));
-    if (!complaint || !Array.isArray(complaint.messages)) return;
-    const index = Number(messageIndex);
-    const msg = complaint.messages[index];
-    if (!msg) return;
-    if (Array.isArray(msg.media)) {
-        for (const file of msg.media) {
-            if (file && file.storage === 'indexeddb' && file.id) await deleteComplaintMediaBlob(file.id);
-        }
-    }
-    complaint.messages.splice(index, 1);
-    if (!saveComplaintChatData()) return;
-    if (String(window.activeCustomerComplaintChatId || '') === id) {
-        await renderCustomerComplaintChatMessages(complaint);
-        renderCustomerComplaintChats();
-    }
-    if (String(typeof activeComplaintChatId !== 'undefined' ? activeComplaintChatId : '') === id) {
+    if (!complaint) return;
+    ensureComplaintMessages(complaint);
+    if (isOwner) {
         await renderComplaintChatMessages(complaint);
-        if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+    } else if (String(window.activeCustomerComplaintChatId || '') === id) {
+        await renderCustomerComplaintChatMessages(complaint);
     }
 }
 
-async function deleteComplaintMessageMedia(complaintId, messageIndex, mediaIndex) {
+async function deleteComplaintMessageMedia(complaintId, messageId, mediaIndex, ownerView) {
     const id = decodeURIComponent(String(complaintId || ''));
-    if (!id) return;
-    if (!confirm('هل تريد حذف هذه الصورة/الوسائط؟')) return;
-    refreshComplaintChatFromStorage();
+    const mid = decodeURIComponent(String(messageId || ''));
+    if (!id || !mid) return;
+    const isOwner = ownerView === true || ownerView === 'true';
+    if (!confirm('هل تريد إخفاء هذه الوسائط من حسابك فقط؟ ستبقى ظاهرة للطرف الآخر.')) return;
     const complaint = storeComplaints.find(c => String(c.id) === String(id));
     if (!complaint || !Array.isArray(complaint.messages)) return;
-    const msg = complaint.messages[Number(messageIndex)];
+    ensureComplaintMessages(complaint);
+    const msg = complaint.messages.find(m => String(m.messageId) === String(mid));
     if (!msg || !Array.isArray(msg.media)) return;
     const index = Number(mediaIndex);
     const file = msg.media[index];
     if (!file) return;
-    if (file.storage === 'indexeddb' && file.id) await deleteComplaintMediaBlob(file.id);
-    msg.media.splice(index, 1);
-    if (!msg.text && msg.media.length === 0) complaint.messages.splice(Number(messageIndex), 1);
-    if (!saveComplaintChatData()) return;
-    if (String(window.activeCustomerComplaintChatId || '') === id) {
-        await renderCustomerComplaintChatMessages(complaint);
-        renderCustomerComplaintChats();
-    }
-    if (String(typeof activeComplaintChatId !== 'undefined' ? activeComplaintChatId : '') === id) {
+    const data = getComplaintLocalDeleted(isOwner);
+    data.media[id + '::' + getComplaintMediaLocalKey(mid, file, index)] = true;
+    saveComplaintLocalDeleted(isOwner, data);
+    if (isOwner) {
         await renderComplaintChatMessages(complaint);
-        if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
+    } else if (String(window.activeCustomerComplaintChatId || '') === id) {
+        await renderCustomerComplaintChatMessages(complaint);
     }
 }
 
