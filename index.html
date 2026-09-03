@@ -891,7 +891,10 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 <style id="bkl-order-preview-fluid-css">
 #order-preview-modal{overscroll-behavior:contain;}
 #order-preview-modal>div{min-height:0;}
-#order-preview-modal #order-preview-content table{min-width:720px;}
+#order-preview-modal #order-preview-content{overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;}
+#order-preview-modal #order-preview-content table{min-width:720px;width:max-content;max-width:none;}
+#order-preview-modal #order-preview-content > *{min-width:0;}
+#order-preview-modal #order-preview-content .bkl-order-table-scroll{width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;touch-action:pan-x;}
 #order-preview-modal td,#order-preview-modal th{vertical-align:middle;white-space:nowrap;}
 @media (max-width:640px){
   #order-preview-modal{align-items:flex-start;}
@@ -3761,8 +3764,8 @@ function previewOrder(orderId) {
                 التوصيل: ${delivery.toLocaleString('ar-DZ')} د.ج
             </div>
         </div>
-        <div class="mt-3 border rounded-xl overflow-hidden">
-            <table class="w-full text-xs">
+        <div class="mt-3 border rounded-xl bkl-order-table-scroll">
+            <table class="text-xs">
                 <thead class="bg-neutral-900 text-white"><tr><th class="p-2 text-right">المنتج</th><th class="p-2">السعر</th><th class="p-2">الكمية</th><th class="p-2">اللون</th><th class="p-2">المقاس</th><th class="p-2">المجموع</th></tr></thead>
                 <tbody>${items.map(item => {
                     const price = Number(item.priceDZD ?? item.price ?? item.unitPriceDZD ?? 0) || Math.round(Number(item.basePrice ?? item.unitPriceUSD ?? 0) * Number(currencyConfig?.DZD?.rate || 132.96));
