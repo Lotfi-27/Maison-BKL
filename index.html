@@ -8324,26 +8324,52 @@ function completeCheckoutOrder() {
             localStorage.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
         }
 
+        // ترحيل آمن للدفتر القديم: نوزّع فقط الفواتير التي تحمل customerId مطابقاً
+        // لحساب مسجل، ثم نحذف المفتاح القديم المشترك حتى لا يتم توريثه لأي حساب جديد.
+        function migrateLegacyCustomerCreditLedgers() {
+            try {
+                const legacyRaw = localStorage.getItem('store_credit_ledger_customer');
+                if (!legacyRaw) return;
+                let legacy = [];
+                try { legacy = JSON.parse(legacyRaw); } catch (e) { legacy = []; }
+                if (!Array.isArray(legacy)) { localStorage.removeItem('store_credit_ledger_customer'); return; }
+
+                const customers = Array.isArray(registeredCustomers) ? registeredCustomers : [];
+                const byId = new Map(customers.filter(c => c && c.id).map(c => [String(c.id), c]));
+                const grouped = new Map();
+                legacy.forEach(entry => {
+                    const id = String(entry?.customerId || '').trim();
+                    if (!id || !byId.has(id)) return;
+                    if (!grouped.has(id)) grouped.set(id, []);
+                    grouped.get(id).push(normalizeCreditEntry(entry));
+                });
+                grouped.forEach((list, id) => {
+                    const key = getCustomerCreditLedgerKey(id);
+                    if (!key) return;
+                    let existing = null;
+                    try { existing = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { existing = null; }
+                    if (!Array.isArray(existing)) localStorage.setItem(key, JSON.stringify(list));
+                });
+                localStorage.removeItem('store_credit_ledger_customer');
+            } catch (e) {}
+        }
+
         function getCreditLedgerCustomer(customer = null) {
             try {
+                migrateLegacyCustomerCreditLedgers();
                 const activeCustomer = customer || ((typeof currentLoggedInCustomer !== 'undefined') ? currentLoggedInCustomer : null);
                 if (!activeCustomer || !activeCustomer.id) return [];
                 const key = getCustomerCreditLedgerKey(activeCustomer.id);
-                let data = JSON.parse(localStorage.getItem(key) || 'null');
-
-                // ترحيل آمن مرة واحدة للبيانات القديمة التي تخص هذا الحساب فقط.
+                if (!key) return [];
+                let data = null;
+                try { data = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { data = null; }
+                // حساب جديد = دفتر جديد وفارغ. لا نستخدم أي مفتاح مشترك أو بيانات بديلة.
                 if (!Array.isArray(data)) {
-                    let legacy = [];
-                    try { legacy = JSON.parse(localStorage.getItem('store_credit_ledger_customer') || '[]'); } catch (e) { legacy = []; }
-                    const migrated = Array.isArray(legacy)
-                        ? legacy.filter(entry => String(entry?.customerId || '') === String(activeCustomer.id))
-                        : [];
-                    data = migrated;
+                    data = [];
                     saveCustomerCreditLedgerFor(activeCustomer.id, data);
                 }
-
-                const list = Array.isArray(data) ? data.map(normalizeCreditEntry) : [];
-                const active = list.filter(entry => entry.remainingAmount > 0);
+                const list = data.map(normalizeCreditEntry);
+                const active = list.filter(entry => entry.remainingAmount > 0 && String(entry.customerId || '') === String(activeCustomer.id));
                 if (active.length !== list.length) saveCustomerCreditLedgerFor(activeCustomer.id, active);
                 return active;
             } catch (e) { return []; }
@@ -8744,9 +8770,7 @@ function completeCheckoutOrder() {
                 return;
             }
             const all = getCreditLedgerCustomer().map(normalizeCreditEntry);
-            const list = all.filter(x => String(x.customerId || '') === String(customer.id || '') ||
-                (x.phone && customer.phone && String(x.phone) === String(customer.phone)) ||
-                (x.customerEmail && customer.email && String(x.customerEmail) === String(customer.email)));
+            const list = all.filter(x => String(x.customerId || '') === String(customer.id || ''));
             if (!list.length) {
                 box.innerHTML = '<div class="text-[10px] text-neutral-400 text-center py-3">لا توجد فواتير كريدي</div>';
                 return;
