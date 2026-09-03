@@ -9502,7 +9502,7 @@ let activeComplaintChatId = null;
                         const reader = new FileReader();
                         reader.onload = function(event) {
                             const base64Data = event.target.result;
-                            complaintFilesBase64.push({ type: file.type, data: base64Data });
+                            complaintFilesBase64.push({ type: file.type, data: base64Data, name: file.name || 'مرفق', file });
 
                             if (file.type.startsWith('image/')) {
                                 previewContainer.innerHTML += `<div class="relative w-12 h-12 rounded-lg overflow-hidden border border-neutral-200 shrink-0"><img src="${base64Data}" class="w-full h-full object-cover"></div>`;
@@ -9519,7 +9519,7 @@ let activeComplaintChatId = null;
             renderCustomerCreditLedger();
         });
 
-        function submitUserComplaint() {
+        async function submitUserComplaint() {
             const name = document.getElementById('comp-name').value.trim();
             const phone = document.getElementById('comp-phone').value.trim();
             const text = document.getElementById('comp-text').value.trim();
@@ -9529,44 +9529,77 @@ let activeComplaintChatId = null;
                 return;
             }
 
-            loadUnifiedComplaints();
-            const loggedCustomer = (typeof currentLoggedInCustomer !== 'undefined' && currentLoggedInCustomer) ? currentLoggedInCustomer : null;
-            const complaintData = {
-                id: 'COMP-' + Math.floor(1000 + Math.random() * 9000) + '-' + Date.now(),
-                customerId: loggedCustomer ? loggedCustomer.id : null,
-                customerPhone: phone || (loggedCustomer ? loggedCustomer.phone : null),
-                customerEmail: loggedCustomer ? loggedCustomer.email : null,
-                customerName: name,
-                name: name,
-                phone: phone,
-                text: text,
-                details: text,
-                media: complaintFilesBase64.map(m => ({
-                    type: m.type || '',
-                    data: m.data || m.url || m.src || '',
-                    name: m.name || 'مرفق'
-                })),
-                branch: getActiveBranchData().name,
-                branchId: currentBranchId,
-                date: new Date().toLocaleString('ar-DZ'),
-                status: 'جديدة',
-                messages: [{
-                    sender: 'customer',
+            const submitBtn = document.querySelector('#complaint-modal button[onclick="submitUserComplaint()"]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'جارٍ إرسال الشكوى...'; }
+
+            try {
+                loadUnifiedComplaints();
+                const loggedCustomer = (typeof currentLoggedInCustomer !== 'undefined' && currentLoggedInCustomer) ? currentLoggedInCustomer : null;
+
+                // نحفظ المرفقات الجديدة في IndexedDB أولاً، ثم نضع فقط مراجعها الصغيرة داخل الشكوى.
+                const storedMedia = [];
+                for (const item of complaintFilesBase64) {
+                    try {
+                        let ref = null;
+                        if (item.file && typeof chatReadFileAsDataURL === 'function') {
+                            ref = await chatReadFileAsDataURL(item.file);
+                        } else if (item.data && String(item.data).startsWith('data:')) {
+                            const response = await fetch(item.data);
+                            const blob = await response.blob();
+                            ref = await saveComplaintMediaBlob(blob, { name: item.name || 'مرفق', type: item.type || blob.type });
+                        }
+                        if (ref) storedMedia.push(ref);
+                    } catch (mediaError) {
+                        console.error('تعذر حفظ مرفق الشكوى:', mediaError);
+                    }
+                }
+
+                const complaintData = {
+                    id: 'COMP-' + Math.floor(1000 + Math.random() * 9000) + '-' + Date.now(),
+                    customerId: loggedCustomer ? loggedCustomer.id : null,
+                    customerPhone: phone || (loggedCustomer ? loggedCustomer.phone : null),
+                    customerEmail: loggedCustomer ? loggedCustomer.email : null,
+                    customerName: name,
+                    name: name,
+                    phone: phone,
                     text: text,
-                    media: complaintFilesBase64.map(m => ({ type: m.type || '', data: m.data || '', name: m.name || 'مرفق' })),
-                    time: getCurrentFullDateTime(),
-                    readByOwner: false,
-                    readByCustomer: true
-                }]
-            };
+                    details: text,
+                    media: storedMedia,
+                    branch: getActiveBranchData().name,
+                    branchId: currentBranchId,
+                    date: new Date().toLocaleString('ar-DZ'),
+                    status: 'جديدة',
+                    messages: [{
+                        sender: 'customer',
+                        text: text,
+                        media: storedMedia.map(m => ({ ...m })),
+                        time: getCurrentFullDateTime(),
+                        readByOwner: false,
+                        readByCustomer: true
+                    }]
+                };
 
-            storeComplaints.unshift(complaintData);
-            saveComplaintChatData();
+                storeComplaints.unshift(complaintData);
+                if (!saveComplaintChatData()) throw new Error('تعذر حفظ الشكوى');
 
-            addLogActivity('العميل (' + name + ')', `إرسال شكوى جديدة: "${text.substring(0, 30)}..."`, currentBranchId);
+                addLogActivity('العميل (' + name + ')', `إرسال شكوى جديدة: "${text.substring(0, 30)}..."`, currentBranchId);
 
-            alert('تم إرسال شكوتك بنجاح إلى لوحة التحكم وسيتم الرد عليك قريباً!');
-            closeComplaintModal();
+                complaintFilesBase64 = [];
+                const mediaInput = document.getElementById('comp-media-file');
+                if (mediaInput) mediaInput.value = '';
+                const cameraInput = document.getElementById('comp-camera-file');
+                if (cameraInput) cameraInput.value = '';
+                const preview = document.getElementById('comp-media-preview');
+                if (preview) preview.innerHTML = '';
+
+                alert('تم إرسال شكوتك بنجاح إلى لوحة التحكم وسيتم الرد عليك قريباً!');
+                closeComplaintModal();
+            } catch (error) {
+                console.error('تعذر إرسال الشكوى:', error);
+                alert('تعذر إرسال الشكوى مع المرفق. يرجى المحاولة مرة أخرى.');
+            } finally {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'إرسال الشكوى'; }
+            }
         }
 
         function addLogActivity(admin, action, branchId = null) {
