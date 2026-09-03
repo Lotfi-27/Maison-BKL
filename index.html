@@ -8659,9 +8659,54 @@ function completeCheckoutOrder() {
                 </div>
                 ${debtors.length ? `<div class="overflow-x-auto rounded-xl border border-orange-100 bg-white"><table class="w-full min-w-[1200px] text-[10px] border-collapse"><thead class="bg-orange-50 text-orange-900"><tr>
                     <th class="p-2 border-b text-right">#</th><th class="p-2 border-b text-right">الاسم واللقب</th><th class="p-2 border-b text-right">رقم الهاتف</th><th class="p-2 border-b text-right">العنوان</th><th class="p-2 border-b text-right">قسم الديون</th><th class="p-2 border-b text-right">آخر تسديد</th><th class="p-2 border-b text-right">مدة الدين</th><th class="p-2 border-b text-right">الإجمالي</th><th class="p-2 border-b text-right">المسدد</th><th class="p-2 border-b text-right">المتبقي</th>
-                </tr></thead><tbody>${debtors.map((d,index)=>`<tr class="border-b border-neutral-100 align-top"><td class="p-2 font-bold text-orange-700">${index+1}</td><td class="p-2 font-extrabold">${escapeOrderHtml(d.customerName)}</td><td class="p-2 dir-ltr text-right">${escapeOrderHtml(d.phone||'-')}</td><td class="p-2 leading-5">${escapeOrderHtml(d.address||'-')}<div class="text-[9px] text-neutral-500">${escapeOrderHtml([d.state,d.municipality].filter(Boolean).join(' - ')||'-')}</div></td><td class="p-2 min-w-[340px]">${d.debts.map(debt=>`<div class="rounded-lg bg-neutral-50 border border-neutral-200 p-2 mb-1"><div class="flex justify-between gap-2 font-bold"><span>فاتورة #${escapeOrderHtml(debt.invoiceId)}</span><span>${escapeOrderHtml(debt.status)}</span></div><div class="text-[9px] text-neutral-500 mt-1">التاريخ: ${escapeOrderHtml(debt.date||'-')}</div><div class="mt-1">الدين: <b>${escapeOrderHtml(formatCreditAmount(debt.total))}</b> — المسدد: <b class="text-emerald-700">${escapeOrderHtml(formatCreditAmount(debt.paid))}</b> — المتبقي: <b class="text-red-700">${escapeOrderHtml(formatCreditAmount(debt.remaining))}</b></div></div>`).join('')}</td><td class="p-2">${escapeOrderHtml(d.lastPaymentDate || 'لم يسدد')}<div class="text-[9px] text-neutral-500">${escapeOrderHtml(d.lastPaymentMethod||'')}</div></td><td class="p-2 font-extrabold text-amber-700">${d.debtDays} يوم</td><td class="p-2 font-bold">${escapeOrderHtml(formatCreditAmount(d.invoiceTotal))}</td><td class="p-2 font-bold text-emerald-700">${escapeOrderHtml(formatCreditAmount(d.paidTotal))}</td><td class="p-2 font-extrabold text-red-700">${escapeOrderHtml(formatCreditAmount(d.remainingTotal))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="text-[10px] text-neutral-400 text-center py-6 bg-white border rounded-xl">لا توجد نتائج مطابقة للفلاتر.</div>'}`;
+                </tr></thead><tbody>${debtors.map((d,index)=>`<tr class="border-b border-neutral-100 align-top cursor-pointer select-none" title="اضغط مطولاً لحذف سجل هذا الزبون" data-credit-debtor-key="${escapeOrderHtml(d.key)}" onmousedown="startCreditDebtorLongPress(event,this,'${escapeOrderHtml(d.key)}')" onmouseup="cancelCreditDebtorLongPress(this)" onmouseleave="cancelCreditDebtorLongPress(this)" ontouchstart="startCreditDebtorLongPress(event,this,'${escapeOrderHtml(d.key)}')" ontouchend="cancelCreditDebtorLongPress(this)" ontouchcancel="cancelCreditDebtorLongPress(this)"><td class="p-2 font-bold text-orange-700">${index+1}</td><td class="p-2 font-extrabold">${escapeOrderHtml(d.customerName)}<div class="text-[8px] text-neutral-400 mt-1">اضغط مطولاً للحذف</div></td><td class="p-2 dir-ltr text-right">${escapeOrderHtml(d.phone||'-')}</td><td class="p-2 leading-5">${escapeOrderHtml(d.address||'-')}<div class="text-[9px] text-neutral-500">${escapeOrderHtml([d.state,d.municipality].filter(Boolean).join(' - ')||'-')}</div></td><td class="p-2 min-w-[340px]">${d.debts.map(debt=>`<div class="rounded-lg bg-neutral-50 border border-neutral-200 p-2 mb-1"><div class="flex justify-between gap-2 font-bold"><span>فاتورة #${escapeOrderHtml(debt.invoiceId)}</span><span>${escapeOrderHtml(debt.status)}</span></div><div class="text-[9px] text-neutral-500 mt-1">التاريخ: ${escapeOrderHtml(debt.date||'-')}</div><div class="mt-1">الدين: <b>${escapeOrderHtml(formatCreditAmount(debt.total))}</b> — المسدد: <b class="text-emerald-700">${escapeOrderHtml(formatCreditAmount(debt.paid))}</b> — المتبقي: <b class="text-red-700">${escapeOrderHtml(formatCreditAmount(debt.remaining))}</b></div></div>`).join('')}</td><td class="p-2">${escapeOrderHtml(d.lastPaymentDate || 'لم يسدد')}<div class="text-[9px] text-neutral-500">${escapeOrderHtml(d.lastPaymentMethod||'')}</div></td><td class="p-2 font-extrabold text-amber-700">${d.debtDays} يوم</td><td class="p-2 font-bold">${escapeOrderHtml(formatCreditAmount(d.invoiceTotal))}</td><td class="p-2 font-bold text-emerald-700">${escapeOrderHtml(formatCreditAmount(d.paidTotal))}</td><td class="p-2 font-extrabold text-red-700">${escapeOrderHtml(formatCreditAmount(d.remainingTotal))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="text-[10px] text-neutral-400 text-center py-6 bg-white border rounded-xl">لا توجد نتائج مطابقة للفلاتر.</div>'}`;
             const sf=document.getElementById('credit-debtors-status-filter'); const df=document.getElementById('credit-debtors-days-filter');
             if(sf) sf.value=getCreditDebtorsFilterState().status; if(df) df.value=String(getCreditDebtorsFilterState().minDays);
+        }
+
+        // حذف سجل صاحب الكريدي بالكامل بالضغط المطول على صف الزبون.
+        let bklCreditDebtorLongPressTimer = null;
+        function startCreditDebtorLongPress(event, row, debtorKey) {
+            if (event && event.type === 'mousedown' && event.button !== 0) return;
+            cancelCreditDebtorLongPress(row);
+            if (row) row.style.opacity = '0.65';
+            bklCreditDebtorLongPressTimer = setTimeout(() => {
+                bklCreditDebtorLongPressTimer = null;
+                if (row) row.style.opacity = '';
+                deleteCreditDebtorRecord(debtorKey);
+            }, 900);
+        }
+        function cancelCreditDebtorLongPress(row) {
+            if (bklCreditDebtorLongPressTimer) { clearTimeout(bklCreditDebtorLongPressTimer); bklCreditDebtorLongPressTimer = null; }
+            if (row) row.style.opacity = '';
+        }
+        function deleteCreditDebtorRecord(debtorKey) {
+            const key = String(debtorKey || '');
+            if (!key) return;
+            const debtors = getCreditDebtorsRegistry();
+            const debtor = debtors.find(d => String(d.key) === key);
+            if (!debtor) return;
+            const label = debtor.customerName || debtor.phone || 'هذا الزبون';
+            const confirmed = confirm(`هل تريد حذف سجل الكريدي بالكامل للزبون «${label}»؟\n\nسيتم حذف فواتير الكريدي المستحقة لهذا الزبون من دفتر الكريدي الخاص بالتاجر والزبون. هذا الإجراء لا يمكن التراجع عنه.`);
+            if (!confirmed) return;
+            const matches = (entry) => {
+                const e = normalizeCreditEntry(entry);
+                const customerId = String(e.customerId || '');
+                const phone = String(e.phone || '');
+                const name = String(e.customerName || '').trim();
+                return (debtor.customerId && customerId === String(debtor.customerId)) ||
+                       (debtor.phone && phone && phone === String(debtor.phone)) ||
+                       (!debtor.customerId && !debtor.phone && name === String(debtor.customerName || '').trim());
+            };
+            const admin = getCreditLedgerAdmin().filter(e => !matches(e));
+            const customer = getCreditLedgerCustomer().filter(e => !matches(e));
+            localStorage.setItem('store_credit_ledger_admin', JSON.stringify(admin));
+            localStorage.setItem('store_credit_ledger_customer', JSON.stringify(customer));
+            try { localStorage.setItem('store_credit_ledger_last_update', String(Date.now())); } catch (e) {}
+            try { addLogActivity('الكريدي', 'حذف سجل صاحب كريدي: ' + label, currentBranchId); } catch (e) {}
+            renderCreditDebtorsRegistry();
+            renderOwnerCreditLedger();
+            renderCustomerCreditLedger();
         }
 
         function resetCreditDebtorsFilters(){
