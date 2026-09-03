@@ -8197,12 +8197,40 @@ function completeCheckoutOrder() {
             } catch (e) { return []; }
         }
 
-        function getCreditLedgerCustomer() {
+        // دفتر الكريدي الخاص بالزبون: لكل حساب مفتاح مستقل حتى لا تظهر بيانات
+        // زبون آخر عند تسجيل الدخول بحساب جديد.
+        function getCustomerCreditLedgerKey(customerId) {
+            const id = String(customerId || '').trim();
+            return id ? 'store_credit_ledger_customer_' + id : '';
+        }
+
+        function saveCustomerCreditLedgerFor(customerId, list) {
+            const key = getCustomerCreditLedgerKey(customerId);
+            if (!key) return;
+            localStorage.setItem(key, JSON.stringify(Array.isArray(list) ? list : []));
+        }
+
+        function getCreditLedgerCustomer(customer = null) {
             try {
-                const data = JSON.parse(localStorage.getItem('store_credit_ledger_customer') || '[]');
+                const activeCustomer = customer || ((typeof currentLoggedInCustomer !== 'undefined') ? currentLoggedInCustomer : null);
+                if (!activeCustomer || !activeCustomer.id) return [];
+                const key = getCustomerCreditLedgerKey(activeCustomer.id);
+                let data = JSON.parse(localStorage.getItem(key) || 'null');
+
+                // ترحيل آمن مرة واحدة للبيانات القديمة التي تخص هذا الحساب فقط.
+                if (!Array.isArray(data)) {
+                    let legacy = [];
+                    try { legacy = JSON.parse(localStorage.getItem('store_credit_ledger_customer') || '[]'); } catch (e) { legacy = []; }
+                    const migrated = Array.isArray(legacy)
+                        ? legacy.filter(entry => String(entry?.customerId || '') === String(activeCustomer.id))
+                        : [];
+                    data = migrated;
+                    saveCustomerCreditLedgerFor(activeCustomer.id, data);
+                }
+
                 const list = Array.isArray(data) ? data.map(normalizeCreditEntry) : [];
                 const active = list.filter(entry => entry.remainingAmount > 0);
-                if (active.length !== list.length) localStorage.setItem('store_credit_ledger_customer', JSON.stringify(active));
+                if (active.length !== list.length) saveCustomerCreditLedgerFor(activeCustomer.id, active);
                 return active;
             } catch (e) { return []; }
         }
@@ -8249,9 +8277,11 @@ function completeCheckoutOrder() {
             adminLedger.unshift(cloneImmutableData(finalEntry));
             localStorage.setItem('store_credit_ledger_admin', JSON.stringify(adminLedger));
 
-            const customerLedger = getCreditLedgerCustomer();
-            customerLedger.unshift(cloneImmutableData(finalEntry));
-            localStorage.setItem('store_credit_ledger_customer', JSON.stringify(customerLedger));
+            if (order.customerId) {
+                const customerLedger = getCreditLedgerCustomer({id: order.customerId});
+                customerLedger.unshift(cloneImmutableData(finalEntry));
+                saveCustomerCreditLedgerFor(order.customerId, customerLedger);
+            }
 
             try { addLogActivity('العميل', 'إنشاء فاتورة كريدي غير قابلة للتعديل (' + order.id + ')', currentBranchId); } catch (e) {}
             renderCustomerCreditLedger();
@@ -8778,9 +8808,16 @@ function completeCheckoutOrder() {
                        (!debtor.customerId && !debtor.phone && name === String(debtor.customerName || '').trim());
             };
             const admin = getCreditLedgerAdmin().filter(e => !matches(e));
-            const customer = getCreditLedgerCustomer().filter(e => !matches(e));
             localStorage.setItem('store_credit_ledger_admin', JSON.stringify(admin));
-            localStorage.setItem('store_credit_ledger_customer', JSON.stringify(customer));
+
+            // حذف السجل من الحساب المرتبط فقط، مع تنظيف أي حسابات قديمة متأثرة بالبيانات المشتركة.
+            const customerIds = new Set();
+            getCreditLedgerAdmin().forEach(e => { if (e.customerId) customerIds.add(String(e.customerId)); });
+            (Array.isArray(registeredCustomers) ? registeredCustomers : []).forEach(c => { if (c?.id) customerIds.add(String(c.id)); });
+            customerIds.forEach(customerId => {
+                const list = getCreditLedgerCustomer({id: customerId}).filter(e => !matches(e));
+                saveCustomerCreditLedgerFor(customerId, list);
+            });
             try { localStorage.setItem('store_credit_ledger_last_update', String(Date.now())); } catch (e) {}
             try { addLogActivity('الكريدي', 'حذف سجل صاحب كريدي: ' + label, currentBranchId); } catch (e) {}
             renderCreditDebtorsRegistry();
@@ -9011,12 +9048,16 @@ function renderOwnerCreditLedger() {
             const activeAdmin = updatedAdminAll.filter(entry => normalizeCreditEntry(entry).remainingAmount > 0);
             localStorage.setItem('store_credit_ledger_admin', JSON.stringify(activeAdmin));
 
-            const customerLedger = getCreditLedgerCustomer();
-            const updatedCustomer = customerLedger.map(raw => {
-                const adminUpdated = updatedAdminAll.find(x => String(x.id) === String(raw.id));
-                return adminUpdated ? cloneImmutableData(adminUpdated) : raw;
-            }).filter(entry => normalizeCreditEntry(entry).remainingAmount > 0);
-            localStorage.setItem('store_credit_ledger_customer', JSON.stringify(updatedCustomer));
+            // تحديث دفتر الحساب المعني فقط، وليس دفترًا مشتركًا بين جميع الحسابات.
+            const affectedCustomerIds = [...new Set(updatedAdminAll.map(x => x.customerId).filter(Boolean).map(String))];
+            affectedCustomerIds.forEach(customerId => {
+                const customerLedger = getCreditLedgerCustomer({id: customerId});
+                const updatedCustomer = customerLedger.map(raw => {
+                    const adminUpdated = updatedAdminAll.find(x => String(x.id) === String(raw.id));
+                    return adminUpdated ? cloneImmutableData(adminUpdated) : raw;
+                }).filter(entry => normalizeCreditEntry(entry).remainingAmount > 0);
+                saveCustomerCreditLedgerFor(customerId, updatedCustomer);
+            });
 
             // ضمان الحساب النهائي: المتبقي = الإجمالي الأصلي - مجموع التسديدات.
             // مثال: 214.550 - 200.000 = 14.550 دج.
@@ -9072,9 +9113,11 @@ function renderOwnerCreditLedger() {
             const updatedAdmin = updatedAdminAll.filter(entry => normalizeCreditEntry(entry).remainingAmount > 0);
             localStorage.setItem('store_credit_ledger_admin', JSON.stringify(updatedAdmin));
 
-            const customerLedger = getCreditLedgerCustomer();
-            const updatedCustomer = customerLedger.map(x => String(x.id) === String(id) ? updateEntry(x) : x).filter(entry => normalizeCreditEntry(entry).remainingAmount > 0);
-            localStorage.setItem('store_credit_ledger_customer', JSON.stringify(updatedCustomer));
+            if (normalized.customerId) {
+                const customerLedger = getCreditLedgerCustomer({id: normalized.customerId});
+                const updatedCustomer = customerLedger.map(x => String(x.id) === String(id) ? updateEntry(x) : x).filter(entry => normalizeCreditEntry(entry).remainingAmount > 0);
+                saveCustomerCreditLedgerFor(normalized.customerId, updatedCustomer);
+            }
 
             try { addLogActivity('صاحب المتجر', 'تسجيل دفعة كريدي بقيمة ' + formatCreditAmount(amount) + ' للفاتورة ' + normalized.invoiceId, currentBranchId); } catch (e) {}
             renderOwnerCreditLedger();
