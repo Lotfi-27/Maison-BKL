@@ -684,6 +684,8 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
 #bkl-branch-customers-panel .bkl-btn-private{background:#ede9fe;color:#5b21b6}
 #bkl-branch-customers-panel .bkl-btn-normal{background:#f1f5f9;color:#475569}
 #bkl-branch-customers-panel .bkl-btn-delete{background:#fee2e2;color:#b91c1c}
+#bkl-branch-customers-panel tbody tr.bkl-customer-longpress-active{opacity:.62;transform:scale(.995);transition:opacity .15s,transform .15s;}
+#bkl-branch-customers-panel tbody tr{user-select:none;-webkit-user-select:none;}
 @media(max-width:760px){#bkl-branch-customers-panel .bkl-bc-controls{display:grid;grid-template-columns:1fr;gap:7px}#bkl-branch-customers-panel .bkl-bc-body{max-height:420px}#bkl-branch-customers-panel table{min-width:900px}}
 </style>
 
@@ -7295,7 +7297,7 @@ function completeCheckoutOrder() {
                 const discount = Math.min(75, Math.max(0, Number(c?.discount ?? c?.discountRate ?? 0) || 0));
                 const discountOptions = Array.from({length: 75}, (_, i) => i + 1)
                     .map(percent => `<option value="${percent}" ${discount === percent ? 'selected' : ''}>${percent}%</option>`).join('');
-                return `<tr class="bkl-customer-colored" style="border-inline-start:5px solid ${customerColor};background:linear-gradient(90deg,${customerTint},#fff 35%);">
+                return `<tr class="bkl-customer-colored" title="اضغط مطولاً لحذف هذا الزبون" data-bkl-customer-id="${esc(c?.id ?? c?.username ?? "")}" onpointerdown="startBKLRegisteredCustomerLongPress(event,this)" onpointerup="cancelBKLRegisteredCustomerLongPress(this)" onpointercancel="cancelBKLRegisteredCustomerLongPress(this)" onpointerleave="cancelBKLRegisteredCustomerLongPress(this)" oncontextmenu="return false" style="border-inline-start:5px solid ${customerColor};background:linear-gradient(90deg,${customerTint},#fff 35%);">
                     <td>${esc(`${c?.firstname || ''} ${c?.lastname || ''}`.trim() || '—')}</td>
                     <td><span class="bkl-customer-badge ${type}" style="color:${customerColor};border:1px solid ${customerColor};background:${customerTint};">${esc(typeLabel)}</span></td>
                     <td>
@@ -7322,6 +7324,60 @@ function completeCheckoutOrder() {
                     </td>
                 </tr>`;
             }).join('');
+        }
+
+        // حذف الزبون المسجل بالكامل بالضغط المطول على صفه (كمبيوتر/هاتف).
+        let bklRegisteredCustomerLongPressTimer = null;
+        let bklRegisteredCustomerLongPressRow = null;
+        function startBKLRegisteredCustomerLongPress(event, row) {
+            if (!row) return;
+            if (event && event.pointerType === 'mouse' && event.button !== 0) return;
+            // لا نعتبر الضغط على عناصر التحكم داخل الصف طلب حذف.
+            if (event && event.target && event.target.closest && event.target.closest('select,button,input,a')) return;
+            cancelBKLRegisteredCustomerLongPress(row);
+            bklRegisteredCustomerLongPressRow = row;
+            row.classList.add('bkl-customer-longpress-active');
+            bklRegisteredCustomerLongPressTimer = setTimeout(() => {
+                bklRegisteredCustomerLongPressTimer = null;
+                if (row) row.classList.remove('bkl-customer-longpress-active');
+                const id = row.getAttribute('data-bkl-customer-id') || '';
+                bklRegisteredCustomerLongPressRow = null;
+                if (id) deleteBKLRegisteredCustomer(id);
+            }, 900);
+        }
+        function cancelBKLRegisteredCustomerLongPress(row) {
+            if (bklRegisteredCustomerLongPressTimer) {
+                clearTimeout(bklRegisteredCustomerLongPressTimer);
+                bklRegisteredCustomerLongPressTimer = null;
+            }
+            const targetRow = row || bklRegisteredCustomerLongPressRow;
+            if (targetRow) targetRow.classList.remove('bkl-customer-longpress-active');
+            bklRegisteredCustomerLongPressRow = null;
+        }
+        function deleteBKLRegisteredCustomer(customerId) {
+            const id = String(customerId || '');
+            if (!id) return;
+            let customers = [];
+            try { customers = JSON.parse(localStorage.getItem('store_customers') || '[]'); } catch (e) { customers = []; }
+            if (!Array.isArray(customers)) customers = [];
+            const index = customers.findIndex(c => String(c?.id ?? c?.username ?? '') === id);
+            if (index < 0) return;
+            const customer = customers[index];
+            const label = `${customer?.firstname || ''} ${customer?.lastname || ''}`.trim() || customer?.username || customer?.phone || 'هذا الزبون';
+            if (!confirm(`هل تريد حذف الزبون «${label}» من قائمة الزبائن المسجلين؟\n\nسيتم حذف حسابه من قائمة الزبائن المسجلين. هذا الإجراء لا يمكن التراجع عنه.`)) return;
+            customers.splice(index, 1);
+            localStorage.setItem('store_customers', JSON.stringify(customers));
+            try { registeredCustomers = customers; } catch (e) {}
+            try {
+                if (typeof currentLoggedInCustomer !== 'undefined' && currentLoggedInCustomer && String(currentLoggedInCustomer?.id ?? currentLoggedInCustomer?.username ?? '') === id) {
+                    currentLoggedInCustomer = null;
+                    localStorage.removeItem('store_active_customer');
+                }
+            } catch (e) {}
+            try { addLogActivity('الزبائن', 'حذف زبون مسجل: ' + label, customer?.registeredBranchId || customer?.branchId || currentBranchId); } catch (e) {}
+            renderBKLBranchCustomers();
+            try { if (typeof renderCustomerNotifications === 'function') renderCustomerNotifications(); } catch (e) {}
+            try { if (typeof renderCustomerComplaintChats === 'function') renderCustomerComplaintChats(); } catch (e) {}
         }
 
         function bklSetCustomerTypeFilter(type) {
