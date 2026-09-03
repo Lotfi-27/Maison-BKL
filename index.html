@@ -2518,7 +2518,7 @@ async function getChatMessageMediaHtml(msg, ownerView, complaintId, messageIndex
     const parts = await Promise.all(media.map(async (file, index) => {
         if (isComplaintMediaLocallyDeleted(ownerView, complaintId, msg.messageId, index)) return '';
         const type = String(file.type || '');
-        let src = String(file.data || file.url || file.src || '');
+        let src = String(file.data || file.syncData || file.url || file.src || '');
         if (!src && file.storage === 'indexeddb' && file.id) {
             try {
                 const blob = await getComplaintMediaBlob(file.id);
@@ -9519,6 +9519,53 @@ let activeComplaintChatId = null;
             renderCustomerCreditLedger();
         });
 
+        async function compressInitialComplaintImage(file) {
+            if (!file || !file.type || !file.type.startsWith('image/')) return null;
+            let source = null;
+            try {
+                if (typeof createImageBitmap === 'function') {
+                    try { source = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (_) {}
+                }
+                if (!source) {
+                    source = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const img = new Image();
+                            img.onload = () => resolve(img);
+                            img.onerror = () => reject(new Error('تعذر قراءة الصورة'));
+                            img.src = reader.result;
+                        };
+                        reader.onerror = () => reject(new Error('تعذر قراءة الصورة'));
+                        reader.readAsDataURL(file);
+                    });
+                }
+                const width = source.width || source.naturalWidth;
+                const height = source.height || source.naturalHeight;
+                const maxSide = 1280;
+                const scale = Math.min(1, maxSide / Math.max(width, height));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(width * scale));
+                canvas.height = Math.max(1, Math.round(height * scale));
+                const ctx = canvas.getContext('2d', { alpha: false });
+                if (!ctx) throw new Error('تعذر تجهيز الصورة');
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+                if (source.close) source.close();
+                let quality = 0.70;
+                let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                // إبقاء الصورة المضغوطة صغيرة حتى تنتقل مع بيانات الشكوى بأمان.
+                while (dataUrl.length > 450000 && quality > 0.45) {
+                    quality -= 0.05;
+                    dataUrl = canvas.toDataURL('image/jpeg', quality);
+                }
+                return dataUrl;
+            } catch (e) {
+                console.error('تعذر ضغط صورة الشكوى الأولى:', e);
+                return null;
+            }
+        }
+
         async function submitUserComplaint() {
             const name = document.getElementById('comp-name').value.trim();
             const phone = document.getElementById('comp-phone').value.trim();
@@ -9536,21 +9583,29 @@ let activeComplaintChatId = null;
                 loadUnifiedComplaints();
                 const loggedCustomer = (typeof currentLoggedInCustomer !== 'undefined' && currentLoggedInCustomer) ? currentLoggedInCustomer : null;
 
-                // نحفظ المرفقات الجديدة في IndexedDB أولاً، ثم نضع فقط مراجعها الصغيرة داخل الشكوى.
+                // الصور الأولى للشكوى تُضغط ثم تُحفظ كبيانات صغيرة قابلة للمزامنة مع التاجر.
                 const storedMedia = [];
                 for (const item of complaintFilesBase64) {
                     try {
-                        let ref = null;
-                        if (item.file && typeof chatReadFileAsDataURL === 'function') {
-                            ref = await chatReadFileAsDataURL(item.file);
-                        } else if (item.data && String(item.data).startsWith('data:')) {
-                            const response = await fetch(item.data);
-                            const blob = await response.blob();
-                            ref = await saveComplaintMediaBlob(blob, { name: item.name || 'مرفق', type: item.type || blob.type });
+                        if (item.file && item.file.type && item.file.type.startsWith('image/')) {
+                            const compressedData = await compressInitialComplaintImage(item.file);
+                            if (compressedData) {
+                                storedMedia.push({
+                                    type: 'image/jpeg',
+                                    syncData: compressedData,
+                                    name: (item.name || 'صورة').replace(/\.[^.]+$/, '') + '.jpg',
+                                    storage: 'sync'
+                                });
+                                continue;
+                            }
                         }
-                        if (ref) storedMedia.push(ref);
+                        // الفيديوهات/الملفات الأخرى تبقى في IndexedDB كما في نظام المحادثة.
+                        if (item.file && typeof chatReadFileAsDataURL === 'function') {
+                            const ref = await chatReadFileAsDataURL(item.file);
+                            if (ref) storedMedia.push(ref);
+                        }
                     } catch (mediaError) {
-                        console.error('تعذر حفظ مرفق الشكوى:', mediaError);
+                        console.error('تعذر ضغط/حفظ مرفق الشكوى:', mediaError);
                     }
                 }
 
