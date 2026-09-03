@@ -2688,6 +2688,8 @@ function saveComplaintChatData() {
 }
 
 function refreshComplaintChatFromStorage() {
+    // أثناء تجهيز صورة/فيديو للإرسال لا تسمح بالمزامنة الدورية باستبدال المحادثة الموجودة بالذاكرة.
+    if (typeof complaintChatSendInProgress !== 'undefined' && complaintChatSendInProgress) return;
     try {
         const raw = localStorage.getItem('store_complaints') ||
                     localStorage.getItem('storeComplaints') ||
@@ -2813,7 +2815,12 @@ async function renderComplaintChatMessages(complaint) {
     container.scrollTop = container.scrollHeight;
 }
 
+let complaintChatSendInProgress = false;
+
 async function sendComplaintReply() {
+    if (complaintChatSendInProgress) return;
+    complaintChatSendInProgress = true;
+    try {
     const input = document.getElementById('owner-chat-text-input');
     const fileInput = document.getElementById('owner-chat-file-input');
     if (!activeComplaintChatId) return;
@@ -2821,8 +2828,6 @@ async function sendComplaintReply() {
     const media = await collectChatAttachments('owner-chat-file-input');
     if (!text && !media.length) return;
 
-    refreshComplaintChatFromStorage();
-    await migrateComplaintLegacyMediaToIndexedDB();
     const complaint = storeComplaints.find(c => String(c.id) === String(activeComplaintChatId));
     if (!complaint) return;
     ensureComplaintMessages(complaint);
@@ -2865,8 +2870,11 @@ async function sendComplaintReply() {
         }
     }
 
-    renderComplaintChatMessages(complaint);
+    await renderComplaintChatMessages(complaint);
     renderOwnerDashboardData();
+    } finally {
+        complaintChatSendInProgress = false;
+    }
 }
 
 function findRegisteredCustomerForComplaint(complaint) {
@@ -2954,6 +2962,9 @@ async function renderCustomerComplaintChatMessages(complaint) {
 }
 
 async function sendCustomerComplaintMessage() {
+    if (complaintChatSendInProgress) return;
+    complaintChatSendInProgress = true;
+    try {
     const input = document.getElementById('customer-chat-text-input');
     const id = window.activeCustomerComplaintChatId;
     if (!input || !id || !currentLoggedInCustomer) return;
@@ -2961,8 +2972,6 @@ async function sendCustomerComplaintMessage() {
     const media = await collectChatAttachments('customer-chat-file-input');
     if (!text && !media.length) return;
 
-    refreshComplaintChatFromStorage();
-    await migrateComplaintLegacyMediaToIndexedDB();
     const complaint = storeComplaints.find(c => String(c.id) === String(id));
     if (!complaint || !getCustomerComplaintsForAccount().some(c => String(c.id) === String(id))) return;
     ensureComplaintMessages(complaint);
@@ -2985,10 +2994,13 @@ async function sendCustomerComplaintMessage() {
         addLogActivity(`العميل (${complaint.customerName || currentLoggedInCustomer.firstname || 'زبون'})`, `إرسال رسالة جديدة في الشكوى #${complaint.id}`, typeof currentBranchId !== 'undefined' ? currentBranchId : null);
     }
 
-    renderCustomerComplaintChatMessages(complaint);
+    await renderCustomerComplaintChatMessages(complaint);
     renderCustomerComplaintChats();
     if (typeof renderOwnerDashboardData === 'function') renderOwnerDashboardData();
                 if (typeof renderCustomerCreditLedger === 'function') renderCustomerCreditLedger();
+    } finally {
+        complaintChatSendInProgress = false;
+    }
 }
 
 async function deleteComplaintMessage(complaintId, messageIndex) {
