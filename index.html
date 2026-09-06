@@ -904,6 +904,10 @@ footer button:hover i{filter:brightness(.88); transform:translateY(-1px); transi
   #order-preview-modal #order-preview-content table{min-width:680px;}
 }
 </style>
+
+<style id="bkl-dzd-decimal-style">
+.dzd-decimal { font-size: 0.68em; font-weight: 500; vertical-align: baseline; }
+</style>
 </head>
 <body class="bg-neutral-50 min-h-screen flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
@@ -1961,6 +1965,19 @@ let currentCurrency = 'DZD';
 let exchangeRatesLastUpdated = null;
 let exchangeRatesSource = 'ExchangeRate-API';
 
+function formatDZDDisplay(value) {
+    const amount = Number(value) || 0;
+    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatDZDDisplayHtml(value) {
+    const amount = Number(value) || 0;
+    const formatted = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const match = formatted.match(/^(.*?)(\.)(\d{2})$/);
+    if (!match) return formatted;
+    return `${match[1]}<span class="dzd-decimal">${match[2]}${match[3]}</span>`;
+}
+
 function formatPrice(basePriceUSD, priceDZD = null) {
     const config = currencyConfig[currentCurrency] || currencyConfig['USD'];
     let converted;
@@ -1980,9 +1997,9 @@ function formatPrice(basePriceUSD, priceDZD = null) {
 
     const rounded = currentCurrency === 'DZD' ? Math.round(converted) : Number(converted.toFixed(2));
     if (config.position === 'before') {
-        return `${config.symbol} ${rounded.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+        return `${config.symbol} ${currentCurrency === 'DZD' ? formatDZDDisplay(rounded) : rounded.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
     }
-    return `${rounded.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${config.symbol}`;
+    return `${currentCurrency === 'DZD' ? formatDZDDisplay(rounded) : rounded.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${config.symbol}`;
 }
 
 async function loadLiveExchangeRates(force = false) {
@@ -2031,7 +2048,7 @@ async function loadLiveExchangeRates(force = false) {
         if (typeof renderCart === 'function') renderCart();
         if (typeof selectedProduct !== 'undefined' && selectedProduct) {
             const priceElement = document.getElementById('product-price');
-            if (priceElement) priceElement.innerText = formatPrice(selectedProduct.basePrice, selectedProduct.priceDZD);
+            if (priceElement) priceElement.innerHTML = formatPriceDisplayHtml(selectedProduct.basePrice, selectedProduct.priceDZD);
         }
         return true;
     } catch (error) {
@@ -2045,7 +2062,7 @@ function changeCurrency(curr) {
     renderProducts();
     if (selectedProduct) {
         const priceElement = document.getElementById('product-price');
-        if (priceElement) priceElement.innerText = formatPrice(selectedProduct.basePrice, selectedProduct.priceDZD);
+        if (priceElement) priceElement.innerHTML = formatPriceDisplayHtml(selectedProduct.basePrice, selectedProduct.priceDZD);
     }
     if (typeof renderCart === 'function') renderCart();
 }
@@ -3392,7 +3409,7 @@ function recalculateOrderTotals(order) {
     order.deliveryPrice = delivery;
     order.shippingPrice = delivery;
     order.grandTotal = grandTotal;
-    order.totalAmount = grandTotal.toLocaleString('ar-DZ', { minimumFractionDigits: grandTotal % 1 ? 2 : 0, maximumFractionDigits: 2 }) + ' د.ج';
+    order.totalAmount = formatDZDDisplay(grandTotal) + ' د.ج';
     order.total = order.totalAmount;
     order.totalPriceFormatted = order.totalAmount;
     return order;
@@ -3447,8 +3464,8 @@ function renderOrdersList() {
                     <div class="sm:text-left">
                         <p class="font-bold text-amber-600">🛍️ المنتجات (${items.length}):</p>
                         <div class="mt-1 space-y-0.5">${itemSummary}</div>
-                        <p class="text-[11px] text-neutral-600 mt-1">التوصيل: ${delivery.toLocaleString('ar-DZ')} د.ج</p>
-                        <p class="font-bold text-neutral-900 mt-0.5">💰 الإجمالي: ${total.toLocaleString('ar-DZ')} د.ج</p>
+                        <p class="text-[11px] text-neutral-600 mt-1">التوصيل: ${formatDZDDisplayHtml(delivery)} د.ج</p>
+                        <p class="font-bold text-neutral-900 mt-0.5">💰 الإجمالي: ${formatDZDDisplayHtml(total)} د.ج</p>
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-neutral-100">
@@ -3699,7 +3716,7 @@ function updateEditedOrderTotalPreview() {
     const rate = Number(currencyConfig?.DZD?.rate || 132.96);
     const subtotal = collectEditedOrderItems().reduce((sum, item) => sum + Math.round(Number(item.basePrice || 0) * Number(item.quantity || 1) * rate), 0);
     const delivery = Math.max(0, Number(document.getElementById('edit-order-delivery')?.value || 0) || 0);
-    totalEl.textContent = `الإجمالي: ${(subtotal + delivery).toLocaleString('ar-DZ')} د.ج`;
+    totalEl.innerHTML = `الإجمالي: ${formatDZDDisplayHtml(subtotal + delivery)} د.ج`;
 }
 
 function saveEditedOrder(event) {
@@ -3819,7 +3836,7 @@ function previewOrder(orderId) {
                 التاريخ: ${escapeOrderEditorValue(order.date || '')}<br>
                 الحالة: ${escapeOrderEditorValue(order.status || 'قيد التجهيز')}<br>
                 الدفع: ${escapeOrderEditorValue(order.paymentMethod || 'غير محدد')}<br>
-                التوصيل: ${delivery.toLocaleString('ar-DZ')} د.ج
+                التوصيل: ${formatDZDDisplayHtml(delivery)} د.ج
             </div>
         </div>
         <div class="mt-3 border rounded-xl bkl-order-table-scroll">
@@ -3828,14 +3845,14 @@ function previewOrder(orderId) {
                 <tbody>${items.map(item => {
                     const price = Number(item.priceDZD ?? item.price ?? item.unitPriceDZD ?? 0) || Math.round(Number(item.basePrice ?? item.unitPriceUSD ?? 0) * Number(currencyConfig?.DZD?.rate || 132.96));
                     const qty = Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1);
-                    return `<tr class="border-t"><td class="p-2">${escapeOrderEditorValue(item.name || item.productName || 'منتج')}</td><td class="p-2 text-center">${price.toLocaleString('ar-DZ')} د.ج</td><td class="p-2 text-center">${qty}</td><td class="p-2 text-center">${escapeOrderEditorValue(item.color || '—')}</td><td class="p-2 text-center">${escapeOrderEditorValue(item.size || '—')}</td><td class="p-2 text-center font-bold">${(price * qty).toLocaleString('ar-DZ')} د.ج</td></tr>`;
+                    return `<tr class="border-t"><td class="p-2">${escapeOrderEditorValue(item.name || item.productName || 'منتج')}</td><td class="p-2 text-center">${formatDZDDisplayHtml(price)} د.ج</td><td class="p-2 text-center">${qty}</td><td class="p-2 text-center">${escapeOrderEditorValue(item.color || '—')}</td><td class="p-2 text-center">${escapeOrderEditorValue(item.size || '—')}</td><td class="p-2 text-center font-bold">${formatDZDDisplayHtml(price * qty)} د.ج</td></tr>`;
                 }).join('')}</tbody>
             </table>
         </div>
         <div class="mt-3 text-left font-bold text-sm leading-7">
-            <div>مجموع المنتجات: ${subtotal.toLocaleString('ar-DZ')} د.ج</div>
-            <div>التوصيل: ${delivery.toLocaleString('ar-DZ')} د.ج</div>
-            <div class="text-amber-700 text-base">الإجمالي: ${total.toLocaleString('ar-DZ')} د.ج</div>
+            <div>مجموع المنتجات: ${formatDZDDisplayHtml(total)} د.ج</div>
+            <div>التوصيل: ${formatDZDDisplayHtml(delivery)} د.ج</div>
+            <div class="text-amber-700 text-base">الإجمالي: ${formatDZDDisplayHtml(total)} د.ج</div>
         </div>`;
 
     const done = document.getElementById('order-preview-done-btn');
@@ -3949,7 +3966,7 @@ function printOrderInvoice(orderId, action = 'print') {
         value && typeof value === 'object' && !Array.isArray(value) ? value : {}
     );
 
-    const formatDZD = (value) => `${Math.round(toNumber(value)).toLocaleString('ar-DZ')} د.ج`;
+    const formatDZD = (value) => `${formatDZDDisplay(toNumber(value))} د.ج`;
     const rateDZD = (typeof currencyConfig !== 'undefined' && currencyConfig && currencyConfig.DZD && Number.isFinite(Number(currencyConfig.DZD.rate))) ? Number(currencyConfig.DZD.rate) : 132.96;
 
     // -----------------------------------------------------
@@ -4150,7 +4167,16 @@ function printOrderInvoice(orderId, action = 'print') {
     const discountPercentDZD = Math.min(75, Math.max(0, toNumber(order.discountPercent ?? order.discountPercentage ?? 0)));
     const discountAmountDZD = Math.min(originalGrandTotalDZD, Math.max(0, Math.round((originalGrandTotalDZD * discountPercentDZD / 100) * 100) / 100));
     const discountedGrandTotalDZD = Math.max(0, Math.round((originalGrandTotalDZD - discountAmountDZD) * 100) / 100);
-    const creditRemainingDZD = (String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined) ? Math.max(0, toNumber(order.creditRemainingAmount)) : discountedGrandTotalDZD;
+    const isCreditInvoice = String(order.paymentMethod || '').toLowerCase() === 'كريدي';
+    // في فاتورة الكريدي يجب أن تكون قيمة الفاتورة هي نفسها grandTotal المحفوظ في دفتر الكريدي،
+    // حتى بعد تسجيل تسديدات لاحقة. أما المتبقي فيبقى في creditRemainingAmount بشكل مستقل.
+    const creditOriginalGrandTotalDZD = isCreditInvoice
+        ? Math.max(0, toNumber(order.creditOriginalGrandTotal ?? order.originalGrandTotal ?? order.grandTotal ?? discountedGrandTotalDZD))
+        : discountedGrandTotalDZD;
+    const creditRemainingDZD = (isCreditInvoice && order.creditRemainingAmount !== undefined)
+        ? Math.max(0, toNumber(order.creditRemainingAmount))
+        : creditOriginalGrandTotalDZD;
+    const invoiceGrandTotalDZD = isCreditInvoice ? creditOriginalGrandTotalDZD : discountedGrandTotalDZD;
     const grandTotalDZD = creditRemainingDZD;
 
     const orderDate = firstValid(
@@ -4425,13 +4451,13 @@ function printOrderInvoice(orderId, action = 'print') {
                         <strong>${escapeHtml(formatDZD(discountAmountDZD))}</strong>
                     </div>` : ''}
                     <div class="summary-row total">
-                        <span>${String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined ? 'المبلغ المستحق بعد الخصم:' : 'المبلغ المستحق للدفع:'}</span>
-                        <strong>${escapeHtml(formatDZD(discountedGrandTotalDZD))}</strong>
+                        <span>${isCreditInvoice ? 'الإجمالي في الفاتورة ودفتر الكريدي:' : 'المبلغ المستحق للدفع:'}</span>
+                        <strong>${escapeHtml(formatDZD(invoiceGrandTotalDZD))}</strong>
                     </div>
                     ${String(order.paymentMethod || '').toLowerCase() === 'كريدي' && order.creditRemainingAmount !== undefined ? `
                     <div class="summary-row">
                         <span>إجمالي المدفوع:</span>
-                        <strong>${escapeHtml(formatDZD(Math.max(0, discountedGrandTotalDZD - grandTotalDZD)))}</strong>
+                        <strong>${escapeHtml(formatDZD(Math.max(0, invoiceGrandTotalDZD - grandTotalDZD)))}</strong>
                     </div>
                     <div class="summary-row total">
                         <span>المبلغ المتبقي بعد التسديد:</span>
@@ -6047,7 +6073,7 @@ function searchProducts(query) {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${formatDZDDisplayHtml(Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))))} د.ج</span>
             </div>
         `;
     });
@@ -6193,7 +6219,7 @@ function renderProducts() {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${formatDZDDisplayHtml(Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))))} د.ج</span>
             </div>
         `;
     });
@@ -6648,7 +6674,7 @@ function selectProduct(id) {
         const descEl = document.getElementById('product-desc');
 
         if (nameEl) nameEl.innerText = selectedProduct.name;
-        if (priceEl) priceEl.innerText = `${Math.round(Number(selectedProduct.priceDZD ?? (Number(selectedProduct.basePrice || 0) * 132.96))).toLocaleString('ar-DZ')} د.ج`;
+        if (priceEl) priceEl.innerHTML = `${formatDZDDisplayHtml(Math.round(Number(selectedProduct.priceDZD ?? (Number(selectedProduct.basePrice || 0) * 132.96))))} د.ج`;
         if (descEl) descEl.innerText = selectedProduct.description;
         
         const qtyInput = document.getElementById('product-quantity');
@@ -6821,8 +6847,8 @@ function renderCart() {
         const qty = Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1);
         const unitDZD = Number(item.priceDZD ?? item.unitPriceDZD);
         const unitBase = Number(item.basePrice ?? item.unitPriceUSD ?? item.priceBase ?? 0) || 0;
-        const unitDisplay = Number.isFinite(unitDZD) ? `${unitDZD.toLocaleString('ar-DZ')} د.ج` : formatPrice(unitBase);
-        const lineDisplay = Number.isFinite(unitDZD) ? `${(unitDZD * qty).toLocaleString('ar-DZ')} د.ج` : formatPrice(unitBase * qty);
+        const unitDisplay = Number.isFinite(unitDZD) ? `${formatDZDDisplayHtml(unitDZD)} د.ج` : formatPrice(unitBase);
+        const lineDisplay = Number.isFinite(unitDZD) ? `${formatDZDDisplayHtml(unitDZD * qty)} د.ج` : formatPrice(unitBase * qty);
         const options = [item.size ? `المقاس: ${item.size}` : '', item.color ? `اللون: ${item.color}` : ''].filter(Boolean).join(' - ');
         return `
             <div class="bg-white border border-neutral-200 rounded-2xl p-3 shadow-sm">
@@ -6857,7 +6883,7 @@ function renderCart() {
     emptyState?.classList.toggle('hidden', hasItems);
     summary?.classList.toggle('hidden', !hasItems);
     if (proceed) proceed.disabled = !hasItems;
-    if (totalEl) totalEl.innerText = hasItems ? `${subtotal.toLocaleString('ar-DZ')} ${currencyConfig[currentCurrency]?.symbol || 'د.ج'}` : '0 د.ج';
+    if (totalEl) totalEl.innerHTML = hasItems ? `${formatDZDDisplayHtml(subtotal)} ${currencyConfig[currentCurrency]?.symbol || 'د.ج'}` : '0 د.ج';
     if (countEl) countEl.innerText = `${totalQuantity} منتج`;
     if (itemsCountEl) itemsCountEl.innerText = String(totalQuantity);
 }
@@ -8201,7 +8227,7 @@ function completeCheckoutOrder() {
             const grossTotal = round2(subtotal + delivery);
             const customer = (typeof bklFindCustomerForOrder === 'function') ? bklFindCustomerForOrder({id: currentLoggedInCustomer?.id, customerId: currentLoggedInCustomer?.id, phone: document.getElementById('pay-phone')?.value || currentLoggedInCustomer?.phone, email: currentLoggedInCustomer?.email, customerName: `${document.getElementById('pay-firstname')?.value || currentLoggedInCustomer?.firstname || ''} ${document.getElementById('pay-lastname')?.value || currentLoggedInCustomer?.lastname || ''}`}) : currentLoggedInCustomer;
             const dd = (typeof bklGetCustomerDiscountData === 'function') ? bklGetCustomerDiscountData(customer, grossTotal) : {percent:0,amount:0,finalTotal:grossTotal};
-            preview.innerHTML = dd.percent>0 ? `الإجمالي: <s>${grossTotal.toLocaleString('ar-DZ',{maximumFractionDigits:2})} د.ج</s> &nbsp; الخصم ${dd.percent}%: <strong>${dd.finalTotal.toLocaleString('ar-DZ',{maximumFractionDigits:2})} د.ج</strong>` : `الإجمالي: ${grossTotal.toLocaleString('ar-DZ', { maximumFractionDigits: 2 })} د.ج`;
+            preview.innerHTML = dd.percent>0 ? `الإجمالي: <s>${formatDZDDisplayHtml(grossTotal)} د.ج</s> &nbsp; الخصم ${dd.percent}%: <strong>${formatDZDDisplayHtml(dd.finalTotal)} د.ج</strong>` : `الإجمالي: ${formatDZDDisplayHtml(grossTotal)} د.ج`;
         }
 
         // غلاف آمن لإتمام الدفع: يمنع النقر المزدوج ويعيد تفعيل الزر إذا حدث خطأ،
@@ -8319,10 +8345,7 @@ function completeCheckoutOrder() {
             const discountPercent = discountData.percent || 0;
             const discountAmount = round2(discountData.amount || 0);
             const grandTotal = round2(discountData.finalTotal ?? grossGrandTotal);
-            const totalAmount = grandTotal.toLocaleString('ar-DZ', {
-                minimumFractionDigits: grandTotal % 1 ? 2 : 0,
-                maximumFractionDigits: 2
-            }) + ' د.ج';
+            const totalAmount = formatDZDDisplay(grandTotal) + ' د.ج';
 
             const branchName = typeof getActiveBranchData === 'function'
                 ? (getActiveBranchData()?.name || 'المتجر الرئيسي')
@@ -8530,7 +8553,7 @@ function completeCheckoutOrder() {
         }
 
         function formatCreditAmount(value) {
-            return (Number(value) || 0).toLocaleString('ar-DZ') + ' د.ج';
+            return formatDZDDisplay(value) + ' د.ج';
         }
 
         function getCreditTotals(list) {
@@ -8756,8 +8779,8 @@ function completeCheckoutOrder() {
                     copy.amountDueAfterCreditPayment = remaining;
                     copy.currentInvoiceTotal = remaining;
                     copy.grandTotalAfterCreditPayment = remaining;
-                    copy.totalAmountAfterCreditPayment = remaining.toLocaleString('ar-DZ') + ' د.ج';
-                    copy.creditBalanceLabel = remaining.toLocaleString('ar-DZ') + ' د.ج';
+                    copy.totalAmountAfterCreditPayment = formatDZDDisplay(remaining) + ' د.ج';
+                    copy.creditBalanceLabel = formatDZDDisplay(remaining) + ' د.ج';
                     copy.lastPaymentMethod = paymentMethod || '';
                     copy.lastPaymentDate = updatedAt;
                     copy.creditPaymentMeta = paymentMeta || null;
@@ -8785,7 +8808,7 @@ function completeCheckoutOrder() {
                             copy.remainingAmount = remaining;
                             copy.currentInvoiceTotal = remaining;
                             copy.grandTotalAfterCreditPayment = remaining;
-                            copy.totalAmountAfterCreditPayment = remaining.toLocaleString('ar-DZ') + ' د.ج';
+                            copy.totalAmountAfterCreditPayment = formatDZDDisplay(remaining) + ' د.ج';
                             copy.total = copy.totalAmountAfterCreditPayment;
                             copy.totalPriceFormatted = copy.totalAmountAfterCreditPayment;
                             return copy;
@@ -9451,7 +9474,7 @@ function renderOwnerCreditLedger() {
 
         function formatOrderDZD(value) {
             const n = Number(value) || 0;
-            return n.toLocaleString('ar-DZ') + ' د.ج';
+            return formatDZDDisplay(n) + ' د.ج';
         }
 
         
