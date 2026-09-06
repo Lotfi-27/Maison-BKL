@@ -1982,7 +1982,7 @@ function formatCurrentCurrencyAmount(amountDZD) {
     const amount = Number(amountDZD) || 0;
     // The stored product price is always DZD. Convert it to the selected currency.
     if (currentCurrency === 'DZD') {
-        return `${formatDZDDisplayHtml(amount)} د.ج`;
+        return `${formatDZDDisplayHtml(amount)}`;
     }
     const usdAmount = amount / (Number(currencyConfig.DZD.rate) || 1);
     const converted = currentCurrency === 'USD'
