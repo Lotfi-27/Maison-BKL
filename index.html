@@ -1979,7 +1979,19 @@ function formatDZDDisplayHtml(value) {
 }
 
 function formatCurrentCurrencyAmount(amountDZD) {
-    return formatPrice(0, Number(amountDZD) || 0);
+    const amount = Number(amountDZD) || 0;
+    // The stored product price is always DZD. Convert it to the selected currency.
+    if (currentCurrency === 'DZD') {
+        return `${formatDZDDisplayHtml(amount)} د.ج`;
+    }
+    const usdAmount = amount / (Number(currencyConfig.DZD.rate) || 1);
+    const converted = currentCurrency === 'USD'
+        ? usdAmount
+        : usdAmount * (Number(currencyConfig.EUR.rate) || 0);
+    const rounded = Number(converted.toFixed(2));
+    const config = currencyConfig[currentCurrency] || currencyConfig.USD;
+    const formatted = rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return config.position === 'before' ? `${config.symbol} ${formatted}` : `${formatted} ${config.symbol}`;
 }
 
 
@@ -2016,7 +2028,9 @@ async function loadLiveExchangeRates(force = false) {
         if (!force && cached && cached.timestamp && (Date.now() - cached.timestamp) < CACHE_TTL) {
             if (Number.isFinite(cached.usdDzd) && Number.isFinite(cached.eurDzd)) {
                 currencyConfig.DZD.rate = cached.usdDzd;
-                currencyConfig.EUR.rate = cached.eurDzd / cached.usdDzd;
+                currencyConfig.EUR.rate = Number.isFinite(cached.eurPerUsd) && cached.eurPerUsd > 0
+                    ? cached.eurPerUsd
+                    : ((Number(cached.eurDzd) > 0 && Number(cached.usdDzd) > 0) ? Number(cached.eurDzd) / Number(cached.usdDzd) : currencyConfig.EUR.rate);
                 exchangeRatesLastUpdated = cached.updatedAt || cached.timestamp;
                 return true;
             }
@@ -2024,20 +2038,19 @@ async function loadLiveExchangeRates(force = false) {
     } catch (_) {}
 
     try {
-        // Open endpoint, no API key. It publishes the latest available FX dataset.
-        const response = await fetch('https://open.er-api.com/v6/latest/DZD', { cache: 'no-store' });
+        // Open endpoint, no API key. Request rates with USD as the common base:
+        // DZD.rate = DZD per 1 USD, EUR.rate = EUR per 1 USD.
+        const response = await fetch('https://open.er-api.com/v6/latest/USD', { cache: 'no-store' });
         if (!response.ok) throw new Error(`FX HTTP ${response.status}`);
         const data = await response.json();
         if (data?.result !== 'success') throw new Error('FX provider returned an error');
 
-        const usdPerDzd = Number(data.rates?.USD);
-        const eurPerDzd = Number(data.rates?.EUR);
-        if (!(usdPerDzd > 0) || !(eurPerDzd > 0)) throw new Error('USD/EUR rates unavailable');
+        const usdDzd = Number(data.rates?.DZD);
+        const eurPerUsd = Number(data.rates?.EUR);
+        if (!(usdDzd > 0) || !(eurPerUsd > 0)) throw new Error('USD/EUR rates unavailable');
 
-        const usdDzd = 1 / usdPerDzd;
-        const eurDzd = 1 / eurPerDzd;
         currencyConfig.DZD.rate = usdDzd;
-        currencyConfig.EUR.rate = eurDzd / usdDzd;
+        currencyConfig.EUR.rate = eurPerUsd;
         exchangeRatesLastUpdated = data.time_last_update_utc || Date.now();
         exchangeRatesSource = 'ExchangeRate-API';
 
@@ -2045,7 +2058,8 @@ async function loadLiveExchangeRates(force = false) {
             timestamp: Date.now(),
             updatedAt: data.time_last_update_utc || Date.now(),
             usdDzd,
-            eurDzd
+            eurDzd: usdDzd / (eurPerUsd || 1),
+            eurPerUsd
         }));
 
         // Re-render all currency-dependent UI without touching stored product DZD prices.
