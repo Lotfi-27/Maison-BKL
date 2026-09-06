@@ -8146,7 +8146,34 @@ function completeCheckoutOrder() {
             preview.innerHTML = dd.percent>0 ? `الإجمالي: <s>${grossTotal.toLocaleString('ar-DZ',{maximumFractionDigits:2})} د.ج</s> &nbsp; الخصم ${dd.percent}%: <strong>${dd.finalTotal.toLocaleString('ar-DZ',{maximumFractionDigits:2})} د.ج</strong>` : `الإجمالي: ${grossTotal.toLocaleString('ar-DZ', { maximumFractionDigits: 2 })} د.ج`;
         }
 
+        // غلاف آمن لإتمام الدفع: يمنع النقر المزدوج ويعيد تفعيل الزر إذا حدث خطأ،
+        // حتى لا يتعطل الدفع في عملية شراء لاحقة.
         function submitOrderAndPay() {
+            const btn = document.getElementById('btn-pay-now');
+            if (window.__bklPaymentInProgress) return;
+            window.__bklPaymentInProgress = true;
+            if (btn) {
+                btn.disabled = true;
+                btn.dataset.originalText = btn.textContent || '';
+                btn.textContent = 'جارٍ إتمام الطلب...';
+                btn.classList.add('opacity-70');
+            }
+            try {
+                return __submitOrderAndPayCore();
+            } catch (error) {
+                console.error('خطأ أثناء إتمام الدفع:', error);
+                alert('تعذر إتمام الطلب حالياً. يرجى المحاولة مرة أخرى.');
+            } finally {
+                window.__bklPaymentInProgress = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = btn.dataset.originalText || 'ادفع الآن';
+                    btn.classList.remove('opacity-70');
+                }
+            }
+        }
+
+        function __submitOrderAndPayCore() {
             const customer = (typeof currentLoggedInCustomer !== 'undefined') ? currentLoggedInCustomer : null;
             if (customer && isCustomerBlacklisted(customer)) {
                 alert('حسابك محظور من المتجر، ولا يمكنك إجراء عملية شراء.');
@@ -8295,6 +8322,13 @@ function completeCheckoutOrder() {
             } catch (e) {}
 
             localStorage.removeItem('store_cart');
+            // تنظيف حالة عملية الشراء الحالية حتى تبدأ عملية الشراء التالية من سلة وحالة دفع جديدة.
+            try {
+                window.currentCheckoutQuantity = 1;
+                window.currentCheckoutSize = '';
+                window.currentCheckoutColor = '';
+                if (typeof selectedProduct !== 'undefined') selectedProduct = null;
+            } catch (e) {}
 
             goToPage('page-5');
         }
