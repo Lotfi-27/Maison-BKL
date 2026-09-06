@@ -3240,12 +3240,70 @@ function getStoreOrders() {
     return normalizeStoreOrders(storeOrdersList);
 }
 
+function compactOrderItemsForStorage(items) {
+    if (!Array.isArray(items)) return [];
+    return items.map(item => ({
+        id: item?.id ?? null,
+        productId: item?.productId ?? item?.id ?? null,
+        name: item?.name ?? item?.productName ?? 'منتج',
+        productName: item?.productName ?? item?.name ?? 'منتج',
+        basePrice: Number(item?.basePrice ?? item?.unitPriceUSD ?? item?.priceBase ?? 0) || 0,
+        priceDZD: Number(item?.priceDZD ?? item?.unitPriceDZD ?? 0) || 0,
+        quantity: Math.max(1, Number(item?.quantity ?? item?.qty ?? 1) || 1),
+        qty: Math.max(1, Number(item?.quantity ?? item?.qty ?? 1) || 1),
+        color: item?.color || '',
+        size: item?.size || ''
+    }));
+}
+
+function compactOrdersForStorage(orders) {
+    return normalizeStoreOrders(orders).map(order => ({
+        ...order,
+        // لا نخزن صور المنتجات داخل كل فاتورة؛ الصور قد تكون Base64 كبيرة جداً
+        // وتتسبب في امتلاء localStorage بعد أول أو ثاني طلب.
+        items: compactOrderItemsForStorage(order.items),
+    }));
+}
+
+function persistOrdersSafely(orders) {
+    const compact = compactOrdersForStorage(orders);
+    const json = JSON.stringify(compact);
+
+    // المفتاح القديم كان نسخة ثانية كاملة من نفس الطلبات، ما يضاعف استهلاك التخزين.
+    // نحذفه مؤقتاً قبل الحفظ لإفساح مساحة، ثم نحاول إعادة نسخة التوافق.
+    try { localStorage.removeItem('storeOrdersList'); } catch (e) {}
+
+    try {
+        localStorage.setItem('store_orders', json);
+    } catch (e) {
+        // تنظيف مفاتيح الطلبات القديمة غير الأساسية ثم إعادة المحاولة.
+        ['orders', 'ordersList', 'purchaseOrders', 'customerOrders'].forEach(key => {
+            try { localStorage.removeItem(key); } catch (ignore) {}
+        });
+        try {
+            localStorage.setItem('store_orders', json);
+        } catch (e2) {
+            console.error('تعذر حفظ الطلب بسبب امتلاء التخزين المحلي:', e2);
+            throw e2;
+        }
+    }
+
+    // نسخة توافقية صغيرة فقط؛ إذا لم تتسع فلا نفشل عملية الشراء،
+    // لأن store_orders هو المصدر الأساسي.
+    try {
+        localStorage.setItem('storeOrdersList', json);
+    } catch (e) {
+        try { localStorage.removeItem('storeOrdersList'); } catch (ignore) {}
+        console.warn('تعذر حفظ نسخة التوافق storeOrdersList، تم الاحتفاظ بالطلب في store_orders.');
+    }
+
+    storeOrdersList = compact;
+    return true;
+}
+
 function saveStoreOrders() {
     storeOrdersList = normalizeStoreOrders(storeOrdersList);
-
-    // حفظ نفس القائمة في المفاتيح الأساسية والقديمة لضمان التوافق.
-    setStoredData('storeOrdersList', storeOrdersList);
-    setStoredData('store_orders', storeOrdersList);
+    persistOrdersSafely(storeOrdersList);
 }
 
 
@@ -8162,7 +8220,10 @@ function completeCheckoutOrder() {
                 return __submitOrderAndPayCore();
             } catch (error) {
                 console.error('خطأ أثناء إتمام الدفع:', error);
-                alert('تعذر إتمام الطلب حالياً. يرجى المحاولة مرة أخرى.');
+                const storageProblem = error && (error.name === 'QuotaExceededError' || /quota|storage|exceeded/i.test(String(error.message || '')));
+                alert(storageProblem
+                    ? 'تعذر حفظ الطلب بسبب امتلاء مساحة التخزين المحلية. تم تنظيف النسخ الزائدة، يرجى الضغط على «ادفع الآن» مرة أخرى.'
+                    : 'تعذر إتمام الطلب حالياً. يرجى المحاولة مرة أخرى.');
             } finally {
                 window.__bklPaymentInProgress = false;
                 if (btn) {
@@ -8281,7 +8342,8 @@ function completeCheckoutOrder() {
                 municipality,
                 detailedAddress: address,
                 address: address + (municipality ? ', ' + municipality : '') + (state ? ', ' + state : '') + ', ' + country,
-                items: cartItems,
+                // نحتفظ بالبيانات اللازمة للفواتير فقط ولا نكرر صور Base64 الكبيرة داخل كل طلب.
+                items: compactOrderItemsForStorage(cartItems),
                 subtotal,
                 productSubtotal: subtotal,
                 deliveryPrice,
@@ -8308,8 +8370,8 @@ function completeCheckoutOrder() {
             }
 
             orders.unshift(orderData);
-            localStorage.setItem('store_orders', JSON.stringify(orders));
-            localStorage.setItem('storeOrdersList', JSON.stringify(orders));
+            // حفظ آمن يمنع فشل الطلب الثاني بسبب تضخم localStorage بالصور ونسخ الطلبات.
+            persistOrdersSafely(orders);
 
             // الكريدي: نحفظ نسخة ثابتة من الفاتورة في دفتر الكريدي الخاص بالمتجر والزبون.
             // النسختان snapshots مستقلتان ولا توجد لهما دوال تعديل أو حذف.
