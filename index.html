@@ -1978,6 +1978,11 @@ function formatDZDDisplayHtml(value) {
     return `${match[1]}<span class="dzd-decimal">${match[2]}${match[3]}</span>`;
 }
 
+function formatCurrentCurrencyAmount(amountDZD) {
+    return formatPrice(0, Number(amountDZD) || 0);
+}
+
+
 function formatPrice(basePriceUSD, priceDZD = null) {
     const config = currencyConfig[currentCurrency] || currencyConfig['USD'];
     let converted;
@@ -2046,6 +2051,7 @@ async function loadLiveExchangeRates(force = false) {
         // Re-render all currency-dependent UI without touching stored product DZD prices.
         if (typeof renderProducts === 'function') renderProducts();
         if (typeof renderCart === 'function') renderCart();
+        if (typeof updateCheckoutGrandTotalPreview === 'function') updateCheckoutGrandTotalPreview();
         if (typeof selectedProduct !== 'undefined' && selectedProduct) {
             const priceElement = document.getElementById('product-price');
             if (priceElement) priceElement.innerHTML = formatPriceDisplayHtml(selectedProduct.basePrice, selectedProduct.priceDZD);
@@ -2057,19 +2063,30 @@ async function loadLiveExchangeRates(force = false) {
     }
 }
 
-function changeCurrency(curr) {
+async function changeCurrency(curr) {
     currentCurrency = curr;
     renderProducts();
     if (selectedProduct) {
         const priceElement = document.getElementById('product-price');
-        if (priceElement) priceElement.innerHTML = formatPriceDisplayHtml(selectedProduct.basePrice, selectedProduct.priceDZD);
+        if (priceElement) priceElement.innerText = formatPrice(selectedProduct.basePrice, selectedProduct.priceDZD);
     }
     if (typeof renderCart === 'function') renderCart();
+    try { await loadLiveExchangeRates(true); } catch (_) {}
+    renderProducts();
+    if (selectedProduct) {
+        const priceElement = document.getElementById('product-price');
+        if (priceElement) priceElement.innerText = formatPrice(selectedProduct.basePrice, selectedProduct.priceDZD);
+    }
+    if (typeof renderCart === 'function') renderCart();
+    if (typeof updateCheckoutGrandTotalPreview === 'function') updateCheckoutGrandTotalPreview();
 }
 
 // Refresh the latest available rates automatically.
 loadLiveExchangeRates(false);
-setInterval(() => loadLiveExchangeRates(true), 60 * 60 * 1000);
+setInterval(async () => {
+    await loadLiveExchangeRates(true);
+    if (typeof updateCheckoutGrandTotalPreview === 'function') updateCheckoutGrandTotalPreview();
+}, 60 * 60 * 1000);
 
 // ==========================================
 // 2. نظام صلاحيات صاحب المتجر وإدارة البيانات
@@ -6073,7 +6090,7 @@ function searchProducts(query) {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${formatDZDDisplayHtml(Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))))} د.ج</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${formatCurrentCurrencyAmount(Number(product.priceDZD ?? (Number(product.basePrice || 0) * Number(currencyConfig?.DZD?.rate || 132.96))))}</span>
             </div>
         `;
     });
@@ -6219,7 +6236,7 @@ function renderProducts() {
             <div onclick="selectProduct(${product.id})" class="bg-neutral-50 border border-neutral-200 rounded-2xl p-3 flex flex-col items-center cursor-pointer hover:border-amber-600 transition shadow-sm">
                 <div class="w-full h-24 bg-neutral-100 rounded-xl mb-2 flex items-center justify-center overflow-hidden">${imageHTML}</div>
                 <span class="text-xs font-medium text-neutral-900 text-center truncate w-full">${product.name}</span>
-                <span class="text-xs text-amber-600 font-bold mt-1">${formatDZDDisplayHtml(Math.round(Number(product.priceDZD ?? (Number(product.basePrice || 0) * 132.96))))} د.ج</span>
+                <span class="text-xs text-amber-600 font-bold mt-1">${formatCurrentCurrencyAmount(Number(product.priceDZD ?? (Number(product.basePrice || 0) * Number(currencyConfig?.DZD?.rate || 132.96))))}</span>
             </div>
         `;
     });
@@ -6674,7 +6691,7 @@ function selectProduct(id) {
         const descEl = document.getElementById('product-desc');
 
         if (nameEl) nameEl.innerText = selectedProduct.name;
-        if (priceEl) priceEl.innerHTML = `${formatDZDDisplayHtml(Math.round(Number(selectedProduct.priceDZD ?? (Number(selectedProduct.basePrice || 0) * 132.96))))} د.ج`;
+        if (priceEl) priceEl.innerHTML = `${formatCurrentCurrencyAmount(Number(selectedProduct.priceDZD ?? (Number(selectedProduct.basePrice || 0) * Number(currencyConfig?.DZD?.rate || 132.96))))}`;
         if (descEl) descEl.innerText = selectedProduct.description;
         
         const qtyInput = document.getElementById('product-quantity');
@@ -6839,16 +6856,16 @@ function renderCart() {
         const qty = Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1);
         const unitDZD = Number(item.priceDZD ?? item.unitPriceDZD);
         const unitBase = Number(item.basePrice ?? item.unitPriceUSD ?? item.priceBase ?? 0) || 0;
-        const unitAmount = Number.isFinite(unitDZD) ? unitDZD : unitBase * ((currencyConfig[currentCurrency] || currencyConfig.DZD).rate);
-        return sum + (unitAmount * qty);
+        const unitAmountDZD = Number.isFinite(unitDZD) ? unitDZD : (unitBase * Number(currencyConfig.DZD.rate || 1));
+        return sum + (unitAmountDZD * qty);
     }, 0);
 
     container.innerHTML = items.map((item, index) => {
         const qty = Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1);
         const unitDZD = Number(item.priceDZD ?? item.unitPriceDZD);
         const unitBase = Number(item.basePrice ?? item.unitPriceUSD ?? item.priceBase ?? 0) || 0;
-        const unitDisplay = Number.isFinite(unitDZD) ? `${formatDZDDisplayHtml(unitDZD)} د.ج` : formatPrice(unitBase);
-        const lineDisplay = Number.isFinite(unitDZD) ? `${formatDZDDisplayHtml(unitDZD * qty)} د.ج` : formatPrice(unitBase * qty);
+        const unitDisplay = formatPrice(unitBase, Number.isFinite(unitDZD) ? unitDZD : null);
+        const lineDisplay = formatPrice(unitBase * qty, Number.isFinite(unitDZD) ? unitDZD * qty : null);
         const options = [item.size ? `المقاس: ${item.size}` : '', item.color ? `اللون: ${item.color}` : ''].filter(Boolean).join(' - ');
         return `
             <div class="bg-white border border-neutral-200 rounded-2xl p-3 shadow-sm">
@@ -6883,7 +6900,7 @@ function renderCart() {
     emptyState?.classList.toggle('hidden', hasItems);
     summary?.classList.toggle('hidden', !hasItems);
     if (proceed) proceed.disabled = !hasItems;
-    if (totalEl) totalEl.innerHTML = hasItems ? `${formatDZDDisplayHtml(subtotal)} ${currencyConfig[currentCurrency]?.symbol || 'د.ج'}` : '0 د.ج';
+    if (totalEl) totalEl.innerHTML = hasItems ? formatCurrentCurrencyAmount(subtotal) : formatCurrentCurrencyAmount(0);
     if (countEl) countEl.innerText = `${totalQuantity} منتج`;
     if (itemsCountEl) itemsCountEl.innerText = String(totalQuantity);
 }
@@ -8214,20 +8231,19 @@ function completeCheckoutOrder() {
                 const raw = JSON.parse(localStorage.getItem('store_cart') || '[]');
                 cartItems = Array.isArray(raw) ? raw : [];
             } catch (e) {}
-            const rate = Number(currencyConfig[currentCurrency]?.rate || 1);
             const round2 = value => Math.round((Number(value) || 0) * 100) / 100;
             const subtotal = round2(cartItems.reduce((sum, item) => {
                 const qty = Math.max(1, Number(item.quantity ?? item.qty ?? 1) || 1);
                 const storedDZD = Number(item.priceDZD ?? item.unitPriceDZD);
                 const basePrice = Number(item.basePrice ?? item.unitPriceUSD ?? item.priceBase ?? 0) || 0;
-                const unitDZD = Number.isFinite(storedDZD) ? storedDZD : (basePrice * rate);
+                const unitDZD = Number.isFinite(storedDZD) ? storedDZD : (basePrice * Number(currencyConfig.DZD.rate || 1));
                 return sum + (unitDZD * qty);
             }, 0));
             const delivery = round2(Math.max(0, Number(document.getElementById('pay-delivery-price')?.value || 0) || 0));
             const grossTotal = round2(subtotal + delivery);
             const customer = (typeof bklFindCustomerForOrder === 'function') ? bklFindCustomerForOrder({id: currentLoggedInCustomer?.id, customerId: currentLoggedInCustomer?.id, phone: document.getElementById('pay-phone')?.value || currentLoggedInCustomer?.phone, email: currentLoggedInCustomer?.email, customerName: `${document.getElementById('pay-firstname')?.value || currentLoggedInCustomer?.firstname || ''} ${document.getElementById('pay-lastname')?.value || currentLoggedInCustomer?.lastname || ''}`}) : currentLoggedInCustomer;
             const dd = (typeof bklGetCustomerDiscountData === 'function') ? bklGetCustomerDiscountData(customer, grossTotal) : {percent:0,amount:0,finalTotal:grossTotal};
-            preview.innerHTML = dd.percent>0 ? `الإجمالي: <s>${formatDZDDisplayHtml(grossTotal)} د.ج</s> &nbsp; الخصم ${dd.percent}%: <strong>${formatDZDDisplayHtml(dd.finalTotal)} د.ج</strong>` : `الإجمالي: ${formatDZDDisplayHtml(grossTotal)} د.ج`;
+            preview.innerHTML = dd.percent>0 ? `الإجمالي: <s>${formatCurrentCurrencyAmount(grossTotal)}</s> &nbsp; الخصم ${dd.percent}%: <strong>${formatCurrentCurrencyAmount(dd.finalTotal)}</strong>` : `الإجمالي: ${formatCurrentCurrencyAmount(grossTotal)}`;
         }
 
         // غلاف آمن لإتمام الدفع: يمنع النقر المزدوج ويعيد تفعيل الزر إذا حدث خطأ،
